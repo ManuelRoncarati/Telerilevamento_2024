@@ -10,7 +10,7 @@ im.list()
 # Importing data
 b2 <- im.import("sentinel.dolomites.b2.tif") #importiamo la banda del blu
 
-# Plotting the data
+# Plotting the data, plot della banda 2
 clg <- colorRampPalette(c("black", "grey", "light grey"))(3)
 plot(b2, col=clg)
 
