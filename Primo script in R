@@ -1,0 +1,28 @@
+# Primo script in R
+
+# R come calcolatrice
+a <- 6 * 7
+b <- 5 * 8
+
+a + b
+
+# Creare un Array
+
+flowers <- c(3, 6, 8, 10, 15, 18) # Ho creato l'array flowers
+flowers
+
+insects <- c(10, 16, 25, 42, 61, 73)
+insects
+
+plot(flowers, insects) # grafico con insects sulla y e flowers sulla x
+
+# aggiungere parametri al plot
+
+plot(flowers, insects, pch=19) # 'pch' = 19 indica che i punti nel grafico saranno rappresentati da cerchi pieni
+
+# symbol dimensions
+plot(flowers, insects, pch=19, cex=2) # 'cex' permette di aumentare/diminuire la dimesione dei caratteri
+plot(flowers, insects, pch=19, cex=.5)
+
+# color
+plot(flowers, insects, pch=19, cex=.5, col="chocolate1") # diamo un colroe ai punti con 'col'
