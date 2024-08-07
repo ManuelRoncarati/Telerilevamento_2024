@@ -41,9 +41,9 @@ dev.off()
 sila_multibanda <- mask (crop_multibanda, perimetro[1]) #ritaglio definitivo 
 plotRGB(sila_multibanda, r = 1, g = 2, b = 3, stretch = "lin")
 dev.off()
+scalata <- rescaleImage(sila_multibanda, ymin = 0, ymax = 255) # rescale dell'immagine a 255 colori
 par (mfrow = c(1,2) )
 plotRGB(sila_multibanda, r = 1, g = 2, b = 3) # plot in falsi colori senza stretch
-scalata <- rescaleImage(sila_multibanda, ymin = 0, ymax = 255) # rescale dell'immagine a 255 colori
 plotRGB(scalata, r = 1, g = 2, b = 3)
 
 # salvataggio file raster scalato e ritagliato swcondo i confini del PN della Sila
