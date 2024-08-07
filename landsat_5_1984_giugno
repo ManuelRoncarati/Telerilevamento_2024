@@ -6,68 +6,119 @@ library(sf)
 library(RStoolbox)
 setwd("C:/esame/landsat_5_1984_giugno")
 
-# Landsat 5 bands : B1 = blue , B2 = green, B3 = visible red, B4 = NIR (0.76-0.90)
+# Landsat 5 bands : B1 = blue , B2 = green, B3 = visible red, B4 = NIR (0.76-0.90), B5 = SWIR (1.55-1.75)
 
 B1 <- "LT05_L2SP_188033_19840620_20200918_02_T1_SR_B1.TIF"
 B2 <- "LT05_L2SP_188033_19840620_20200918_02_T1_SR_B2.TIF"
 B3 <- "LT05_L2SP_188033_19840620_20200918_02_T1_SR_B3.TIF"
 B4 <- "LT05_L2SP_188033_19840620_20200918_02_T1_SR_B4.TIF"
+B5 <- "LT05_L2SP_188033_19840620_20200918_02_T1_SR_B5.TIF"
 
 # creo l'immagine satellitare
 
-stack <- c(B4, B3, B2, B1)
-multibanda <- rast(stack)
-multibanda
+stack_NIR <- c( B4, B3, B2)
+stack_SWIR <- c( B5, B3, B2)
+stack_RGB <- c( B3, B2, B1)
+stack_FLUO <- c( B2, B4, B3)
 
-plotRGB (multibanda, r = 2, g = 3, b = 4, stretch = "lin") # plot in colori naturali RGB
-dev.off()
+immagine_NIR <- rast (stack_NIR)
+immagine_SWIR <- rast (stack_SWIR)
+immagine_RGB <- rast (stack_RGB)
+immagine_FLUO <- rast (stack_FLUO)
 
-plotRGB (multibanda, r = 1, g = 2, b = 3, stretch = "lin") # plot in falsi colori_ NIR, RED, GREEN
+par (mfrow = c (1,4))
 
-plotRGB (multibanda, r = 3, g = 1, b = 4, stretch = "lin") # vegetazione verde fluo con green nel red
+plotRGB(immagine_NIR, stretch = "lin")
+plotRGB(immagine_SWIR, stretch = "lin")
+plotRGB(immagine_FLUO, stretch = "lin")
+plotRGB(immagine_RGB, stretch = "lin")
 
-par (mfrow = c(1,3) ) 
-plotRGB (multibanda, r = 2, g = 3, b = 4, stretch = "lin") # plot in colori naturali RGB
-plotRGB (multibanda, r = 1, g = 2, b = 3, stretch = "lin") # plot in falsi colori_ NIR, RED, GREEN
-plotRGB (multibanda, r = 3, g = 1, b = 4, stretch = "lin") # vegetazione verde fluo con green nel red
 dev.off()
 
 #carico lo shape file del PN della Sila
 
-perimetro <- st_read("prova_4_shape.shp") # shapefile esportato da gis nel crs dell'immagine satellitare
-crop_multibanda <- crop (multibanda, perimetro[1]) # crop secondo i confini del parco
-plot(crop_multibanda)
-dev.off()
-sila_multibanda <- mask (crop_multibanda, perimetro[1]) #ritaglio definitivo 
-plotRGB(sila_multibanda, r = 1, g = 2, b = 3, stretch = "lin")
-dev.off()
-scalata <- rescaleImage(sila_multibanda, ymin = 0, ymax = 255) # rescale dell'immagine a 255 colori
-par (mfrow = c(1,2) )
-plotRGB(sila_multibanda, r = 1, g = 2, b = 3) # plot in falsi colori senza stretch
-plotRGB(scalata, r = 1, g = 2, b = 3)
+shape_sila <- st_read("shape_sila.shp")
 
-# salvataggio file raster scalato e ritagliato swcondo i confini del PN della Sila
+# realizzo un crop delle immagini secondo le dimensioni del bounding box del parco
 
-writeRaster(scalata, filename = "1984_falsi.tif", NAflag = 255 )
-dev.off()
+crop_NIR <- crop (immagine_NIR, shape_sila[1])
+crop_SWIR <- crop (immagine_SWIR, shape_sila[1])
+crop_RGB <- crop (immagine_RGB, shape_sila[1])
+crop_FLUO <- crop(immagine_FLUO, shape_sila[1])
 
-# ora realizzo l'immagine satellitare solo con 3 bande, NIR, RED e GREEN
+# grazie alla funzione mask ritaglio le immagini secondo il perimetro del parco
 
-bande_3_1984 <- c(B4, B3, B2)
-s1984_3 <- rast(bande_3_1984)
-plotRGB(s1984_3, stretch = "lin") # controllo che tutto si veda correttamente
-dev.off()
+mask_NIR <- mask (crop_NIR, shape[1])
+mask_SWIR <- mask (crop_SWIR, shape[1])
+mask_FLUO <- mask (crop_FLUO, shape_sila[1])
+mask_RGB <- mask (crop_RGB, shape_sila[1])
 
-# crop e mask secondo i confini del parco nazionale della Sila con l'immagine a 3 bande in falsi colori
+par (mfrow = c (1, 4))
 
-s1984_3_crop <- crop(s1984_3, perimetro[1])
-s1984_3_sila <- mask(s1984_3_crop, perimetro[1])
-par (mfrow = c(1,2) )
-plotRGB (s1984_3_sila, stretch = "lin")
-plotRGB (s1984_3_sila)
+plotRGB (mask_NIR, stretch = "lin")
+plotRGB (mask_SWIR, stretch = "lin")
+plotRGB (mask_FLUO, stretch = "lin")
+plotRGB (mask_RGB, stretch  = "lin")
+
 dev.off()
 
-# salviamo l'immagine in un file png che possa contenere tutte le informazioni sulle bande
+# utilizzo la funzione rescale per trasformare rendere le mie immagini ad 8 bit
 
-plotRGB (s1984_3_sila)
-writeRaster(s1984_3_sila, filename = "1984_falsi.png", NAflag = 255 )
+scala_NIR  <- rescaleImage ( mask_NIR, ymin = 0, ymax = 255)
+scala_SWIR <- rescaleImage( mask_SWIR, ymin = 0, ymax = 255)
+scala_FLUO <- rescaleImage ( mask_FLUO, ymin = 0, ymax = 255)
+scala_RGB <- rescaleImage ( mask_RGB, ymin = 0, ymax = 255)
+
+# ulteriore plottaggio per visualizzare le immagini ad 8 bit
+
+par (mfrow = c (1, 4))
+
+plotRGB (scala_NIR, stretch = "lin")
+plotRGB (scala_SWIR, stretch = "lin")
+plotRGB (scala_FLUO, stretch = "lin")
+plotRGB (scala_RGB, stretch  = "lin")
+
+# stretch lineare personalizzato sulle singole immagini grazie alla funzione stretch
+
+lin_RGB <- stretch (scala_RGB, minq = .01, maxq = .99)
+lin_NIR <- stretch (scala_NIR, minq = .02, maxq = .98)
+lin_SWIR <- stretch (scala_SWIR, minq = .02, maxq = .98)
+lin_FLUO <- stretch (scala_FLUO, minq = .02, maxq = .98)
+
+png(filename = "lin_plot.png", width = 1920, height = 1080)
+
+par (mfrow = c(1,4))
+
+plotRGB (lin_NIR, main = "NIR")
+plotRGB (lin_SWIR, main = "SWIR")
+plotRGB (lin_FLUO, main = "FLUO")
+plotRGB (lin_RGB, main = "RGB")
+
+dev.off()
+
+# salvataggio delle singole immagini nella wd grazie alla funzione writeRaster, NAflag per ottenere uno sfondo bianco
+
+writeRaster (lin_NIR, filename = "lin_NIR.png", NAflag = 255)
+writeRaster (lin_SWIR, filename = "lin_SWIR.png", NAflag = 255)
+writeRaster (lin_FLUO, filename = "lin_FLUO.png", NAflag = 255)
+writeRaster (lin_RGB, filename = "lin_RGB.png", NAflag = 255)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
