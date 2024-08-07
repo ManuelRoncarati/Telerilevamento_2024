@@ -1,36 +1,73 @@
+# richiamiamo le librerie necessarie e facciamo il set della cartella di lavoro
+
 library(terra)
 library(raster)
 library(sf)
+library(RStoolbox)
 setwd("C:/esame/landsat_5_1984_giugno")
+
 # Landsat 5 bands : B1 = blue , B2 = green, B3 = visible red, B4 = NIR (0.76-0.90)
+
 B1 <- "LT05_L2SP_188033_19840620_20200918_02_T1_SR_B1.TIF"
 B2 <- "LT05_L2SP_188033_19840620_20200918_02_T1_SR_B2.TIF"
 B3 <- "LT05_L2SP_188033_19840620_20200918_02_T1_SR_B3.TIF"
 B4 <- "LT05_L2SP_188033_19840620_20200918_02_T1_SR_B4.TIF"
+
+# creo l'immagine satellitare
+
 stack <- c(B4, B3, B2, B1)
 multibanda <- rast(stack)
 multibanda
+
 plotRGB (multibanda, r = 2, g = 3, b = 4, stretch = "lin") # plot in colori naturali RGB
 dev.off()
+
 plotRGB (multibanda, r = 1, g = 2, b = 3, stretch = "lin") # plot in falsi colori_ NIR, RED, GREEN
+
 plotRGB (multibanda, r = 3, g = 1, b = 4, stretch = "lin") # vegetazione verde fluo con green nel red
+
 par (mfrow = c(1,3) ) 
 plotRGB (multibanda, r = 2, g = 3, b = 4, stretch = "lin") # plot in colori naturali RGB
 plotRGB (multibanda, r = 1, g = 2, b = 3, stretch = "lin") # plot in falsi colori_ NIR, RED, GREEN
 plotRGB (multibanda, r = 3, g = 1, b = 4, stretch = "lin") # vegetazione verde fluo con green nel red
 dev.off()
+
+#carico lo shape file del PN della Sila
+
 perimetro <- st_read("prova_4_shape.shp") # shapefile esportato da gis nel crs dell'immagine satellitare
-crop_multibanda <- crop (multibanda, perimetro[1])
+crop_multibanda <- crop (multibanda, perimetro[1]) # crop secondo i confini del parco
 plot(crop_multibanda)
 dev.off()
-sila_multibanda <- mask (crop_multibanda, perimetro[1])
+sila_multibanda <- mask (crop_multibanda, perimetro[1]) #ritaglio definitivo 
 plotRGB(sila_multibanda, r = 1, g = 2, b = 3, stretch = "lin")
 dev.off()
 par (mfrow = c(1,2) )
 plotRGB(sila_multibanda, r = 1, g = 2, b = 3) # plot in falsi colori senza stretch
-scalata <- rescaleImage(sila_multibanda, ymin = 0, ymax = 255)
+scalata <- rescaleImage(sila_multibanda, ymin = 0, ymax = 255) # rescale dell'immagine a 255 colori
 plotRGB(scalata, r = 1, g = 2, b = 3)
-writeRaster(scalata, filename = "1984_falsi.png", NAflag = 255 )
+
+# salvataggio file raster scalato e ritagliato swcondo i confini del PN della Sila
+
+writeRaster(scalata, filename = "1984_falsi.tif", NAflag = 255 )
 dev.off()
 
+# ora realizzo l'immagine satellitare solo con 3 bande, NIR, RED e GREEN
 
+bande_3_1984 <- c(B4, B3, B2)
+s1984_3 <- rast(bande_3_1984)
+plotRGB(s1984_3, stretch = "lin") # controllo che tutto si veda correttamente
+dev.off()
+
+# crop e mask secondo i confini del parco nazionale della Sila con l'immagine a 3 bande in falsi colori
+
+s1984_3_crop <- crop(s1984_3, perimetro[1])
+s1984_3_sila <- mask(s1984_3_crop, perimetro[1])
+par (mfrow = c(1,2) )
+plotRGB (s1984_3_sila, stretch = "lin")
+plotRGB (s1984_3_sila)
+dev.off()
+
+# salviamo l'immagine in un file png che possa contenere tutte le informazioni sulle bande
+
+plotRGB (s1984_3_sila)
+writeRaster(s1984_3_sila, filename = "1984_falsi.png", NAflag = 255 )
