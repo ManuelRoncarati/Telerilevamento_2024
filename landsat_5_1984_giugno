@@ -50,8 +50,8 @@ crop_FLUO <- crop(immagine_FLUO, shape_sila[1])
 
 # grazie alla funzione mask ritaglio le immagini secondo il perimetro del parco
 
-mask_NIR <- mask (crop_NIR, shape[1])
-mask_SWIR <- mask (crop_SWIR, shape[1])
+mask_NIR <- mask (crop_NIR, shape_sila[1])
+mask_SWIR <- mask (crop_SWIR, shape_sila[1])
 mask_FLUO <- mask (crop_FLUO, shape_sila[1])
 mask_RGB <- mask (crop_RGB, shape_sila[1])
 
