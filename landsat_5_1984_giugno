@@ -4,6 +4,8 @@ library(terra)
 library(raster)
 library(sf)
 library(RStoolbox)
+library(viridis)
+
 setwd("C:/esame/landsat_5_1984_giugno")
 
 # Landsat 5 bands : B1 = blue , B2 = green, B3 = visible red, B4 = NIR (0.76-0.90), B5 = SWIR (1.55-1.75)
@@ -102,6 +104,33 @@ writeRaster (lin_NIR, filename = "lin_NIR.png", NAflag = 255)
 writeRaster (lin_SWIR, filename = "lin_SWIR.png", NAflag = 255)
 writeRaster (lin_FLUO, filename = "lin_FLUO.png", NAflag = 255)
 writeRaster (lin_RGB, filename = "lin_RGB.png", NAflag = 255)
+
+# creo un raster con tutte e 5 le bande a disposizione, eseguo le funzioni crop e mask ed infine porto l'immagine ad 8 bit
+
+multibanda <- c(B1, B2, B3, B4, B5) 
+img_multibanda <- rast(multibanda)
+crop_multi <- crop (img_multibanda, shape_sila[1])
+mask_multi <- mask (crop_multi, shape_sila[1])
+multi_scala <- rescaleImage (mask_multi, ymin = 0, ymax = 255)
+
+plotRGB(multi_scala, 3, 2, 1, stretch = "lin")
+dev.off()
+
+writeRaster (multi_scala, filename = "multi_scala.tif", NAflag = 255)
+
+# calcolo degli indici spettrali tramite la funzione spectralIndices 
+# utlizzo della libreria viridis per la colorRampPalette
+
+indici <- spectralIndices(multi_scala, blue = 1, green = 2, red = 3, nir= 4, swir2 = 5)
+plot(indici, col = cividis(100))
+
+# multi_scala_2 <- rescaleImage (mask_multi, ymin = 0, ymax = 1) prova a calcolare altri due indici che necessitano questa condizione 
+# EVI <- spectralIndices(multi_scala_2, blue = 1, green = 2, red = 3, nir= 4, swir2 = 5, indices = "EVI")
+# EVI2 <-spectralIndices(multi_scala_2, blue = 1, green = 2, red = 3, nir= 4, swir2 = 5, indices = "EVI2")
+# par (mfrow = c(1,2))
+# plot(EVI, col = turbo(100))
+# plot(EVI2, col = turbo(100))
+
 
 
 
