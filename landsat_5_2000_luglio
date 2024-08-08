@@ -34,6 +34,18 @@ plotRGB(immagine_FLUO, stretch = "lin", main = "FLUO_2000", cex.main = 4)
 plotRGB(immagine_RGB, stretch = "lin", main = "RGB_2000", cex.main = 4)
 
 dev.off()
+
+#carico lo shape file del PN della Sila
+
+shape_sila <- st_read("shape_sila.shp")
+
+# realizzo un crop delle immagini secondo le dimensioni del bounding box del parco
+
+crop_NIR <- crop (immagine_NIR, shape_sila[1])
+crop_SWIR <- crop (immagine_SWIR, shape_sila[1])
+crop_RGB <- crop (immagine_RGB, shape_sila[1])
+crop_FLUO <- crop(immagine_FLUO, shape_sila[1])
+
 # grazie alla funzione mask ritaglio le immagini secondo il perimetro del parco
 
 mask_NIR <- mask (crop_NIR, shape_sila[1])
