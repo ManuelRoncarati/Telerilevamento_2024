@@ -1,0 +1,9 @@
+
+library(terra)
+library(raster)
+library(sf)
+library(RStoolbox)
+library(viridis)
+
+setwd("C:/esame/landsat_5_2008_giugno")
+list.files()
