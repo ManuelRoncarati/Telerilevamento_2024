@@ -193,9 +193,15 @@ uso_suolo <- c("yellow", "chartreuse3" , "red" ,  "darkgreen" , "forestgreen" , 
 class_names <- c("Campi agricoli", "Latifoglie", "Urbano", "Conifere", "Latifoglie/Conifere", "Acqua")
 class_colors <- c("yellow", "chartreuse3" , "red" ,  "darkgreen" , "forestgreen" , "blue")
 
+#png(filename = "uso_suolo_1984_legend.png", width = 1920, height = 1080, res = 100)
+
 plot(land_cover_NIR$map, legend = FALSE, col = uso_suolo, main = "Land Cover Classification 1984")
-legend(x= 618500, y =4335000, legend = class_names, fill = class_colors, title = "Uso del suolo", cex = .55)
+legend(x= 618500, y =4335000, legend = class_names, fill = class_colors, title = "Uso del suolo", cex = 1.4)
 dev.off()
+
+# percentuali <- c(classe_1, classe_2, classe_3, classe_4, classe_5, classe_6)
+# 15.568701 23.984942 19.736488 13.901586  4.114009 22.694273
+
 
 # prestare comunque attenzioni in quanto unsuperClass le classi ho ogni volta le fa diverse quindi lanciando... 
 # ...il codice i colori non corrispondono più alle classi precedenti e anche le proporzioni variano leggermente
