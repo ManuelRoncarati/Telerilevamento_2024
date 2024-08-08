@@ -200,7 +200,7 @@ legend(x= 618500, y =4335000, legend = class_names, fill = class_colors, title =
 dev.off()
 
 # percentuali <- c(classe_1, classe_2, classe_3, classe_4, classe_5, classe_6)
-# 15.568701 23.984942 19.736488 13.901586  4.114009 22.694273
+# 15.204996 (campi); 26.255770(latifoglie); 3.258213(urbano); 29.351072 (conifere); 24.219386 (latifoglie/conifere); 1.710562 (acqua)
 
 
 # prestare comunque attenzioni in quanto unsuperClass le classi ho ogni volta le fa diverse quindi lanciando... 
