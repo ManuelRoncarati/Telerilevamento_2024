@@ -189,18 +189,26 @@ dev.off()
 # writeRaster(scala_RGB, filename = "scala_RGB_1984.png", NAflag = 255)
 # es: 1 = campi agricoli; 2 = latifoglie; classe 3 = urbano; classe 4 = conifere; classe 5 = misto conifere/latifoglie; classe 6 = acque interne
 
-uso_suolo <- c("yellow", "chartreuse3" , "red" ,  "darkgreen" , "forestgreen" , "blue")
-class_names <- c("Campi agricoli", "Latifoglie", "Urbano", "Conifere", "Latifoglie/Conifere", "Acqua")
+uso_suolo <- c("yellow", "chartreuse3" , "red" ,  "darkgreen" , "forestgreen" , "blue")  # colori per il plot dell'uso del suolo
+
+class_names <- c("Campi agricoli-15.2%", "Latifoglie-26.3%", "Urbano-3.3%", "Conifere-29.4%", "Latifoglie/Conifere-28.2%", "Acqua-1.7%") # nomi classi CON valore %
+
+#class_names <- c("Campi agricoli", "Latifoglie", "Urbano", "Conifere", "Latifoglie/Conifere", "Acqua") # nome classi SENZA valore %
+
 class_colors <- c("yellow", "chartreuse3" , "red" ,  "darkgreen" , "forestgreen" , "blue")
 
-#png(filename = "uso_suolo_1984_legend.png", width = 1920, height = 1080, res = 100)
+#png(filename = "uso_suolo_1984_legend.png", width = 1920, height = 1080, res = 100) # salavataggio plot NO %
+
+png(filename = "uso_suolo_1984_legend_valori.png", width = 1920, height = 1080, res = 100) # salvataggio plot %
 
 plot(land_cover_NIR$map, legend = FALSE, col = uso_suolo, main = "Land Cover Classification 1984")
-legend(x= 618500, y =4335000, legend = class_names, fill = class_colors, title = "Uso del suolo", cex = 1.4)
+legend(x= 618500, y =4335000, legend = class_names, fill = class_colors, title = "Uso del suolo", cex = 1.1)
 dev.off()
 
 # percentuali <- c(classe_1, classe_2, classe_3, classe_4, classe_5, classe_6)
 # 15.204996 (campi); 26.255770(latifoglie); 3.258213(urbano); 29.351072 (conifere); 24.219386 (latifoglie/conifere); 1.710562 (acqua)
+
+
 
 
 # prestare comunque attenzioni in quanto unsuperClass le classi ho ogni volta le fa diverse quindi lanciando... 
