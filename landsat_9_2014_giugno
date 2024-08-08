@@ -95,10 +95,10 @@ lin_FLUO <- stretch (scala_FLUO, minq = .02, maxq = .98)
 
 par (mfrow = c(1,4))
 
-plotRGB (lin_NIR, main = "NIR_2000", cex.main = 4)
-plotRGB (lin_SWIR, main = "SWIR_2000", cex.main = 4)
-plotRGB (lin_FLUO, main = "FLUO_2000", cex.main = 4)
-plotRGB (lin_RGB, main = "RGB_2000", cex.main = 4)
+plotRGB (lin_NIR, main = "NIR_2014", cex.main = 4)
+plotRGB (lin_SWIR, main = "SWIR_2014", cex.main = 4)
+plotRGB (lin_FLUO, main = "FLUO_2014", cex.main = 4)
+plotRGB (lin_RGB, main = "RGB_2014", cex.main = 4)
 dev.off()
 
 # salvataggio delle singole immagini nella wd grazie alla funzione writeRaster, NAflag per ottenere uno sfondo bianco
