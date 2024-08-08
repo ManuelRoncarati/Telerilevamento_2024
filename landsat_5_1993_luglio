@@ -171,25 +171,6 @@ land_cover_NIR$model # visualizziamo le proporzioni
 
 # il rapporto between_SS / total_SS è molto buono nel NIR, sempre sopra 82 %, testato con più plot
 
-a <- land_cover_NIR$model$size[1]
-b <- land_cover_NIR$model$size[2]
-c <- land_cover_NIR$model$size[3]
-d <- land_cover_NIR$model$size[4]
-e <- land_cover_NIR$model$size[5]
-f <- land_cover_NIR$model$size[6]
-
-tot_NIR <- a + b + c + d + e + f
-
-classe_1 <- (a / tot_NIR)*100
-classe_2 <- (b / tot_NIR)*100
-classe_3 <- (c / tot_NIR)*100
-classe_4 <- (d / tot_NIR)*100
-classe_5 <- (e / tot_NIR)*100
-classe_6 <- (f / tot_NIR)*100
-
-# richiamare le classe per vedere la percetuale di ciascuna classe 
-# confronto per identificare l'suo del suolo per ogni classe
-# salvataggio del plot che segue
 par(mfrow = c(1, 2))
 
 plot(land_cover_NIR$map, col = colors, main = "Land Cover Classification")
