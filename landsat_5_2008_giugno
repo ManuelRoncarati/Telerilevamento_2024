@@ -7,3 +7,33 @@ library(viridis)
 
 setwd("C:/esame/landsat_5_2008_giugno")
 list.files()
+
+B1 <- "LT05_L2SP_188033_20080622_20200829_02_T1_SR_B1.TIF"
+B2 <- "LT05_L2SP_188033_20080622_20200829_02_T1_SR_B2.TIF"
+B3 <- "LT05_L2SP_188033_20080622_20200829_02_T1_SR_B3.TIF"
+B4 <- "LT05_L2SP_188033_20080622_20200829_02_T1_SR_B4.TIF"
+B5 <- "LT05_L2SP_188033_20080622_20200829_02_T1_SR_B4.TIF"
+
+# creo l'immagine satellitare
+
+stack_NIR <- c( B4, B3, B2)
+stack_SWIR <- c( B5, B3, B2)
+stack_RGB <- c( B3, B2, B1)
+stack_FLUO <- c( B2, B4, B3)
+
+immagine_NIR <- rast (stack_NIR)
+immagine_SWIR <- rast (stack_SWIR)
+immagine_RGB <- rast (stack_RGB)
+immagine_FLUO <- rast (stack_FLUO)
+
+par (mfrow = c (1,4))
+
+# salvare esportando dal plot 
+
+plotRGB(immagine_NIR, stretch = "lin", main = "NIR_2008", cex.main = 4)
+plotRGB(immagine_SWIR, stretch = "lin", main = "SWIR_2008", cex.main = 4)
+plotRGB(immagine_FLUO, stretch = "lin", main = "FLUO_2008", cex.main = 4)
+plotRGB(immagine_RGB, stretch = "lin", main = "RGB_2008", cex.main = 4)
+
+dev.off()
+
