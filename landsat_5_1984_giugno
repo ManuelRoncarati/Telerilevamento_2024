@@ -7,6 +7,7 @@ library(RStoolbox)
 library(viridis)
 
 setwd("C:/esame/landsat_5_1984_giugno")
+list.files()
 
 # Landsat 5 bands : B1 = blue , B2 = green, B3 = visible red, B4 = NIR (0.76-0.90), B5 = SWIR (1.55-1.75)
 
