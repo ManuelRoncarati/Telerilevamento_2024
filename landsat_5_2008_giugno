@@ -98,4 +98,24 @@ plotRGB (lin_FLUO, main = "FLUO_2008", cex.main = 4)
 plotRGB (lin_RGB, main = "RGB_2008", cex.main = 4)
 dev.off()
 
+# salvataggio delle singole immagini nella wd grazie alla funzione writeRaster, NAflag per ottenere uno sfondo bianco
+
+writeRaster (lin_NIR, filename = "lin_NIR_2008.png", NAflag = 255)
+writeRaster (lin_SWIR, filename = "lin_SWIR_2008.png", NAflag = 255)
+writeRaster (lin_FLUO, filename = "lin_FLUO_2008.png", NAflag = 255)
+writeRaster (lin_RGB, filename = "lin_RGB_2008.png", NAflag = 255)
+
+# creo un raster con tutte e 5 le bande a disposizione, eseguo le funzioni crop e mask ed infine porto l'immagine ad 8 bit
+
+multibanda <- c(B1, B2, B3, B4, B5) 
+img_multibanda <- rast(multibanda)
+crop_multi <- crop (img_multibanda, shape_sila[1])
+mask_multi <- mask (crop_multi, shape_sila[1])
+multi_scala <- rescaleImage (mask_multi, ymin = 0, ymax = 255)
+
+plotRGB(multi_scala, 3, 2, 1, stretch = "lin")
+dev.off()
+
+writeRaster (multi_scala, filename = "multi_scala_2008.tif", NAflag = 255)
+
 
