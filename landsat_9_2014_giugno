@@ -182,7 +182,7 @@ land_cover_NIR$model # visualizziamo le proporzioni
 # il rapporto between_SS / total_SS è molto buono nel NIR, sempre sopra 82 %, testato con più plot
 par(mfrow = c(1, 2))
 
-plot(land_cover_NIR$map, col = colors, main = "Land Cover Classification_2014", legend = FALSE)
+plot(land_cover_NIR$map, col = colors, main = "Land Cover Classification_2014", legend = FALSE) # salvare
 plotRGB (lin_RGB)
 dev.off()
 
