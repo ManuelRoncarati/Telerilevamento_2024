@@ -198,3 +198,17 @@ dev.off()
 # si consiglia di scaricare le immagini e fare un confronto più approfondito, molto utile per discriminare conifere, latifoglie e boschi misti il confronto con il NIR
 # writeRaster(scala_RGB, filename = "scala_RGB_1993.png", NAflag = 255)
 
+uso_suolo <- c("blue", "red" , "yellow" , "chartreuse3", "forestgreen" , "darkgreen")  # colori per il plot dell'uso del suolo
+percentuali <- c(classe_1, classe_2, classe_3, classe_4, classe_5, classe_6)
+percentuali
+class_names <- c("acqua-1.65%", "urbano-5.7%", "campi-14.28", "latifoglie-18.81%", "latifoglie/conifere-25.75%", "conifere-33.79%")
+
+png(filename = "uso_suolo_1993_legend_valori.png", width = 1920, height = 1080, res = 100) # salvataggio plot %
+
+plot(land_cover_NIR$map, legend = FALSE, col = uso_suolo, main = "Land Cover Classification 1993")
+legend(x= 618500, y =4335000, legend = class_names, fill = uso_suolo, title = "Uso del suolo", cex = 1.1)
+dev.off()
+
+
+
+
