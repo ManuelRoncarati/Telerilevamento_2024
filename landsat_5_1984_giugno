@@ -190,8 +190,11 @@ dev.off()
 # es: 1 = campi agricoli; 2 = latifoglie; classe 3 = urbano; classe 4 = conifere; classe 5 = misto conifere/latifoglie; classe 6 = acque interne
 
 uso_suolo <- c("yellow", "chartreuse3" , "red" ,  "darkgreen" , "forestgreen" , "blue")
+class_names <- c("Campi agricoli", "Latifoglie", "Urbano", "Conifere", "Latifoglie/Conifere", "Acqua")
+class_colors <- c("yellow", "chartreuse3" , "red" ,  "darkgreen" , "forestgreen" , "blue")
 
-plot(land_cover_NIR$map, col = uso_suolo, main = "Land Cover Classification 1984")
+plot(land_cover_NIR$map, legend = FALSE, col = uso_suolo, main = "Land Cover Classification 1984")
+legend(x= 618500, y =4335000, legend = class_names, fill = class_colors, title = "Uso del suolo", cex = .55)
 dev.off()
 
 # prestare comunque attenzioni in quanto unsuperClass le classi ho ogni volta le fa diverse quindi lanciando... 
