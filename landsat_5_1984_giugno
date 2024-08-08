@@ -156,11 +156,9 @@ dev.off()
 land_cover_FLUO$model # visualizziamo le proporzioni 
 land_cover_NIR$model # visualizziamo le proporzioni 
 
-# nel mio caso di 6 classi il rapporto between_SS / total_SS 
-# è 82.3 % per il NIR e 82.1 % per il FLUO
-# nel caso di 10 cluster ad esempio between_SS / total_SS =  89.2 %
-# ad esempio RGB e SWIR danno volari maggiori ma in realtà 
-#non sono in grado di distinguere correttamente l'acqua dalle conifere o dalle ombre
+# il rapporto between_SS / total_SS è 82.3 % per il NIR e 82.1 % per il FLUO
+
+tot <- 
 
 
 
