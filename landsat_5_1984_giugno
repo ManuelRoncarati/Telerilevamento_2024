@@ -30,10 +30,12 @@ immagine_FLUO <- rast (stack_FLUO)
 
 par (mfrow = c (1,4))
 
-plotRGB(immagine_NIR, stretch = "lin")
-plotRGB(immagine_SWIR, stretch = "lin")
-plotRGB(immagine_FLUO, stretch = "lin")
-plotRGB(immagine_RGB, stretch = "lin")
+# salvare esportando dal plot 
+
+plotRGB(immagine_NIR, stretch = "lin", main = "NIR_1984", cex.main = 4)
+plotRGB(immagine_SWIR, stretch = "lin", main = "SWIR_1984", cex.main = 4)
+plotRGB(immagine_FLUO, stretch = "lin", main = "FLUO_1984", cex.main = 4)
+plotRGB(immagine_RGB, stretch = "lin", main = "RGB_1984", cex.main = 4)
 
 dev.off()
 
@@ -80,6 +82,8 @@ plotRGB (scala_SWIR, stretch = "lin")
 plotRGB (scala_FLUO, stretch = "lin")
 plotRGB (scala_RGB, stretch  = "lin")
 
+dev.off()
+
 # stretch lineare personalizzato sulle singole immagini grazie alla funzione stretch
 
 lin_RGB <- stretch (scala_RGB, minq = .01, maxq = .99)
@@ -87,23 +91,23 @@ lin_NIR <- stretch (scala_NIR, minq = .02, maxq = .98)
 lin_SWIR <- stretch (scala_SWIR, minq = .02, maxq = .98)
 lin_FLUO <- stretch (scala_FLUO, minq = .02, maxq = .98)
 
-#png(filename = "lin_plot.png", width = 1920, height = 1080)
+# salvare esportando dal plot il seguente plot
 
 par (mfrow = c(1,4))
 
-plotRGB (lin_NIR, main = "NIR")
-plotRGB (lin_SWIR, main = "SWIR")
-plotRGB (lin_FLUO, main = "FLUO")
-plotRGB (lin_RGB, main = "RGB")
+plotRGB (lin_NIR, main = "NIR_1984", cex.main = 4)
+plotRGB (lin_SWIR, main = "SWIR_1984", cex.main = 4)
+plotRGB (lin_FLUO, main = "FLUO_1984", cex.main = 4)
+plotRGB (lin_RGB, main = "RGB_1984", cex.main = 4)
 
 dev.off()
 
 # salvataggio delle singole immagini nella wd grazie alla funzione writeRaster, NAflag per ottenere uno sfondo bianco
 
-#writeRaster (lin_NIR, filename = "lin_NIR.png", NAflag = 255)
-#writeRaster (lin_SWIR, filename = "lin_SWIR.png", NAflag = 255)
-#writeRaster (lin_FLUO, filename = "lin_FLUO.png", NAflag = 255)
-#writeRaster (lin_RGB, filename = "lin_RGB.png", NAflag = 255)
+writeRaster (lin_NIR, filename = "lin_NIR_1984.png", NAflag = 255)
+writeRaster (lin_SWIR, filename = "lin_SWIR_1984.png", NAflag = 255)
+writeRaster (lin_FLUO, filename = "lin_FLUO_1984.png", NAflag = 255)
+writeRaster (lin_RGB, filename = "lin_RGB_1984.png", NAflag = 255)
 
 # creo un raster con tutte e 5 le bande a disposizione, eseguo le funzioni crop e mask ed infine porto l'immagine ad 8 bit
 
@@ -116,7 +120,7 @@ multi_scala <- rescaleImage (mask_multi, ymin = 0, ymax = 255)
 plotRGB(multi_scala, 3, 2, 1, stretch = "lin")
 dev.off()
 
-#writeRaster (multi_scala, filename = "multi_scala.tif", NAflag = 255)
+writeRaster (multi_scala, filename = "multi_scala.tif", NAflag = 255)
 
 # calcolo degli indici spettrali tramite la funzione spectralIndices 
 # utlizzo della libreria viridis per la colorRampPalette
@@ -137,33 +141,22 @@ dev.off()
 # realizzo una mappa dell'uso del suolo grazie alla funzione unsuperclass
 
 land_cover_NIR <- unsuperClass(scala_NIR, nClasses = 6)
-land_cover_FLUO <- unsuperClass(scala_FLUO, nClasses = 6)
 
-par(mfrow = c(1, 2))
 plot(land_cover_NIR$map)
-plot(land_cover_FLUO$map)
 dev.off()
 
-colors <- c("red", "green", "blue", "yellow", "purple", "cyan")
+colors <- c("red", "green", "blue", "yellow", "purple", "cyan") # utile per discriminare le classi
 
-#png(filename = "land_cover_plot_NIR_FLUO.png", width = 1920, height = 1080)
-
-par(mfrow = c(1, 2))
-plot(land_cover_FLUO$map, col = colors, main = "Land Cover Classification")
-plot(land_cover_NIR$map, col = colors, main = "Land Cover Classification")
+plot(land_cover_NIR$map, col = colors, main = "Land Cover Classification", cex.main = 2, cex.lab = 1.5, cex.axis = 1.2) # salvo in png esportando dal plot in 1920 x 1080
 dev.off()
 
-#writeRaster(land_cover_FLUO$map, filename = "land_cover_FLUO.tif")
-#writeRaster(land_cover_NIR$map, filename = "land_cover_NIR.tif")
+writeRaster(land_cover_NIR$map, filename = "land_cover_NIR.tif") # raster a 5 classi land_cover molto figo da usare in qgis per studi di landscape ecology
 
 # calcaliamo le proporzioni delle diverse classi
 
-land_cover_FLUO$model # visualizziamo le proporzioni 
 land_cover_NIR$model # visualizziamo le proporzioni 
 
-# il rapporto between_SS / total_SS è sempre maggiore nel NIR
-# dunque mi concentro su NIR
-
+# il rapporto between_SS / total_SS è molto buono nel NIR, sempre sopra 82 %, testato con più plot
 
 a <- land_cover_NIR$model$size[1]
 b <- land_cover_NIR$model$size[2]
@@ -183,21 +176,22 @@ classe_6 <- (f / tot_NIR)*100
 
 # richiamare le classe per vedere la percetuale di ciascuna classe 
 # confronto per identificare l'suo del suolo per ogni classe
+# salvataggio del plot che segue
+
 par(mfrow = c(1, 2))
+
 plot(land_cover_NIR$map, col = colors, main = "Land Cover Classification")
 plotRGB (lin_RGB)
+
 dev.off()
 
-# si consiglia di scaricare le immagini e fare un confronto più approfondito 
-# png(filename = "land_cover_NIR.png", width = 1920, height = 1080)
-# writeRaster(scala_RGB, filename = "scala_RGB.png", NAflag = 255)
-# es: 1 = conifere; 2 = acque interne; classse 3 = campi agricoli; classe 4 = boschi misti; classe 5 = latifoglie; classe 6 = urbano 
+# si consiglia di scaricare le immagini e fare un confronto più approfondito, molto utile per discriminare conifere, latifoglie e boschi misti il confronto con il NIR
+# writeRaster(scala_RGB, filename = "scala_RGB_1984.png", NAflag = 255)
+# es: 1 = campi agricoli; 2 = latifoglie; classe 3 = urbano; classe 4 = conifere; classe 5 = misto conifere/latifoglie; classe 6 = acque interne
 
-colors_land <- c("darkgreen", "blue", "yellow", "lightgreen", "green", "red")
+uso_suolo <- c("yellow", "chartreuse3" , "red" ,  "darkgreen" , "forestgreen" , "blue")
 
-# png(filename = "land_cover_NIR_classificato.png", width = 1920, height = 1080)
-
-plot(land_cover_NIR$map, col = colors_land, main = "Land Cover Classification")
+plot(land_cover_NIR$map, col = uso_suolo, main = "Land Cover Classification 1984")
 dev.off()
 
 # prestare comunque attenzioni in quanto unsuperClass le classi ho ogni volta le fa diverse quindi lanciando... 
