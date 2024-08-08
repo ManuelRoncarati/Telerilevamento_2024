@@ -12,7 +12,7 @@ B1 <- "LT05_L2SP_188033_20080622_20200829_02_T1_SR_B1.TIF"
 B2 <- "LT05_L2SP_188033_20080622_20200829_02_T1_SR_B2.TIF"
 B3 <- "LT05_L2SP_188033_20080622_20200829_02_T1_SR_B3.TIF"
 B4 <- "LT05_L2SP_188033_20080622_20200829_02_T1_SR_B4.TIF"
-B5 <- "LT05_L2SP_188033_20080622_20200829_02_T1_SR_B4.TIF"
+B5 <- "LT05_L2SP_188033_20080622_20200829_02_T1_SR_B5.TIF"
 
 # creo l'immagine satellitare
 
@@ -36,4 +36,66 @@ plotRGB(immagine_FLUO, stretch = "lin", main = "FLUO_2008", cex.main = 4)
 plotRGB(immagine_RGB, stretch = "lin", main = "RGB_2008", cex.main = 4)
 
 dev.off()
+
+#carico lo shape file del PN della Sila
+
+shape_sila <- st_read("shape_sila.shp")
+
+# realizzo un crop delle immagini secondo le dimensioni del bounding box del parco
+
+crop_NIR <- crop (immagine_NIR, shape_sila[1])
+crop_SWIR <- crop (immagine_SWIR, shape_sila[1])
+crop_RGB <- crop (immagine_RGB, shape_sila[1])
+crop_FLUO <- crop(immagine_FLUO, shape_sila[1])
+
+# grazie alla funzione mask ritaglio le immagini secondo il perimetro del parco
+
+mask_NIR <- mask (crop_NIR, shape_sila[1])
+mask_SWIR <- mask (crop_SWIR, shape_sila[1])
+mask_FLUO <- mask (crop_FLUO, shape_sila[1])
+mask_RGB <- mask (crop_RGB, shape_sila[1])
+
+par (mfrow = c (1, 4))
+
+plotRGB (mask_NIR, stretch = "lin")
+plotRGB (mask_SWIR, stretch = "lin")
+plotRGB (mask_FLUO, stretch = "lin")
+plotRGB (mask_RGB, stretch  = "lin")
+dev.off()
+
+# utilizzo la funzione rescale per trasformare rendere le mie immagini ad 8 bit
+
+scala_NIR  <- rescaleImage ( mask_NIR, ymin = 0, ymax = 255)
+scala_SWIR <- rescaleImage( mask_SWIR, ymin = 0, ymax = 255)
+scala_FLUO <- rescaleImage ( mask_FLUO, ymin = 0, ymax = 255)
+scala_RGB <- rescaleImage ( mask_RGB, ymin = 0, ymax = 255)
+
+# ulteriore plottaggio per visualizzare le immagini ad 8 bit
+
+par (mfrow = c (1, 4))
+
+plotRGB (scala_NIR, stretch = "lin")
+plotRGB (scala_SWIR, stretch = "lin")
+plotRGB (scala_FLUO, stretch = "lin")
+plotRGB (scala_RGB, stretch  = "lin")
+dev.off()
+
+# stretch lineare personalizzato sulle singole immagini grazie alla funzione stretch
+
+lin_RGB <- stretch (scala_RGB, minq = .01, maxq = .99)
+lin_NIR <- stretch (scala_NIR, minq = .02, maxq = .98)
+lin_SWIR <- stretch (scala_SWIR, minq = .02, maxq = .98)
+lin_FLUO <- stretch (scala_FLUO, minq = .02, maxq = .98)
+dev.off()
+
+# salvare esportando dal plot il seguente plot
+
+par (mfrow = c(1,4))
+
+plotRGB (lin_NIR, main = "NIR_2008", cex.main = 4)
+plotRGB (lin_SWIR, main = "SWIR_2008", cex.main = 4)
+plotRGB (lin_FLUO, main = "FLUO_2008", cex.main = 4)
+plotRGB (lin_RGB, main = "RGB_2008", cex.main = 4)
+dev.off()
+
 
