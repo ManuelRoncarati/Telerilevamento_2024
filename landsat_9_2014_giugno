@@ -190,3 +190,7 @@ dev.off()
 
 writeRaster(scala_RGB, filename = "scala_RGB_2014.png", NAflag = 255)
 
+percentuali <- c(classe_1, classe_2, classe_3, classe_4, classe_5, classe_6)
+percentuali # 26.287697 19.188684  5.097411 22.364558  1.654657 25.406992
+
+uso_suolo <- c("darkgreen" , "forestgreen", "red" , "yellow", "blue", "chartreuse3")  # colori per il plot dell'uso del suolo
