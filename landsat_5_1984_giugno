@@ -121,15 +121,34 @@ writeRaster (multi_scala, filename = "multi_scala.tif", NAflag = 255)
 # calcolo degli indici spettrali tramite la funzione spectralIndices 
 # utlizzo della libreria viridis per la colorRampPalette
 
-indici <- spectralIndices(multi_scala, blue = 1, green = 2, red = 3, nir= 4, swir2 = 5)
+indici <- spectralIndices(multi_scala, blue = 1, green = 2, red = 3, nir= 4, swir2 = 5, indices = c("NDVI", "SAVI", "MNDWI", "GNDVI"))
 plot(indici, col = cividis(100))
 
-# multi_scala_2 <- rescaleImage (mask_multi, ymin = 0, ymax = 1) prova a calcolare altri due indici che necessitano questa condizione 
-# EVI <- spectralIndices(multi_scala_2, blue = 1, green = 2, red = 3, nir= 4, swir2 = 5, indices = "EVI")
-# EVI2 <-spectralIndices(multi_scala_2, blue = 1, green = 2, red = 3, nir= 4, swir2 = 5, indices = "EVI2")
-# par (mfrow = c(1,2))
-# plot(EVI, col = turbo(100))
-# plot(EVI2, col = turbo(100))
+# per il calcolo dell'indice EVI è necessario portare il range di colori dell'immagine da [0,255] a [0,1]
+
+multi_scala_2 <- rescaleImage (mask_multi, ymin = 0, ymax = 1) 
+EVI <- spectralIndices(multi_scala_2, blue = 1, green = 2, red = 3, nir= 4, swir2 = 5, indices = "EVI")
+plot(EVI, col = turbo(100))
+dev.off()
+
+# cl <- colorRampPalette(c("darkblue", "yellow", "red", "black")) (100) colorRampPalette molto bella
+# NIR e fluo di rivelano gli unici adatti ad una unSuperclass a 6 classi
+
+# realizzo una mappa dell'uso del suolo grazie alla funzione unsuperclass
+
+land_cover_NIR <- unsuperClass(scala_NIR, nClasses = 6)
+land_cover_FLUO <- unsuperClass(scala_FLUO, nClasses = 6)
+
+par(mfrow = c(1, 2))
+plot(land_cover_NIR$map)
+plot(land_cover_FLUO$map)
+dev.off()
+
+colors <- c("red", "green", "blue", "yellow", "purple", "cyan")
+
+par(mfrow = c(1, 2))
+plot(land_cover_FLUO$map, col = colors, main = "Land Cover Classification")
+plot(land_cover_NIR$map, col = colors, main = "Land Cover Classification")
 
 
 
