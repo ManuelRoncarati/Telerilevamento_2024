@@ -146,25 +146,52 @@ dev.off()
 
 colors <- c("red", "green", "blue", "yellow", "purple", "cyan")
 
+#png(filename = "land_cover_plot_NIR_FLUO.png", width = 1920, height = 1080)
+
 par(mfrow = c(1, 2))
 plot(land_cover_FLUO$map, col = colors, main = "Land Cover Classification")
 plot(land_cover_NIR$map, col = colors, main = "Land Cover Classification")
 dev.off()
+
+#writeRaster(land_cover_FLUO$map, filename = "land_cover_FLUO.tif")
+#writeRaster(land_cover_NIR$map, filename = "land_cover_NIR.tif")
 
 # calcaliamo le proporzioni delle diverse classi
 
 land_cover_FLUO$model # visualizziamo le proporzioni 
 land_cover_NIR$model # visualizziamo le proporzioni 
 
-# il rapporto between_SS / total_SS è 82.3 % per il NIR e 82.1 % per il FLUO
-
-tot <- 
-
+# il rapporto between_SS / total_SS è sempre maggiore nel NIR
+# dunque mi concentro su NIR
 
 
+a <- land_cover_NIR$model$size[1]
+b <- land_cover_NIR$model$size[2]
+c <- land_cover_NIR$model$size[3]
+d <- land_cover_NIR$model$size[4]
+e <- land_cover_NIR$model$size[5]
+f <- land_cover_NIR$model$size[6]
 
+tot_NIR <- a + b + c + d + e + f
 
+classe_1 <- (a / tot_NIR)*100
+classe_2 <- (b / tot_NIR)*100
+classe_3 <- (c / tot_NIR)*100
+classe_4 <- (d / tot_NIR)*100
+classe_5 <- (e / tot_NIR)*100
+classe_6 <- (f / tot_NIR)*100
 
+# richiamare le classe per vedere la percetuale di ciascuna classe 
+# confronto per identificare l'suo del suolo per ogni classe
+par(mfrow = c(1, 2))
+plot(land_cover_NIR$map, col = colors, main = "Land Cover Classification")
+plotRGB (lin_RGB)
+dev.off()
+
+# si consiglia di scaricare le immagini e fare un confronto più approfondito 
+# png(filename = "land_cover_NIR.png", width = 1920, height = 1080)
+# writeRaster(scala_RGB, filename = "scala_RGB.png", NAflag = 255)
+# es: 1 = conifere; 2 = acque interne; classse 3 = campi agricoli; classe 4 = boschi misti; classe 5 = latifoglie; classe 6 = urbano 
 
 
 
