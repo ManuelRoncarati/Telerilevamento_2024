@@ -1,0 +1,141 @@
+library(pacman)# ottimo pacchetto per richiamare più pacchetti insieme
+p_load(geodata, elevatr, terra, sf, tidyverse, classInt, rayshader, magick)
+
+setwd("C:/esame")
+
+ita<- gadm(country = "ITA", level = 1, path = getwd())
+
+regioni <- st_as_sf(ita)
+plot(st_geometry(regioni))
+print(regioni)
+regione_cal <- subset(regioni, NAME_1 == "Calabria")
+
+plot(st_geometry(regione_cal))
+
+italia <- st_union(regioni)
+
+elev <- get_elev_raster( locations = regione_cal, z = 9, clip = "locations")
+
+crs_lambert <- "+proj=laea +lat_0=52 +lon_0=10 +x_0=4321000 +y_0=3210000 +datum=WGS84 +units=m +no_defs"
+elevation_rast <- rast(elev)
+elev_lambert <- project(elevation_rast, crs_lambert)
+
+elev_df <- as.data.frame(elev_lambert, xy = TRUE)
+
+names(elev_df)[3] <- "dem"
+
+breaks <- classIntervals(elev_df$dem, n = 7, style = "pretty" )$brks
+colors <- hcl.colors(n = length(breaks), palette = "Zissou 1")
+
+texture <- colorRampPalette(colors)(512)
+
+map <- ggplot(data = elev_df) +
+    geom_raster(
+        aes(
+            x = x,
+            y = y,
+            fill = dem
+        )
+    ) +
+    scale_fill_gradientn(
+        name = "Elevation (m)",
+        colors = texture,
+        breaks = breaks,
+        labels = round(breaks, 0),
+        limits = c(
+            min(elev_df$dem),
+            max(elev_df$dem)
+        )
+    ) +
+    guides(
+        fill = guide_colorbar(
+            direction = "vertical",
+            barheight = unit(30, "mm"),
+            barwidth = unit(3, "mm"),
+            title.position = "top",
+            label.position = "right",
+            title.hjust = .5,
+            label.hjust = .5,
+            ncol = 1,
+            byrow = FALSE
+        )
+    ) +
+    coord_sf(
+        crs = crs_lambert
+    ) +
+    theme_minimal() +
+    theme(
+        axis.line = element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        legend.text = element_text(
+            size = 9, color = "grey10"
+        ),
+        legend.title = element_text(
+            size = 10, color = "grey10"
+        ),
+        legend.position = c(.9, .285),
+        panel.grid.major = element_line(
+            color = "white"
+        ),
+        panel.grid.minor = element_line(
+            color = "white"
+        ),
+        plot.background = element_rect(
+            fill = "white", color = NA
+        ),
+        legend.background = element_rect(
+            fill = "white", color = NA
+        ),
+        panel.border = element_rect(
+            fill = NA, color = "white"
+        ),
+        plot.margin = unit(
+            c(0, 0, 0, 0), "lines"
+        )
+    )
+
+
+h <- nrow(elev_lambert)
+w <- ncol(elev_lambert)
+
+plot_gg(
+    ggobj = map,
+    width = w / 300,
+    height = h / 300,
+    scale = 100,
+    solid = FALSE,
+    shadow =TRUE,
+    shadowcolor = "white",
+    shadowwidth = 0,
+    shadow_intensity = 1,
+    
+    
+    zoom = .5,
+    phi = 87,
+    theta = 0,
+    windowsize = c(w / 4, h / 4)
+)
+
+#  "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/4k/photo_studio_loft_hall_4k.hdr"
+
+filename <- "3d_calabria.png"
+hdri_file <- "photo_studio_loft_hall_4k.hdr"
+filename <- "3d_calabria.png"
+
+rayshader::render_highquality(
+    filename = filename,
+    preview = TRUE,
+    light = TRUE,
+    environment_light = hdri_file,
+lightdirection = 100,
+    intensity_env = .9,
+    interactive = FALSE,
+    width = w*2,
+    height = h*2
+)
+
+save_obj("calabria_3d.obj")
+dev.off()
