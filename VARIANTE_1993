@@ -1,0 +1,200 @@
+library(terra)
+library(raster)
+library(sf)
+library(RStoolbox)
+library(viridis)
+
+setwd("C:/esame/landsat_5_1993_luglio")
+list.files()
+
+B1 <- "LT05_L2SP_188033_19930731_20200913_02_T1_SR_B1.TIF"
+B2 <- "LT05_L2SP_188033_19930731_20200913_02_T1_SR_B2.TIF"
+B3 <- "LT05_L2SP_188033_19930731_20200913_02_T1_SR_B3.TIF"
+B4 <- "LT05_L2SP_188033_19930731_20200913_02_T1_SR_B4.TIF"
+B5 <- "LT05_L2SP_188033_19930731_20200913_02_T1_SR_B5.TIF"
+# creo l'immagine satellitare
+
+stack_NIR <- c( B4, B3, B2)
+stack_SWIR <- c( B5, B3, B2)
+stack_RGB <- c( B3, B2, B1)
+stack_FLUO <- c( B2, B4, B3)
+
+immagine_NIR <- rast (stack_NIR)
+immagine_SWIR <- rast (stack_SWIR)
+immagine_RGB <- rast (stack_RGB)
+immagine_FLUO <- rast (stack_FLUO)
+
+par (mfrow = c (1,4))
+
+# salvare esportando dal plot 
+
+plotRGB(immagine_NIR, stretch = "lin", main = "NIR_1993", cex.main = 4)
+plotRGB(immagine_SWIR, stretch = "lin", main = "SWIR_1993", cex.main = 4)
+plotRGB(immagine_FLUO, stretch = "lin", main = "FLUO_1993", cex.main = 4)
+plotRGB(immagine_RGB, stretch = "lin", main = "RGB_1993", cex.main = 4)
+
+dev.off()
+
+#carico lo shape file del PN della Sila
+
+shape_sila <- st_read("shape_sila.shp")
+
+# realizzo un crop delle immagini secondo le dimensioni del bounding box del parco
+
+crop_NIR <- crop (immagine_NIR, shape_sila[1])
+crop_SWIR <- crop (immagine_SWIR, shape_sila[1])
+crop_RGB <- crop (immagine_RGB, shape_sila[1])
+crop_FLUO <- crop(immagine_FLUO, shape_sila[1])
+
+# grazie alla funzione mask ritaglio le immagini secondo il perimetro del parco
+
+mask_NIR <- mask (crop_NIR, shape_sila[1])
+mask_SWIR <- mask (crop_SWIR, shape_sila[1])
+mask_FLUO <- mask (crop_FLUO, shape_sila[1])
+mask_RGB <- mask (crop_RGB, shape_sila[1])
+
+par (mfrow = c (1, 4))
+
+plotRGB (mask_NIR, stretch = "lin")
+plotRGB (mask_SWIR, stretch = "lin")
+plotRGB (mask_FLUO, stretch = "lin")
+plotRGB (mask_RGB, stretch  = "lin")
+dev.off()
+
+# utilizzo la funzione rescale per trasformare rendere le mie immagini ad 8 bit
+
+scala_NIR  <- rescaleImage ( mask_NIR, ymin = 0, ymax = 255)
+scala_SWIR <- rescaleImage( mask_SWIR, ymin = 0, ymax = 255)
+scala_FLUO <- rescaleImage ( mask_FLUO, ymin = 0, ymax = 255)
+scala_RGB <- rescaleImage ( mask_RGB, ymin = 0, ymax = 255)
+
+# ulteriore plottaggio per visualizzare le immagini ad 8 bit
+
+par (mfrow = c (1, 4))
+
+plotRGB (scala_NIR, stretch = "lin")
+plotRGB (scala_SWIR, stretch = "lin")
+plotRGB (scala_FLUO, stretch = "lin")
+plotRGB (scala_RGB, stretch  = "lin")
+dev.off()
+
+# stretch lineare personalizzato sulle singole immagini grazie alla funzione stretch
+
+lin_RGB <- stretch (scala_RGB, minq = .01, maxq = .99)
+lin_NIR <- stretch (scala_NIR, minq = .02, maxq = .98)
+lin_SWIR <- stretch (scala_SWIR, minq = .02, maxq = .98)
+lin_FLUO <- stretch (scala_FLUO, minq = .02, maxq = .98)
+
+# salvare esportando dal plot il seguente plot
+
+par (mfrow = c(1,4))
+
+plotRGB (lin_NIR, main = "NIR_1993", cex.main = 4)
+plotRGB (lin_SWIR, main = "SWIR_1993", cex.main = 4)
+plotRGB (lin_FLUO, main = "FLUO_1993", cex.main = 4)
+plotRGB (lin_RGB, main = "RGB_1993", cex.main = 4)
+dev.off()
+
+# salvataggio delle singole immagini nella wd grazie alla funzione writeRaster, NAflag per ottenere uno sfondo bianco
+
+writeRaster (lin_NIR, filename = "lin_NIR_1993.png", NAflag = 255)
+writeRaster (lin_SWIR, filename = "lin_SWIR_1993.png", NAflag = 255)
+writeRaster (lin_FLUO, filename = "lin_FLUO_1993.png", NAflag = 255)
+writeRaster (lin_RGB, filename = "lin_RGB_1993.png", NAflag = 255)
+# creo un raster con tutte e 5 le bande a disposizione, eseguo le funzioni crop e mask ed infine porto l'immagine ad 8 bit
+
+multibanda <- c(B1, B2, B3, B4, B5) 
+img_multibanda <- rast(multibanda)
+crop_multi <- crop (img_multibanda, shape_sila[1])
+mask_multi <- mask (crop_multi, shape_sila[1])
+multi_scala <- rescaleImage (mask_multi, ymin = 0, ymax = 255)
+
+plotRGB(multi_scala, 3, 2, 1, stretch = "lin")
+dev.off()
+
+writeRaster (multi_scala, filename = "multi_scala_1993.tif", NAflag = 255)
+
+# calcolo degli indici spettrali tramite la funzione spectralIndices 
+# utlizzo della libreria viridis per la colorRampPalette
+
+indici <- spectralIndices(multi_scala, blue = 1, green = 2, red = 3, nir= 4, swir2 = 5, indices = c("NDVI", "SAVI", "MNDWI", "GNDVI"))
+plot(indici, col = cividis(100))
+# per il calcolo dell'indice EVI è necessario portare il range di colori dell'immagine da [0,255] a [0,1]
+
+multi_scala_2 <- rescaleImage (mask_multi, ymin = 0, ymax = 1) 
+EVI <- spectralIndices(multi_scala_2, blue = 1, green = 2, red = 3, nir= 4, swir2 = 5, indices = "EVI")
+plot(EVI, col = turbo(100))
+dev.off()
+
+# cl <- colorRampPalette(c("darkblue", "yellow", "red", "black")) (100) colorRampPalette molto bella
+# NIR e fluo di rivelano gli unici adatti ad una unSuperclass a 6 classi
+# realizzo una mappa dell'uso del suolo grazie alla funzione unsuperclass
+
+land_cover_NIR <- unsuperClass(scala_NIR, nClasses = 6)
+
+plot(land_cover_NIR$map)
+dev.off()
+# calcaliamo le proporzioni delle diverse classi
+
+land_cover_NIR$model # visualizziamo le proporzioni 
+
+# il rapporto between_SS / total_SS è molto buono nel NIR, sempre sopra 82 %, testato con più plot
+
+a <- land_cover_NIR$model$size[1]
+b <- land_cover_NIR$model$size[2]
+c <- land_cover_NIR$model$size[3]
+d <- land_cover_NIR$model$size[4]
+e <- land_cover_NIR$model$size[5]
+f <- land_cover_NIR$model$size[6]
+
+tot_NIR <- a + b + c + d + e + f
+
+classe_1 <- (a / tot_NIR)*100
+classe_2 <- (b / tot_NIR)*100
+classe_3 <- (c / tot_NIR)*100
+classe_4 <- (d / tot_NIR)*100
+classe_5 <- (e / tot_NIR)*100
+classe_6 <- (f / tot_NIR)*100
+
+# richiamare le classe per vedere la percetuale di ciascuna classe 
+# confronto per identificare l'suo del suolo per ogni classe
+# salvataggio del plot che segue
+colors <- c("red", "green", "blue", "yellow", "purple", "cyan") # utile per discriminare le classi
+
+plot(land_cover_NIR$map, col = colors, main = "Land Cover Classification", cex.main = 2, cex.lab = 1.5, cex.axis = 1.2) # salvo in png esportando dal plot in 1920 x 1080
+dev.off()
+writeRaster(land_cover_NIR$map, filename = "land_cover_NIR_1993.tif") # raster a 5 classi land_cover molto figo da usare in qgis per studi di landscape ecology
+# calcaliamo le proporzioni delle diverse classi
+
+land_cover_NIR$model # visualizziamo le proporzioni 
+
+# il rapporto between_SS / total_SS è molto buono nel NIR, sempre sopra 82 %, testato con più plot
+
+a <- land_cover_NIR$model$size[1]
+b <- land_cover_NIR$model$size[2]
+c <- land_cover_NIR$model$size[3]
+d <- land_cover_NIR$model$size[4]
+e <- land_cover_NIR$model$size[5]
+f <- land_cover_NIR$model$size[6]
+
+tot_NIR <- a + b + c + d + e + f
+
+classe_1 <- (a / tot_NIR)*100
+classe_2 <- (b / tot_NIR)*100
+classe_3 <- (c / tot_NIR)*100
+classe_4 <- (d / tot_NIR)*100
+classe_5 <- (e / tot_NIR)*100
+classe_6 <- (f / tot_NIR)*100
+
+# richiamare le classe per vedere la percetuale di ciascuna classe 
+# confronto per identificare l'suo del suolo per ogni classe
+# salvataggio del plot che segue
+par(mfrow = c(1, 2))
+
+plot(land_cover_NIR$map, col = colors, main = "Land Cover Classification")
+plotRGB (lin_RGB)
+
+dev.off()
+# si consiglia di scaricare le immagini e fare un confronto più approfondito, molto utile per discriminare conifere, latifoglie e boschi misti il confronto con il NIR
+# writeRaster(scala_RGB, filename = "scala_RGB_1993.png", NAflag = 255)
+
