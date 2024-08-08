@@ -87,7 +87,7 @@ lin_NIR <- stretch (scala_NIR, minq = .02, maxq = .98)
 lin_SWIR <- stretch (scala_SWIR, minq = .02, maxq = .98)
 lin_FLUO <- stretch (scala_FLUO, minq = .02, maxq = .98)
 
-png(filename = "lin_plot.png", width = 1920, height = 1080)
+#png(filename = "lin_plot.png", width = 1920, height = 1080)
 
 par (mfrow = c(1,4))
 
@@ -100,10 +100,10 @@ dev.off()
 
 # salvataggio delle singole immagini nella wd grazie alla funzione writeRaster, NAflag per ottenere uno sfondo bianco
 
-writeRaster (lin_NIR, filename = "lin_NIR.png", NAflag = 255)
-writeRaster (lin_SWIR, filename = "lin_SWIR.png", NAflag = 255)
-writeRaster (lin_FLUO, filename = "lin_FLUO.png", NAflag = 255)
-writeRaster (lin_RGB, filename = "lin_RGB.png", NAflag = 255)
+#writeRaster (lin_NIR, filename = "lin_NIR.png", NAflag = 255)
+#writeRaster (lin_SWIR, filename = "lin_SWIR.png", NAflag = 255)
+#writeRaster (lin_FLUO, filename = "lin_FLUO.png", NAflag = 255)
+#writeRaster (lin_RGB, filename = "lin_RGB.png", NAflag = 255)
 
 # creo un raster con tutte e 5 le bande a disposizione, eseguo le funzioni crop e mask ed infine porto l'immagine ad 8 bit
 
@@ -116,7 +116,7 @@ multi_scala <- rescaleImage (mask_multi, ymin = 0, ymax = 255)
 plotRGB(multi_scala, 3, 2, 1, stretch = "lin")
 dev.off()
 
-writeRaster (multi_scala, filename = "multi_scala.tif", NAflag = 255)
+#writeRaster (multi_scala, filename = "multi_scala.tif", NAflag = 255)
 
 # calcolo degli indici spettrali tramite la funzione spectralIndices 
 # utlizzo della libreria viridis per la colorRampPalette
@@ -149,6 +149,20 @@ colors <- c("red", "green", "blue", "yellow", "purple", "cyan")
 par(mfrow = c(1, 2))
 plot(land_cover_FLUO$map, col = colors, main = "Land Cover Classification")
 plot(land_cover_NIR$map, col = colors, main = "Land Cover Classification")
+dev.off()
+
+# calcaliamo le proporzioni delle diverse classi
+
+land_cover_FLUO$model # visualizziamo le proporzioni 
+land_cover_NIR$model # visualizziamo le proporzioni 
+
+# nel mio caso di 6 classi il rapporto between_SS / total_SS 
+# è 82.3 % per il NIR e 82.1 % per il FLUO
+# nel caso di 10 cluster ad esempio between_SS / total_SS =  89.2 %
+# ad esempio RGB e SWIR danno volari maggiori ma in realtà 
+#non sono in grado di distinguere correttamente l'acqua dalle conifere o dalle ombre
+
+
 
 
 
