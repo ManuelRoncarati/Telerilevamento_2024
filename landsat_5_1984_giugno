@@ -193,6 +193,11 @@ dev.off()
 # writeRaster(scala_RGB, filename = "scala_RGB.png", NAflag = 255)
 # es: 1 = conifere; 2 = acque interne; classse 3 = campi agricoli; classe 4 = boschi misti; classe 5 = latifoglie; classe 6 = urbano 
 
+colors_land <- c("darkgreen", "blue", "yellow", "lightgreen", "green", "red")
+# png(filename = "land_cover_NIR_classificato.png", width = 1920, height = 1080)
+plot(land_cover_NIR$map, col = colors_land, main = "Land Cover Classification")
+dev.off()
+
 
 
 
