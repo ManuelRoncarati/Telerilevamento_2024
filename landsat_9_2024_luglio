@@ -195,8 +195,8 @@ percentuali # 8.475936  1.470588 23.743316 15.882353 29.117647 21.310160
 
 uso_suolo <- c("red" , "blue", "chartreuse3" , "forestgreen", "darkgreen", "yellow")  # colori per il plot dell'uso del suolo
 class_names <- c("urbano-8.27%","acqua-1.47%", "latifoglie/conifere-23.74%", "latifoglie-15.88%", "conifere-29.11%", "campi-21.31")
-png(filename = "uso_suolo_2000_legend_valori.png", width = 1920, height = 1080, res = 100) # salvataggio plot %
 
+png(filename = "uso_suolo_2024_legend_valori.png", width = 1920, height = 1080, res = 100) # salvataggio plot %
 plot(land_cover_NIR$map, legend = FALSE, col = uso_suolo, main = "Land Cover Classification 2024")
 legend(x= 618500, y =4335000, legend = class_names, fill = uso_suolo, title = "Uso del suolo", cex = 1.1)
 dev.off()
