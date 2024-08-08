@@ -193,4 +193,11 @@ writeRaster(scala_RGB, filename = "scala_RGB_2014.png", NAflag = 255)
 percentuali <- c(classe_1, classe_2, classe_3, classe_4, classe_5, classe_6)
 percentuali # 26.287697 19.188684  5.097411 22.364558  1.654657 25.406992
 
-uso_suolo <- c("darkgreen" , "forestgreen", "red" , "yellow", "blue", "chartreuse3")  # colori per il plot dell'uso del suolo
+uso_suolo <- c("darkgreen" , "chartreuse3", "red" , "yellow", "blue", "forestgreen")  # colori per il plot dell'uso del suolo
+class_names <- c("conifere-26.28%","latifoglie-19.18%", "urbano-5.09%", "campi-22.36%", "acqua-1.65%", "latifoglie/conifere-25.40%")
+
+png(filename = "uso_suolo_2000_legend_valori.png", width = 1920, height = 1080, res = 100) # salvataggio plot %
+
+plot(land_cover_NIR$map, legend = FALSE, col = uso_suolo, main = "Land Cover Classification 2014")
+legend(x= 618500, y =4335000, legend = class_names, fill = uso_suolo, title = "Uso del suolo", cex = 1.1)
+dev.off()
