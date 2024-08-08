@@ -116,6 +116,7 @@ writeRaster (multi_scala, filename = "multi_scala_1993.tif", NAflag = 255)
 
 # calcolo degli indici spettrali tramite la funzione spectralIndices 
 # utlizzo della libreria viridis per la colorRampPalette
+# salvare indici 
 
 indici <- spectralIndices(multi_scala, blue = 1, green = 2, red = 3, nir= 4, swir2 = 5, indices = c("NDVI", "SAVI", "MNDWI", "GNDVI"))
 plot(indici, col = cividis(100))
