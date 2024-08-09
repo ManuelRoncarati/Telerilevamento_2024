@@ -10,7 +10,7 @@ list.files()
 
 file_lidar <- "N39E016.hgt"  
 lidar <- rast(file_lidar)
-plot(lidar)
+plot(lidar, col = turbo(100))
 crs(lidar) # verifico l'EPSG del raster e salvo lo shapefile del PN della Sila con lo stesso EPSG ovvero 4326
 writeRaster(lidar, filename = "lidar_grezzo.tif")
 
@@ -20,7 +20,8 @@ writeRaster(lidar, filename = "lidar_grezzo.tif")
 shape_sila <- st_read("shape_sila_4326.shp")
 crop_lidar <- crop(lidar, shape_sila)
 mask_lidar <- mask (crop_lidar, shape_sila)
-plot(mask_lidar)
+plot(crop_lidar, col = turbo(100))
 
 writeRaster(mask_lidar, filename = "lidar_mask.tif")
-
+plot(mask_lidar, col = turbo(100))
+dev.off()
