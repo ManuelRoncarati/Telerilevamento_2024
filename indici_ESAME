@@ -31,16 +31,20 @@ plotRGB(multi_scala, 3, 2, 1, stretch = "lin")
 dev.off()
 
 # calcolo degli indici spettrali tramite la funzione spectralIndices 
-# utlizzo della libreria viridis per la colorRampPalette
 
 indici <- spectralIndices(multi_scala, blue = 1, green = 2, red = 3, nir= 4, swir2 = 5, indices = c("NDVI", "SAVI", "MNDWI", "GNDVI"))
-plot(indici, col = cividis(100))
 
 # per il calcolo dell'indice EVI è necessario portare il range di colori dell'immagine da [0,255] a [0,1]
 
-multi_scala_2 <- rescaleImage (mask_multi, ymin = 0, ymax = 1) 
-EVI <- spectralIndices(multi_scala_2, blue = 1, green = 2, red = 3, nir= 4, swir2 = 5, indices = "EVI")
-plot(EVI, col = turbo(100))
-dev.off()
+multi_scala_2 <- rescaleImage (mask_multi, ymin = 0, ymax = 1)
 
-# cl <- colorRampPalette(c("darkblue", "yellow", "red", "black")) (100) colorRampPalette molto bella
+EVI <- spectralIndices(multi_scala_2, blue = 1, green = 2, red = 3, nir= 4, swir2 = 5, indices = "EVI")
+
+cl <- colorRampPalette(c("darkblue", "yellow", "red", "black")) (100) # colorRampPalette molto bella
+
+EVI <- spectralIndices(multi_scala_2, blue = 1, green = 2, red = 3, nir= 4, swir2 = 5, indices = "EVI")
+indice_ndvi <- spectralIndices(multi_scala, blue = 1, green = 2, red = 3, nir= 4, swir2 = 5, indices = "NDVI")
+
+plot(EVI, col = cl) 
+plot(indici, col = cl) 
+plot(indice_ndvi, col = cl)
