@@ -1,1 +1,61 @@
+library(terra)
+library(RStoolbox)
 
+setwd ( "C:/esame/multibanda_1984-2024")
+list.files()
+
+# B1 = blue, B2 = verde, B3 = rosso, B4 = NIR, B5 = SWIR
+
+m_1984 <- "multi_scala_1984.tif"
+m_1993 <- "multi_scala_1993.tif"
+m_2000 <- "multi_scala_2000.tif"
+m_2008 <- "multi_scala_2008.tif"
+m_2014 <- "multi_scala_2014.tif"
+m_2024 <- "multi_scala_2024.tif"
+
+s_1984 <- rast (m_1984)
+s_1993 <- rast (m_1993)
+s_2000 <- rast (m_2000)
+s_2008 <- rast (m_2008)
+s_2014 <- rast (m_2014)
+s_2024 <- rast (m_2024)
+
+# analisi multivariata
+# con la funzione rasterPCA facciamo un po' di analisi multivariata
+# ci permette di compattare tutta l'informazione in un unico layer, prendiamo tutte le bande e le diamo in pasto
+# alla analisi di componente principale 
+
+pca_1984 <- rasterPCA(s_1984)
+pca_1993 <- rasterPCA(s_1993)
+pca_2000 <- rasterPCA(s_2000)
+pca_2008 <- rasterPCA(s_2008)
+pca_2014 <- rasterPCA(s_2014)
+pca_2024 <- rasterPCA(s_2024)
+
+# ispezione il risultato della pca semplicemente richiamandola es: pca_1984
+# per ogni oggetto pca richiamo uso la funzione summary richiamando la componente model es:summary(pca_1984$model)
+
+summary(pca_1984$model)
+summary(pca_1993$model)
+summary(pca_2000$model)
+summary(pca_2008$model)
+summary(pca_2014$model)
+summary(pca_2024$model)
+
+# osservo la voce Proportion of Variance che mi indica quanto le diverse bande incidono sulla diversità totale
+# con mia grande sorpresa la componente 1 ovvero la banda del blu sembra spiegare la maggior parte della diversità totale
+
+plotRGB(s_1984, 4,3,2, stretch = "lin") 
+
+# pensando di aver fatto un errore faccio un plot in falsi colori con NIR RED e GREEN
+# ma le immagini multibanda sono corrette
+# dunque in una immagine a 5 bande evidentemente la banda del blu spiega la maggior parte della diversità
+
+plot(pca_1984$map) # visualizzo tutte le bande e la diversità che sono in grado di mostrare
+plot(pca_1993$map)
+plot(pca_2000$map)
+plot(pca_2008$map)
+plot(pca_2014$map)
+plot(pca_2024$map)
+
+# in tutti i casi la banda a maggiore diversità è sempre la prima, il B1 = blue
