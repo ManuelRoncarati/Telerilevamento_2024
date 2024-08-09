@@ -53,3 +53,6 @@ plot(indice_ndvi, col = cl)
 
 mean_ndvi <- global(indice_ndvi, fun = 'mean', na.rm = TRUE)
 print(mean_ndvi)
+
+# ndvi medio 1984 NDVI 0.4296909
+
