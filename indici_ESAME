@@ -45,9 +45,10 @@ cl <- colorRampPalette(c("darkblue", "yellow", "red", "black")) (100) # colorRam
 EVI <- spectralIndices(multi_scala_2, blue = 1, green = 2, red = 3, nir= 4, swir2 = 5, indices = "EVI")
 indice_ndvi <- spectralIndices(multi_scala, blue = 1, green = 2, red = 3, nir= 4, swir2 = 5, indices = "NDVI")
 
-plot(EVI, col = cl) 
-plot(indici, col = cl) 
-plot(indice_ndvi, col = cl)
+# plot(EVI, col = cl) 
+# plot(indici, col = cl) 
+
+plot(indice_ndvi, col = cl, main = "1984 NDVI")
 
 # valore medio NDVI
 
