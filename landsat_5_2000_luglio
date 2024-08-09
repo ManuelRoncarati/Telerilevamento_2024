@@ -4,6 +4,8 @@ library(sf)
 library(RStoolbox)
 library(viridis)
 
+#https://earthexplorer.usgs.gov/
+
 setwd("C:/esame/landsat_5_2000_luglio")
 
 B1 <- "LT05_L2SP_188033_20000702_20200907_02_T1_SR_B1.TIF"
