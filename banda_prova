@@ -22,3 +22,8 @@ img_multibanda <- rast(multibanda)
 crop_multi <- crop (img_multibanda, shape_sila[1])
 mask_multi <- mask (crop_multi, shape_sila[1])
 multi_scala <- rescaleImage (mask_multi, ymin = 0, ymax = 255)
+
+pca_multi <- rasterPCA(multi_scala)
+summary(pca_multi$model)
+plot(pca_multi$map)
+# a me sembra che la pca associ sempre alla prima banda la maggiore diversità ma chiaramente deve aver commesso degli errori
