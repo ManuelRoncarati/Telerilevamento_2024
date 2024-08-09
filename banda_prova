@@ -13,7 +13,12 @@ B4 <- "LT05_L2SP_188033_19840620_20200918_02_T1_SR_B4.TIF"
 B5 <- "LT05_L2SP_188033_19840620_20200918_02_T1_SR_B5.TIF"
 
 multibanda <- c(B2, B3, B4)
-
 img_multibanda <- rast(multibanda)
-
+shape_sila <- st_read("shape_sila.shp")
 crop_multi <- crop (img_multibanda, shape_sila[1])
+
+multibanda <- c(B2, B3, B4) 
+img_multibanda <- rast(multibanda)
+crop_multi <- crop (img_multibanda, shape_sila[1])
+mask_multi <- mask (crop_multi, shape_sila[1])
+multi_scala <- rescaleImage (mask_multi, ymin = 0, ymax = 255)
