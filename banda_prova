@@ -27,3 +27,4 @@ pca_multi <- rasterPCA(multi_scala)
 summary(pca_multi$model)
 plot(pca_multi$map)
 # a me sembra che la pca associ sempre alla prima banda la maggiore diversità ma chiaramente deve aver commesso degli errori
+# anche provando ad utilizzare l'immagine senza rescale comunque risulta sempre la prima banda
