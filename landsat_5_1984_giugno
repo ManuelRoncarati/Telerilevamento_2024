@@ -6,6 +6,8 @@ library(sf)
 library(RStoolbox)
 library(viridis)
 
+#https://earthexplorer.usgs.gov/
+
 setwd("C:/esame/landsat_5_1984_giugno")
 list.files()
 
