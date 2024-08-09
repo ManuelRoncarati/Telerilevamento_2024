@@ -1,1 +1,26 @@
+# link per download dati LIDAR
+# https://search.earthdata.nasa.gov/search/granules?p=C2763266377-LPCLOUD&pg[0][v]=f&pg[0][gsk]=-start_date&sb[0]=16.22461%2C38.84834%2C16.98926%2C39.60454&fdc=Shuttle%2BRadar%2BTopography%2BMission%2B%2528SRTM%2529&gdf=HGT&tl=1723160297.71!3!!&lat=39.08895934714208&long=15.1875&zoom=7
+
+library(terra)
+library(sf) # mi servirà per la funzione st_read
+library(viridis)
+
+setwd("C:/esame/hgt")
+list.files()
+
+file_lidar <- "N39E016.hgt"  
+lidar <- rast(file_lidar)
+plot(lidar)
+crs(lidar) # verifico l'EPSG del raster e salvo lo shapefile del PN della Sila con lo stesso EPSG ovvero 4326
+writeRaster(lidar, filename = "lidar_grezzo.tif")
+
+
+# crop e mask secondo i confini del PN
+
+shape_sila <- st_read("shape_sila_4326.shp")
+crop_lidar <- crop(lidar, shape_sila)
+mask_lidar <- mask (crop_lidar, shape_sila)
+plot(mask_lidar)
+
+writeRaster(mask_lidar, filename = "lidar_mask.tif")
 
