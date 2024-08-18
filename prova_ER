@@ -1,0 +1,60 @@
+
+library(terra)
+library(raster)
+library(sf)
+library(RStoolbox)
+library(viridis)
+
+setwd("C:/esame/landsat_luglio_1984_ER")
+
+B1 <- "LT05_L2SP_191030_19840711_20200918_02_T1_SR_B1.TIF"
+B2 <- "LT05_L2SP_191030_19840711_20200918_02_T1_SR_B2.TIF"
+B3 <- "LT05_L2SP_191030_19840711_20200918_02_T1_SR_B3.TIF"
+B4 <- "LT05_L2SP_191030_19840711_20200918_02_T1_SR_B4.TIF"
+B5 <- "LT05_L2SP_191030_19840711_20200918_02_T1_SR_B5.TIF"
+
+# creo l'immagine satellitare
+
+stack_NIR <- c( B4, B3, B2)
+stack_SWIR <- c( B5, B3, B2)
+stack_RGB <- c( B3, B2, B1)
+stack_FLUO <- c( B2, B4, B3)
+
+immagine_NIR <- rast (stack_NIR)
+immagine_SWIR <- rast (stack_SWIR)
+immagine_RGB <- rast (stack_RGB)
+immagine_FLUO <- rast (stack_FLUO)
+
+par (mfrow = c (1,4))
+
+# salvare esportando dal plot 
+
+plotRGB(immagine_NIR, stretch = "lin", main = "NIR_2008", cex.main = 4)
+plotRGB(immagine_SWIR, stretch = "lin", main = "SWIR_2008", cex.main = 4)
+plotRGB(immagine_FLUO, stretch = "lin", main = "FLUO_2008", cex.main = 4)
+plotRGB(immagine_RGB, stretch = "lin", main = "RGB_2008", cex.main = 4)
+
+dev.off()
+
+#carico lo shape file del PN 
+
+shape_sila <- st_read("ER_shape.shp")
+
+crop_NIR <- crop (immagine_NIR, shape_sila[1])
+crop_SWIR <- crop (immagine_SWIR, shape_sila[1])
+crop_RGB <- crop (immagine_RGB, shape_sila[1])
+crop_FLUO <- crop(immagine_FLUO, shape_sila[1])
+
+mask_NIR <- mask (crop_NIR, shape_sila[1])
+mask_SWIR <- mask (crop_SWIR, shape_sila[1])
+mask_FLUO <- mask (crop_FLUO, shape_sila[1])
+mask_RGB <- mask (crop_RGB, shape_sila[1])
+
+par (mfrow = c (1, 4))
+
+plotRGB (mask_NIR, stretch = "lin")
+plotRGB (mask_SWIR, stretch = "lin")
+plotRGB (mask_FLUO, stretch = "lin")
+plotRGB (mask_RGB, stretch  = "lin")
+
+dev.off()
