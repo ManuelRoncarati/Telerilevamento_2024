@@ -5,13 +5,13 @@ library(sf)
 library(RStoolbox)
 library(viridis)
 
-setwd("C:/esame/landsat_luglio_1984_ER")
+setwd("C:/esame/landsat_luglio_1988_ER")
 
-B1 <- "LT05_L2SP_191030_19840711_20200918_02_T1_SR_B1.TIF"
-B2 <- "LT05_L2SP_191030_19840711_20200918_02_T1_SR_B2.TIF"
-B3 <- "LT05_L2SP_191030_19840711_20200918_02_T1_SR_B3.TIF"
-B4 <- "LT05_L2SP_191030_19840711_20200918_02_T1_SR_B4.TIF"
-B5 <- "LT05_L2SP_191030_19840711_20200918_02_T1_SR_B5.TIF"
+B1 <- "LT05_L2SP_192029_19880729_20200917_02_T1_SR_B1.TIF"
+B2 <- "LT05_L2SP_192029_19880729_20200917_02_T1_SR_B2.TIF"
+B3 <- "LT05_L2SP_192029_19880729_20200917_02_T1_SR_B3.TIF"
+B4 <- "LT05_L2SP_192029_19880729_20200917_02_T1_SR_B4.TIF"
+B5 <- "LT05_L2SP_192029_19880729_20200917_02_T1_SR_B5.TIF"
 
 # creo l'immagine satellitare
 
@@ -29,26 +29,26 @@ par (mfrow = c (1,4))
 
 # salvare esportando dal plot 
 
-plotRGB(immagine_NIR, stretch = "lin", main = "NIR_2008", cex.main = 4)
-plotRGB(immagine_SWIR, stretch = "lin", main = "SWIR_2008", cex.main = 4)
-plotRGB(immagine_FLUO, stretch = "lin", main = "FLUO_2008", cex.main = 4)
-plotRGB(immagine_RGB, stretch = "lin", main = "RGB_2008", cex.main = 4)
+plotRGB(immagine_NIR, stretch = "lin", main = "NIR_1988", cex.main = 4)
+plotRGB(immagine_SWIR, stretch = "lin", main = "SWIR_1988", cex.main = 4)
+plotRGB(immagine_FLUO, stretch = "lin", main = "FLUO_1988", cex.main = 4)
+plotRGB(immagine_RGB, stretch = "lin", main = "RGB_1988", cex.main = 4)
 
 dev.off()
 
 #carico lo shape file del PN 
 
-shape_sila <- st_read("ER_shape.shp")
+shape_parco <- st_read("632_shape.shp")
 
-crop_NIR <- crop (immagine_NIR, shape_sila[1])
-crop_SWIR <- crop (immagine_SWIR, shape_sila[1])
-crop_RGB <- crop (immagine_RGB, shape_sila[1])
-crop_FLUO <- crop(immagine_FLUO, shape_sila[1])
+crop_NIR <- crop (immagine_NIR, shape_parco[1])
+crop_SWIR <- crop (immagine_SWIR, shape_parco[1])
+crop_RGB <- crop (immagine_RGB, shape_parco[1])
+crop_FLUO <- crop(immagine_FLUO, shape_parco[1])
 
-mask_NIR <- mask (crop_NIR, shape_sila[1])
-mask_SWIR <- mask (crop_SWIR, shape_sila[1])
-mask_FLUO <- mask (crop_FLUO, shape_sila[1])
-mask_RGB <- mask (crop_RGB, shape_sila[1])
+mask_NIR <- mask (crop_NIR, shape_parco[1])
+mask_SWIR <- mask (crop_SWIR, shape_parco[1])
+mask_FLUO <- mask (crop_FLUO, shape_parco[1])
+mask_RGB <- mask (crop_RGB, shape_parco[1])
 
 par (mfrow = c (1, 4))
 
@@ -56,5 +56,38 @@ plotRGB (mask_NIR, stretch = "lin")
 plotRGB (mask_SWIR, stretch = "lin")
 plotRGB (mask_FLUO, stretch = "lin")
 plotRGB (mask_RGB, stretch  = "lin")
+
+dev.off()
+
+# utilizzo la funzione rescale per trasformare rendere le mie immagini ad 8 bit
+
+scala_NIR  <- rescaleImage ( mask_NIR, ymin = 0, ymax = 255)
+scala_SWIR <- rescaleImage( mask_SWIR, ymin = 0, ymax = 255)
+scala_FLUO <- rescaleImage ( mask_FLUO, ymin = 0, ymax = 255)
+scala_RGB <- rescaleImage ( mask_RGB, ymin = 0, ymax = 255)
+
+par (mfrow = c (1, 4))
+
+plotRGB (scala_NIR, stretch = "lin")
+plotRGB (scala_SWIR, stretch = "lin")
+plotRGB (scala_FLUO, stretch = "lin")
+plotRGB (scala_RGB, stretch  = "lin")
+dev.off()
+
+# stretch lineare personalizzato sulle singole immagini grazie alla funzione stretch
+
+lin_RGB <- stretch (scala_RGB, minq = .01, maxq = .99)
+lin_NIR <- stretch (scala_NIR, minq = .02, maxq = .98)
+lin_SWIR <- stretch (scala_SWIR, minq = .02, maxq = .98)
+lin_FLUO <- stretch (scala_FLUO, minq = .02, maxq = .98)
+
+# salvare esportando dal plot il seguente plot
+
+par (mfrow = c(1,4))
+
+plotRGB (lin_NIR, main = "NIR_1988", cex.main = 4)
+plotRGB (lin_SWIR, main = "SWIR_1988", cex.main = 4)
+plotRGB (lin_FLUO, main = "FLUO_1988", cex.main = 4)
+plotRGB (lin_RGB, main = "RGB_1988", cex.main = 4)
 
 dev.off()
