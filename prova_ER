@@ -123,6 +123,12 @@ writeRaster (multi_scala, filename = "multi_scala_1988.tif", NAflag = 255)
 # salvare indici 
 
 indici <- spectralIndices(multi_scala, blue = 1, green = 2, red = 3, nir= 4, swir2 = 5, indices = c("NDVI", "SAVI", "MNDWI", "GNDVI"))
-plot(indici, col = cividis(100))
-# per il calcolo dell'indice EVI è necessario portare il range di colori dell'immagine da [0,255] a [0,1]
 
+plot(indici, col = cividis(100))
+
+
+cl <- colorRampPalette(c("darkblue", "yellow", "red", "black")) (100) # colorRampPalette molto bella
+
+indice_ndvi <- spectralIndices(multi_scala, blue = 1, green = 2, red = 3, nir= 4, swir2 = 5, indices = "NDVI")
+
+plot(indice_ndvi, col = cl, main = "1988 NDVI")
