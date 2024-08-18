@@ -104,10 +104,10 @@ dev.off()
 # writeRaster (lin_RGB, filename = "lin_RGB_2024.png", NAflag = 255)
 
 
-writeRaster (scala_NIR, filename = "scala_NIR_2024.png", NAflag = 255) 
-writeRaster (scala_SWIR, filename = "scala_SWIR_2024.png", NAflag = 255)
-writeRaster (scala_FLUO, filename = "scala_FLUO_2024.png", NAflag = 255)
-writeRaster (scala_RGB, filename = "scala_RGB_2024.png", NAflag = 255)
+# writeRaster (scala_NIR, filename = "scala_NIR_2024.png", NAflag = 255) 
+# writeRaster (scala_SWIR, filename = "scala_SWIR_2024.png", NAflag = 255)
+# writeRaster (scala_FLUO, filename = "scala_FLUO_2024.png", NAflag = 255)
+# writeRaster (scala_RGB, filename = "scala_RGB_2024.png", NAflag = 255)
 
 # creo un raster con tutte e 5 le bande a disposizione, eseguo le funzioni crop e mask ed infine porto l'immagine ad 8 bit
 
