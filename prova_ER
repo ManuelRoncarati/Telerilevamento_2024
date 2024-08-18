@@ -91,3 +91,38 @@ plotRGB (lin_FLUO, main = "FLUO_1988", cex.main = 4)
 plotRGB (lin_RGB, main = "RGB_1988", cex.main = 4)
 
 dev.off()
+
+# salvataggio delle singole immagini nella wd grazie alla funzione writeRaster
+
+# writeRaster (lin_NIR, filename = "lin_NIR_1988.png", NAflag = 255) 
+# writeRaster (lin_SWIR, filename = "lin_SWIR_1988.png", NAflag = 255)
+# writeRaster (lin_FLUO, filename = "lin_FLUO_1988.png", NAflag = 255)
+# writeRaster (lin_RGB, filename = "lin_RGB_1988.png", NAflag = 255)
+
+
+writeRaster (scala_NIR, filename = "scala_NIR_1988.png", NAflag = 255) 
+writeRaster (scala_SWIR, filename = "scala_SWIR_1988.png", NAflag = 255)
+writeRaster (scala_FLUO, filename = "scala_FLUO_1988.png", NAflag = 255)
+writeRaster (scala_RGB, filename = "scala_RGB_1988.png", NAflag = 255)
+
+# creo un raster con tutte e 5 le bande a disposizione, eseguo le funzioni crop e mask ed infine porto l'immagine ad 8 bit
+
+multibanda <- c(B1, B2, B3, B4, B5) 
+img_multibanda <- rast(multibanda)
+crop_multi <- crop (img_multibanda, shape_sila[1])
+mask_multi <- mask (crop_multi, shape_sila[1])
+multi_scala <- rescaleImage (mask_multi, ymin = 0, ymax = 255)
+
+plotRGB(multi_scala, 3, 2, 1, stretch = "lin")
+dev.off()
+
+writeRaster (multi_scala, filename = "multi_scala_1988.tif", NAflag = 255)
+
+# calcolo degli indici spettrali tramite la funzione spectralIndices 
+# utlizzo della libreria viridis per la colorRampPalette
+# salvare indici 
+
+indici <- spectralIndices(multi_scala, blue = 1, green = 2, red = 3, nir= 4, swir2 = 5, indices = c("NDVI", "SAVI", "MNDWI", "GNDVI"))
+plot(indici, col = cividis(100))
+# per il calcolo dell'indice EVI è necessario portare il range di colori dell'immagine da [0,255] a [0,1]
+
