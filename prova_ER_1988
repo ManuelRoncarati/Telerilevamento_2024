@@ -109,14 +109,14 @@ dev.off()
 
 multibanda <- c(B1, B2, B3, B4, B5) 
 img_multibanda <- rast(multibanda)
-crop_multi <- crop (img_multibanda, shape_sila[1])
-mask_multi <- mask (crop_multi, shape_sila[1])
+crop_multi <- crop (img_multibanda, shape_parco[1])
+mask_multi <- mask (crop_multi, shape_parco[1])
 multi_scala <- rescaleImage (mask_multi, ymin = 0, ymax = 255)
 
 plotRGB(multi_scala, 3, 2, 1, stretch = "lin")
 dev.off()
 
-writeRaster (multi_scala, filename = "multi_scala_1988.tif", NAflag = 255)
+# writeRaster (multi_scala, filename = "multi_scala_1988.tif", NAflag = 255)
 
 # calcolo degli indici spettrali tramite la funzione spectralIndices 
 # utlizzo della libreria viridis per la colorRampPalette
