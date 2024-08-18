@@ -38,4 +38,110 @@ plotRGB(immagine_SWIR, stretch = "lin", main = "SWIR_2024", cex.main = 4)
 plotRGB(immagine_FLUO, stretch = "lin", main = "FLUO_2024", cex.main = 4)
 plotRGB(immagine_RGB, stretch = "lin", main = "RGB_2024", cex.main = 4)
 
+dev.off()
+
+#carico lo shape file del PN 
+
+shape_parco <- st_read("632_shape.shp")
+
+crop_NIR <- crop (immagine_NIR, shape_parco[1])
+crop_SWIR <- crop (immagine_SWIR, shape_parco[1])
+crop_RGB <- crop (immagine_RGB, shape_parco[1])
+crop_FLUO <- crop(immagine_FLUO, shape_parco[1])
+
+mask_NIR <- mask (crop_NIR, shape_parco[1])
+mask_SWIR <- mask (crop_SWIR, shape_parco[1])
+mask_FLUO <- mask (crop_FLUO, shape_parco[1])
+mask_RGB <- mask (crop_RGB, shape_parco[1])
+
+par (mfrow = c (1, 4))
+
+plotRGB (mask_NIR, stretch = "lin")
+plotRGB (mask_SWIR, stretch = "lin")
+plotRGB (mask_FLUO, stretch = "lin")
+plotRGB (mask_RGB, stretch  = "lin")
+
+dev.off()
+
+# utilizzo la funzione rescale per trasformare rendere le mie immagini ad 8 bit
+
+scala_NIR  <- rescaleImage ( mask_NIR, ymin = 0, ymax = 255)
+scala_SWIR <- rescaleImage( mask_SWIR, ymin = 0, ymax = 255)
+scala_FLUO <- rescaleImage ( mask_FLUO, ymin = 0, ymax = 255)
+scala_RGB <- rescaleImage ( mask_RGB, ymin = 0, ymax = 255)
+
+par (mfrow = c (1, 4))
+
+plotRGB (scala_NIR, stretch = "lin")
+plotRGB (scala_SWIR, stretch = "lin")
+plotRGB (scala_FLUO, stretch = "lin")
+plotRGB (scala_RGB, stretch  = "lin")
+dev.off()
+
+# stretch lineare personalizzato sulle singole immagini grazie alla funzione stretch
+
+lin_RGB <- stretch (scala_RGB, minq = .01, maxq = .99)
+lin_NIR <- stretch (scala_NIR, minq = .02, maxq = .98)
+lin_SWIR <- stretch (scala_SWIR, minq = .02, maxq = .98)
+lin_FLUO <- stretch (scala_FLUO, minq = .02, maxq = .98)
+
+# salvare esportando dal plot il seguente plot
+
+par (mfrow = c(1,4))
+
+plotRGB (lin_NIR, main = "NIR_2024", cex.main = 4)
+plotRGB (lin_SWIR, main = "SWIR_2024", cex.main = 4)
+plotRGB (lin_FLUO, main = "FLUO_2024", cex.main = 4)
+plotRGB (lin_RGB, main = "RGB_2024", cex.main = 4)
+
+dev.off()
+
+# salvataggio delle singole immagini nella wd grazie alla funzione writeRaster
+
+# writeRaster (lin_NIR, filename = "lin_NIR_2024.png", NAflag = 255) 
+# writeRaster (lin_SWIR, filename = "lin_SWIR_2024.png", NAflag = 255)
+# writeRaster (lin_FLUO, filename = "lin_FLUO_2024.png", NAflag = 255)
+# writeRaster (lin_RGB, filename = "lin_RGB_2024.png", NAflag = 255)
+
+
+writeRaster (scala_NIR, filename = "scala_NIR_2024.png", NAflag = 255) 
+writeRaster (scala_SWIR, filename = "scala_SWIR_2024.png", NAflag = 255)
+writeRaster (scala_FLUO, filename = "scala_FLUO_2024.png", NAflag = 255)
+writeRaster (scala_RGB, filename = "scala_RGB_2024.png", NAflag = 255)
+
+# creo un raster con tutte e 5 le bande a disposizione, eseguo le funzioni crop e mask ed infine porto l'immagine ad 8 bit
+
+multibanda <- c(B1, B2, B3, B4, B5) 
+img_multibanda <- rast(multibanda)
+crop_multi <- crop (img_multibanda, shape_parco[1])
+mask_multi <- mask (crop_multi, shape_parco[1])
+multi_scala <- rescaleImage (mask_multi, ymin = 0, ymax = 255)
+
+plotRGB(multi_scala, 3, 2, 1, stretch = "lin")
+dev.off()
+
+writeRaster (multi_scala, filename = "multi_scala_2024.tif", NAflag = 255)
+
+# calcolo degli indici spettrali tramite la funzione spectralIndices 
+# utlizzo della libreria viridis per la colorRampPalette
+# salvare indici 
+
+indici <- spectralIndices(multi_scala, blue = 1, green = 2, red = 3, nir= 4, swir2 = 5, indices = c("NDVI", "SAVI", "MNDWI", "GNDVI"))
+
+plot(indici, col = cividis(100))
+
+
+cl <- colorRampPalette(c("darkblue", "yellow", "red", "black")) (100) # colorRampPalette molto bella
+
+indice_ndvi <- spectralIndices(multi_scala, blue = 1, green = 2, red = 3, nir= 4, swir2 = 5, indices = "NDVI")
+
+plot(indice_ndvi, col = cl, main = "2024 NDVI")
+
+# valore medio NDVI
+
+mean_ndvi <- global(indice_ndvi, fun = 'mean', na.rm = TRUE)
+
+print(mean_ndvi) # 0.7717879
+
+
 
