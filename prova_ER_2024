@@ -120,7 +120,7 @@ multi_scala <- rescaleImage (mask_multi, ymin = 0, ymax = 255)
 plotRGB(multi_scala, 3, 2, 1, stretch = "lin")
 dev.off()
 
-writeRaster (multi_scala, filename = "multi_scala_2024.tif", NAflag = 255)
+# writeRaster (multi_scala, filename = "multi_scala_2024.tif", NAflag = 255)
 
 # calcolo degli indici spettrali tramite la funzione spectralIndices 
 # utlizzo della libreria viridis per la colorRampPalette
