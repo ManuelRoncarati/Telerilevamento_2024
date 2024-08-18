@@ -132,3 +132,9 @@ cl <- colorRampPalette(c("darkblue", "yellow", "red", "black")) (100) # colorRam
 indice_ndvi <- spectralIndices(multi_scala, blue = 1, green = 2, red = 3, nir= 4, swir2 = 5, indices = "NDVI")
 
 plot(indice_ndvi, col = cl, main = "1988 NDVI")
+
+# valore medio NDVI
+
+mean_ndvi <- global(indice_ndvi, fun = 'mean', na.rm = TRUE)
+
+print(mean_ndvi) # 0.6405974
