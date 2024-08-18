@@ -138,3 +138,4 @@ plot(indice_ndvi, col = cl, main = "1988 NDVI")
 mean_ndvi <- global(indice_ndvi, fun = 'mean', na.rm = TRUE)
 
 print(mean_ndvi) # 0.6405974
+
