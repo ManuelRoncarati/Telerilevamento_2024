@@ -143,5 +143,11 @@ mean_ndvi <- global(indice_ndvi, fun = 'mean', na.rm = TRUE)
 
 print(mean_ndvi) # 0.7717879
 
+MNDWI_24 <- spectralIndices(multi_scala, blue = 1, green = 2, red = 3, nir= 4, swir2 = 5, indices = "MNDWI") # calcolo dell'indice MNDWI per identificare l'acqua
 
+MNDWI_24_rast <- raster(MNDWI_24) # rasterizzo per poter utilizzare la funzinoe reclassify
+
+lago_24 <- reclassify(MNDWI_24_rast, cbind(-Inf, 0.3, NA)) # tutti i valori superiore a 0.3 di MNDWI corrispondono alla diga di Ridracoli
+
+# writeRaster (lago_24, filename = "ridracoli_2024.tif", NAflag = 255)
 
