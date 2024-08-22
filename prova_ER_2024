@@ -8,7 +8,7 @@ setwd("C:/esame/landsat_2024_ER")
 
 # landsat 9 ha le bande leggermente diverse da landsat 5
 # in questo caso che avere un confronto uniforme
-# inserisco le bande dalla 2 3 4 6 per avere blu green red e swir 
+# inserisco le bande dalla 2 3 4 5 6 per avere blu green red nir e swir 
 # nelle stesse posizioni di landsat 5
 
 B1 <- "LC08_L1TP_192029_20240716_20240722_02_T1_B2.TIF" 
