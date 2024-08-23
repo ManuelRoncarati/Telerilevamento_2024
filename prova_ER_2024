@@ -151,3 +151,12 @@ lago_24 <- reclassify(MNDWI_24_rast, cbind(-Inf, 0.3, NA)) # tutti i valori supe
 
 # writeRaster (lago_24, filename = "ridracoli_2024.tif", NAflag = 255)
 
+lago_shape <- st_read("prova_shape_lago.shp")
+
+maskera <- mask(scala_NIR, lago_shape, inverse = TRUE)
+
+NDVI_no_lago_24 <-spectralIndices(maskera, red = 2, nir= 1, indices = "NDVI")
+
+mean_ndvi_no_lago <- global(NDVI_no_lago_24, fun = 'mean', na.rm = TRUE)
+
+print(mean_ndvi_no_lago) # 0.7735642
