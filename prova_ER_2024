@@ -160,3 +160,7 @@ NDVI_no_lago_24 <-spectralIndices(maskera, red = 2, nir= 1, indices = "NDVI")
 mean_ndvi_no_lago <- global(NDVI_no_lago_24, fun = 'mean', na.rm = TRUE)
 
 print(mean_ndvi_no_lago) # 0.7735642
+
+maskera_2 <- mask(multi_scala, lago_shape, inverse = TRUE)
+
+plotRGB(maskera_2, 3, 2, 1)
