@@ -79,9 +79,16 @@ NDVI_TOT <- spectralIndices(mask_parco, red = 2, nir = 1, indices = "NDVI")
 
 NDVI_NO_ACQUA <- spectralIndices(PN_no_acqua, red = 2, nir = 1, indices = "NDVI")
 
-NDVI_TOT
+dev.off()
 
-NDVI_NO_ACQUA
+mean_NDVI_TOT <- global(NDVI_TOT, fun = 'mean', na.rm = TRUE)
+
+mean_NDVI_NO_ACQUA <- global(NDVI_NO_ACQUA, fun = 'mean', na.rm = TRUE)
+
+mean_NDVI_TOT
+
+mean_NDVI_NO_ACQUA
+
 
 
 
