@@ -89,6 +89,9 @@ mean_NDVI_TOT
 
 mean_NDVI_NO_ACQUA
 
+# la conclusione è che non è necessario portare le immagini a 8 bit, 
+# anzi queste restituiscono valori elevatissimi di NDVI e pure non veritieri, è comunque possibile 
+# portarle a 8 bit senza il rescaleImage però, ma ciò non è necessario, molto più accurato lavorare a 8 bit
 
 
 
