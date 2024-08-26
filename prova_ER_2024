@@ -208,4 +208,6 @@ plot(lago, col = "black")
 maskera_3 <- mask(masker_rast, lago, inverse = TRUE) #banda nir senza l'acqua, è un ritaglio
 
 plot(maskera_3)
+# puoi ritagliare la banda red e poi fare un multibanda per calcolare NDVI oppure trasformare il tif salvato del lago in uno shape e provare a ritagliare il multibanda già pronto
+
 
