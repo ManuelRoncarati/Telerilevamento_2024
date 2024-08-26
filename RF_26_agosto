@@ -1,0 +1,60 @@
+library(terra)
+library(raster)
+library(sf)
+library(RStoolbox)
+library(viridis)
+library(randomForest)
+
+setwd("C:/esame/landsat_2024_ER")
+
+
+B1 <- "LC08_L1TP_192029_20240716_20240722_02_T1_B2.TIF" 
+B2 <- "LC08_L1TP_192029_20240716_20240722_02_T1_B3.TIF"
+B3 <- "LC08_L1TP_192029_20240716_20240722_02_T1_B4.TIF" 
+B4 <- "LC08_L1TP_192029_20240716_20240722_02_T1_B5.TIF"
+B5 <- "LC08_L1TP_192029_20240716_20240722_02_T1_B6.TIF" 
+
+# falsi colori NIR RED GREEN
+
+stack <- c( B4, B3, B2)
+
+falsi_colori <- rast(stack)
+
+shape_parco <- st_read("632_shape.shp")
+
+crop_falsi_colori<- crop (falsi_colori, shape_parco[1])
+
+mask_parco <- mask(crop_falsi_colori, shape_parco[1])
+
+nir_parco <- mask_parco[[1]]
+
+nir_parco_raster <- raster(nir_parco)
+
+values <- getValues(nir_parco_raster)
+
+data <- data.frame(value = values)
+
+set.seed(99)
+
+kmeans_result <- kmeans(na.omit(values), centers = 10)
+
+data$cluster <- NA
+
+data$cluster[!is.na(values)] <- kmeans_result$cluster
+
+# rimuovo le righe con valori NA
+training_data <- na.omit(data)
+
+# creo il modello Random Forest
+rf_model <- randomForest(cluster ~ value, data = training_data, ntree = 100)
+
+# classifico l'intero raster
+classified_values <- predict(rf_model, newdata = data.frame(value = values))
+
+classified_raster <- setValues(nir_parco_raster, classified_values)
+
+plot(classified_raster, main = "Random Forest Classification", col=magma(10))
+
+lago<- reclassify(classified_raster, c(-Inf, 3, NA, 4, Inf, NA))
+
+plot(lago, col="black")
