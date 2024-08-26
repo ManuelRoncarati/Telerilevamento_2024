@@ -203,3 +203,7 @@ lago_93 <- reclassify(classified_raster, c(-Inf, 1, NA, 2, Inf, NA))
 plot(lago_93, col = "black")
 
 writeRaster(lago_93, filename = "lago_93_RF_10.tif")
+
+maskera_3 <- mask(masker_rast, lago_93, inverse = TRUE) #banda nir senza l'acqua, è un ritaglio
+plot(maskera_3)
+
