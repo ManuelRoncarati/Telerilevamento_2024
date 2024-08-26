@@ -72,3 +72,6 @@ perimetro_lago_pol<- st_as_sf(perimetro_lago)
 shape <- "diga_ridracoli_shape.shp"
 
 diga_ridracoli_shape <- st_read(shape)
+
+PN_no_acqua <- mask(nir_parco, diga_ridracoli_shape)
+
