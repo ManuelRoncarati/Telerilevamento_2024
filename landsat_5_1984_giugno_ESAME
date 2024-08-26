@@ -220,6 +220,101 @@ dev.off()
 
 
 
+library(terra)
+library(raster)
+library(sf)
+library(RStoolbox)
+library(viridis)
+library(randomForest)
+
+setwd("C:/esame/landsat_5_1984_giugno")
+
+B1 <- "LT05_L2SP_188033_19840620_20200918_02_T1_SR_B1.TIF"
+B2 <- "LT05_L2SP_188033_19840620_20200918_02_T1_SR_B2.TIF"
+B3 <- "LT05_L2SP_188033_19840620_20200918_02_T1_SR_B3.TIF"
+B4 <- "LT05_L2SP_188033_19840620_20200918_02_T1_SR_B4.TIF"
+B5 <- "LT05_L2SP_188033_19840620_20200918_02_T1_SR_B5.TIF"
+
+list.files()
+
+stack <- c( B4, B3, B2)
+
+falsi_colori <- rast(stack)
+
+shape_parco <- st_read("shape_sila.shp")
+
+crop_falsi_colori<- crop (falsi_colori, shape_parco[1])
+
+mask_parco <- mask(crop_falsi_colori, shape_parco[1])
+
+nir_parco <- mask_parco[[1]]
+
+nir_parco_raster <- raster(nir_parco)
+
+plot(nir_parco_raster)
+
+values <- getValues(nir_parco_raster)
+ 
+data <- data.frame(value = values)
+ 
+set.seed(99)
+ 
+kmeans_result <- kmeans(na.omit(values), centers = 10)
+ 
+data$cluster <- NA
+ 
+data$cluster[!is.na(values)] <- kmeans_result$cluster
+
+# rimuovo le righe con valori NA
+  
+training_data <- na.omit(data)
+
+# creo il modello Random Forest
+  
+rf_model <- randomForest(cluster ~ value, data = training_data, ntree = 100)
+
+# classifico l'intero raster
+  
+classified_values <- predict(rf_model, newdata = data.frame(value = values))
+ 
+classified_raster <- setValues(nir_parco_raster, classified_values)
+
+plot(classified_raster, main = "Random Forest Classification", col=magma(10))
+
+lago <- reclassify(classified_raster, c(-Inf, 1, NA, 2, Inf, NA))
+
+plot(lago, col="black")
+
+perimetro_lago <- rasterToPolygons(lago, dissolve = TRUE)
+
+#writeRaster(lago, filename = "ridracoli_RF_10.tif")
+
+perimetro_lago <- rasterToPolygons(lago, dissolve = TRUE)
+
+perimetro_lago_pol<- st_as_sf(perimetro_lago)
+
+#st_write(perimetro_lago_pol, "laghi_shape.shp")
+
+shape <- "laghi_shape.shp"
+
+lago_shape <- st_read(shape)
+
+PN_no_acqua <- mask(mask_parco, lago_shape, inverse = TRUE)
+
+NDVI_TOT <- spectralIndices(mask_parco, red = 2, nir = 1, indices = "NDVI")
+
+NDVI_NO_ACQUA <- spectralIndices(PN_no_acqua, red = 2, nir = 1, indices = "NDVI")
+
+dev.off()
+
+mean_NDVI_TOT <- global(NDVI_TOT, fun = 'mean', na.rm = TRUE)
+
+mean_NDVI_NO_ACQUA <- global(NDVI_NO_ACQUA, fun = 'mean', na.rm = TRUE)
+
+mean_NDVI_TOT
+
+mean_NDVI_NO_ACQUA
+
 
 
 
