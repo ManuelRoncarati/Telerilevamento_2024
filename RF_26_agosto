@@ -73,5 +73,15 @@ shape <- "diga_ridracoli_shape.shp"
 
 diga_ridracoli_shape <- st_read(shape)
 
-PN_no_acqua <- mask(nir_parco, diga_ridracoli_shape)
+PN_no_acqua <- mask(mask_parco, diga_ridracoli_shape, inverse = TRUE)
+
+NDVI_TOT <- spectralIndices(mask_parco, red = 2, nir = 1, indices = "NDVI")
+
+NDVI_NO_ACQUA <- spectralIndices(PN_no_acqua, red = 2, nir = 1, indices = "NDVI")
+
+NDVI_TOT
+
+NDVI_NO_ACQUA
+
+
 
