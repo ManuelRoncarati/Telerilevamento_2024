@@ -58,3 +58,7 @@ plot(classified_raster, main = "Random Forest Classification", col=magma(10))
 lago<- reclassify(classified_raster, c(-Inf, 3, NA, 4, Inf, NA))
 
 plot(lago, col="black")
+
+perimetro_lago <- rasterToPolygons(lago, dissolve = TRUE)
+
+#writeRaster(lago, filename = "ridracoli_RF_10.tif")
