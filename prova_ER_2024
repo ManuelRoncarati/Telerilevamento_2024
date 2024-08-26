@@ -170,10 +170,13 @@ plotRGB(maskera_2, 3, 2, 1)
 
 nir <- rast(B4)
 
-croppato <- crop(nir, shape_sila)
+croppato <- crop(nir, shape_parco[1])
 plot(croppato)
-maskera <- mask(croppato, shape_sila)
+dev.off()
+maskera <- mask(croppato, shape_parco[1])
 masker_rast <- raster(maskera)
+plot(masker_rast)
+dev.off()
 
 
 values <- getValues(masker_rast)
@@ -194,16 +197,15 @@ classified_values <- predict(rf_model, newdata = data.frame(value = values))
 classified_raster <- setValues(masker_rast, classified_values)
  
 # visualizzo il risultato
-plot(classified_raster, main = "Random Forest Classification")
+plot(classified_raster, main = "Random Forest Classification", col =cl)
 
-lago_93 <- reclassify(classified_raster, c(-Inf, 1, NA, 2, Inf, NA))
+lago<- reclassify(classified_raster, c(-Inf, 3, NA, 4, Inf, NA))
 
-lago_93 <- reclassify(classified_raster, c(-Inf, 1, NA, 2, Inf, NA))
+plot(lago, col = "black")
 
-plot(lago_93, col = "black")
+#writeRaster(lago, filename = "lago_RF_10.tif")
 
-writeRaster(lago_93, filename = "lago_93_RF_10.tif")
+maskera_3 <- mask(masker_rast, lago, inverse = TRUE) #banda nir senza l'acqua, è un ritaglio
 
-maskera_3 <- mask(masker_rast, lago_93, inverse = TRUE) #banda nir senza l'acqua, è un ritaglio
 plot(maskera_3)
 
