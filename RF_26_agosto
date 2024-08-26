@@ -62,3 +62,13 @@ plot(lago, col="black")
 perimetro_lago <- rasterToPolygons(lago, dissolve = TRUE)
 
 #writeRaster(lago, filename = "ridracoli_RF_10.tif")
+
+perimetro_lago <- rasterToPolygons(lago, dissolve = TRUE)
+
+perimetro_lago_pol<- st_as_sf(perimetro_lago)
+
+#st_write(perimetro_lago_pol, "diga_ridracoli_shape.shp")
+
+shape <- "diga_ridracoli_shape.shp"
+
+diga_ridracoli_shape <- st_read(shape)
