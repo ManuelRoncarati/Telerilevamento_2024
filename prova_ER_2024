@@ -3,6 +3,7 @@ library(raster)
 library(sf)
 library(RStoolbox)
 library(viridis)
+library(randomForest)
 
 setwd("C:/esame/landsat_2024_ER")
 
@@ -164,3 +165,41 @@ print(mean_ndvi_no_lago) # 0.7735642
 maskera_2 <- mask(multi_scala, lago_shape, inverse = TRUE)
 
 plotRGB(maskera_2, 3, 2, 1)
+
+# proviamo con random forest a fare una  clusterizzazione in base alla riflettanza nel NIR
+
+nir <- rast(B4)
+
+croppato <- crop(nir, shape_sila)
+plot(croppato)
+maskera <- mask(croppato, shape_sila)
+masker_rast <- raster(maskera)
+
+
+values <- getValues(masker_rast)
+data <- data.frame(value = values)
+set.seed(99)
+kmeans_result <- kmeans(na.omit(values), centers = 10)
+data$cluster <- NA
+data$cluster[!is.na(values)] <- kmeans_result$cluster
+ 
+# rimuovo le righe con valori NA
+training_data <- na.omit(data)
+ 
+# creo il modello Random Forest
+rf_model <- randomForest(cluster ~ value, data = training_data, ntree = 100)
+ 
+# classifico l'intero raster
+classified_values <- predict(rf_model, newdata = data.frame(value = values))
+classified_raster <- setValues(masker_rast, classified_values)
+ 
+# visualizzo il risultato
+plot(classified_raster, main = "Random Forest Classification")
+
+lago_93 <- reclassify(classified_raster, c(-Inf, 1, NA, 2, Inf, NA))
+
+lago_93 <- reclassify(classified_raster, c(-Inf, 1, NA, 2, Inf, NA))
+
+plot(lago_93, col = "black")
+
+writeRaster(lago_93, filename = "lago_93_RF_10.tif")
