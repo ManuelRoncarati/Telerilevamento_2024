@@ -1,0 +1,139 @@
+
+library(terra)
+library(raster)
+library(sf)
+library(RStoolbox)
+library(viridis)
+library(randomForest)
+
+setwd("C:/esame/falsi colori sila")
+
+nir_1984 <- raster("NIR_PN_SILA_84.TIF")
+nir_1993 <- raster("NIR_PN_SILA_93.TIF")
+nir_2000 <- raster("NIR_PN_SILA_2000.TIF")
+nir_2008 <- raster("NIR_PN_SILA_2008.TIF")
+nir_2014 <- raster("NIR_PN_SILA_2014.TIF")
+nir_2024 <- raster("NIR_PN_SILA_2024.TIF")
+
+falsi_colori_1984 <- rast("falsi_colori_PN_SILA_84.TIF")
+falsi_colori_1993 <- rast("falsi_colori_PN_SILA_93.TIF")
+falsi_colori_2000 <- rast("falsi_colori_PN_SILA_2000.TIF")
+falsi_colori_2008 <- rast("falsi_colori_PN_SILA_2008.TIF")
+falsi_colori_2014 <- rast("falsi_colori_PN_SILA_2014.TIF")
+falsi_colori_2024 <- rast("falsi_colori_PN_SILA_2024.TIF")
+
+values <- getValues(nir_1984)
+data <- data.frame(value = values)
+set.seed(99)
+kmeans_result <- kmeans(na.omit(values), centers = 10)
+data$cluster <- NA
+data$cluster[!is.na(values)] <- kmeans_result$cluster
+# rimuovo le righe con valori NA
+training_data <- na.omit(data)
+# creo il modello Random Forest
+rf_model <- randomForest(cluster ~ value, data = training_data, ntree = 100)
+# classifico l'intero raster
+classified_values <- predict(rf_model, newdata = data.frame(value = values))
+classified_raster_1984 <- setValues(nir_1984, classified_values)
+plot(classified_raster_1984, main = "Random Forest Classification 1984", col=magma(10))
+laghi_1984 <- reclassify(classified_raster_1984, c(-Inf, 1, NA, 2, Inf, NA))
+plot(laghi_1984, col="black")
+
+values <- getValues(nir_1993)
+data <- data.frame(value = values)
+set.seed(99)
+kmeans_result <- kmeans(na.omit(values), centers = 10)
+data$cluster <- NA
+data$cluster[!is.na(values)] <- kmeans_result$cluster
+# rimuovo le righe con valori NA
+training_data <- na.omit(data)
+# creo il modello Random Forest
+rf_model <- randomForest(cluster ~ value, data = training_data, ntree = 100)
+# classifico l'intero raster
+classified_values <- predict(rf_model, newdata = data.frame(value = values))
+classified_raster_1993 <- setValues(nir_1993, classified_values)
+plot(classified_raster_1993, main = "Random Forest Classification 1993", col=magma(10))
+laghi_1993 <- reclassify(classified_raster_1993, c(-Inf, 1, NA, 2, Inf, NA))
+plot(laghi_1993, col="black")
+
+values <- getValues(nir_2000)
+data <- data.frame(value = values)
+set.seed(99)
+kmeans_result <- kmeans(na.omit(values), centers = 10)
+data$cluster <- NA
+data$cluster[!is.na(values)] <- kmeans_result$cluster
+# rimuovo le righe con valori NA
+training_data <- na.omit(data)
+# creo il modello Random Forest
+rf_model <- randomForest(cluster ~ value, data = training_data, ntree = 100)
+# classifico l'intero raster
+classified_values <- predict(rf_model, newdata = data.frame(value = values))
+classified_raster_2000 <- setValues(nir_2000, classified_values)
+plot(classified_raster_2000, main = "Random Forest Classification 2000", col=magma(10))
+laghi_2000 <- reclassify(classified_raster_2000, c(-Inf, 1, NA, 2, Inf, NA))
+plot(laghi_2000, col="black")
+
+values <- getValues(nir_2008)
+data <- data.frame(value = values)
+set.seed(99)
+kmeans_result <- kmeans(na.omit(values), centers = 10)
+data$cluster <- NA
+data$cluster[!is.na(values)] <- kmeans_result$cluster
+# rimuovo le righe con valori NA
+training_data <- na.omit(data)
+# creo il modello Random Forest
+rf_model <- randomForest(cluster ~ value, data = training_data, ntree = 100)
+# classifico l'intero raster
+classified_values <- predict(rf_model, newdata = data.frame(value = values))
+classified_raster_2008 <- setValues(nir_2008, classified_values)
+plot(classified_raster_2008, main = "Random Forest Classification 2008", col=magma(10))
+laghi_2008 <- reclassify(classified_raster_2008, c(-Inf, 1, NA, 2, Inf, NA))
+plot(laghi_2008, col="black")
+
+values <- getValues(nir_2014)
+data <- data.frame(value = values)
+set.seed(99)
+kmeans_result <- kmeans(na.omit(values), centers = 10)
+data$cluster <- NA
+data$cluster[!is.na(values)] <- kmeans_result$cluster
+# rimuovo le righe con valori NA
+training_data <- na.omit(data)
+# creo il modello Random Forest
+rf_model <- randomForest(cluster ~ value, data = training_data, ntree = 100)
+# classifico l'intero raster
+classified_values <- predict(rf_model, newdata = data.frame(value = values))
+classified_raster_2014 <- setValues(nir_2014, classified_values)
+plot(classified_raster_2014, main = "Random Forest Classification 2014", col=magma(10))
+laghi_2014 <- reclassify(classified_raster_2014, c(-Inf, 1, NA, 2, Inf, NA))
+plot(laghi_2014, col="black")
+
+values <- getValues(nir_2024)
+data <- data.frame(value = values)
+set.seed(99)
+kmeans_result <- kmeans(na.omit(values), centers = 10)
+data$cluster <- NA
+data$cluster[!is.na(values)] <- kmeans_result$cluster
+# rimuovo le righe con valori NA
+training_data <- na.omit(data)
+# creo il modello Random Forest
+rf_model <- randomForest(cluster ~ value, data = training_data, ntree = 100)
+# classifico l'intero raster
+classified_values <- predict(rf_model, newdata = data.frame(value = values))
+classified_raster_2024 <- setValues(nir_2024, classified_values)
+plot(classified_raster_2024, main = "Random Forest Classification 2024", col=magma(10))
+laghi_2024 <- reclassify(classified_raster_2024, c(-Inf, 1, NA, 2, Inf, NA))
+plot(laghi_2024, col="black")
+
+par(mfrow = c(2,3)
+plot(laghi_1984, main = "1984", col = "black")
+plot(laghi_1993, main = "1993", col = "black")
+plot(laghi_2000, main = "2000", col = "black")
+plot(laghi_2008, main = "2008", col = "black")
+plot(laghi_2014, main = "2014", col = "black")
+plot(laghi_2024, main = "2024", col = "black")
+
+
+perimetro_laghi_1984 <- rasterToPolygons(laghi_1984, dissolve = TRUE)
+perimetro_lago_pol_1984<- st_as_sf(perimetro_lago)
+#st_write(perimetro_lago_pol, "laghi_shape.shp")
+shape <- "laghi_shape.shp"
