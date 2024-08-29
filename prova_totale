@@ -4,6 +4,7 @@ library(sf)
 library(RStoolbox)
 library(viridis)
 library(randomForest)
+library(dplyr)
 
 setwd("C:/esame/falsi colori sila")
 
@@ -44,12 +45,21 @@ polygons <- rasterToPolygons(classified_raster_1984, fun = function(x) !is.na(x)
 polygons_sf <- st_as_sf(polygons)
 
 polygons_sf <- polygons_sf %>%
-  +     rename(Classe = NIR_PN_SILA_84)
+  rename(Classe = NIR_PN_SILA_84)
 
-polygons_sf <- polygons_sf %>%dissolved_polygons <- polygons_sf %>%
-  group_by(class) %>%
+polygons_sf <- polygons_sf %>%
+  mutate(Classe = as.integer(round(Classe)))
+
+
+dissolved_polygons <- polygons_sf %>%
+  group_by(Classe) %>%
   summarise(geometry = st_union(geometry), .groups = 'drop')
-  +     mutate(Classe = as.integer(Classe))
+
+# Esegui il dissolve per aggregare i poligoni con lo stesso valore di classe
+dissolved_polygons <- polygons_sf %>%
+  group_by(Classe) %>%
+  summarise(geometry = st_union(geometry), .groups = 'drop')
+
 
 dissolved_polygons <- dissolved_polygons %>%
   mutate(Area_m2 = st_area(geometry))
@@ -59,3 +69,5 @@ dissolved_polygons <- dissolved_polygons %>%
 
 dissolved_polygons <- dissolved_polygons %>%
   mutate(geometry = st_make_valid(geometry))
+
+st_write(dissolved_polygons, "1984_6_cluster.gpkg")
