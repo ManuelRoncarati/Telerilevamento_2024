@@ -1,0 +1,80 @@
+library(terra)
+library(raster)
+library(sf)
+library(RStoolbox)
+library(viridis)
+library(randomForest)
+library(dplyr)
+
+setwd("C:/esame/falsi colori sila")
+
+# Lista dei tuoi raster
+nir_files <- c("NIR_PN_SILA_84.TIF", "NIR_PN_SILA_93.TIF", "NIR_PN_SILA_2000.TIF", 
+               "NIR_PN_SILA_2007.TIF", "NIR_PN_SILA_2014.TIF", "NIR_PN_SILA_2024.TIF")
+
+# Funzione per processare i raster
+process_raster <- function(nir_file) {
+  # Carica il raster
+  nir_raster <- raster(nir_file)
+  
+  # Estrai il nome di base senza estensione
+  output_name <- tools::file_path_sans_ext(basename(nir_file))
+  
+  # Ottieni i valori del raster
+  values <- getValues(nir_raster)
+  
+  # Crea un dataframe per l'addestramento
+  data <- data.frame(value = values)
+  
+  # Esegui il k-means clustering
+  set.seed(99)
+  kmeans_result <- kmeans(na.omit(values), centers = 6)
+  
+  # Assegna i cluster ai dati
+  data$cluster <- NA
+  data$cluster[!is.na(values)] <- kmeans_result$cluster
+  
+  # Rimuovi le righe con valori NA
+  training_data <- na.omit(data)
+  
+  # Crea il modello Random Forest
+  rf_model <- randomForest(cluster ~ value, data = training_data, ntree = 150)
+  
+  # Classifica l'intero raster
+  classified_values <- predict(rf_model, newdata = data.frame(value = values))
+  classified_raster <- setValues(nir_raster, classified_values)
+  
+  # Converti il raster in poligoni
+  polygons <- rasterToPolygons(classified_raster, fun = function(x) !is.na(x), dissolve = FALSE)
+  polygons_sf <- st_as_sf(polygons)
+  
+  # Trova il nome della colonna che contiene i dati
+  col_name <- names(polygons_sf)[1]
+  
+  # Rinominare il campo e arrotondare per difetto
+  polygons_sf <- polygons_sf %>%
+    rename(Classe = !!sym(col_name)) %>%
+    mutate(Classe = as.integer(round(Classe)))
+  
+  # Esegui il dissolve per aggregare i poligoni con lo stesso valore di classe
+  dissolved_polygons <- polygons_sf %>%
+    group_by(Classe) %>%
+    summarise(geometry = st_union(geometry), .groups = 'drop')
+  
+  # Calcola l'area in metri quadrati e aggiungi il campo "Area"
+  dissolved_polygons <- dissolved_polygons %>%
+    mutate(Area_m2 = st_area(geometry)) %>%
+    mutate(Area_ha = Area_m2 / 10000) %>%
+    mutate(geometry = st_make_valid(geometry))
+  
+  # Costruisci il percorso completo di output
+  output_path <- file.path("C:/esame/falsi colori sila/raster_classificati", paste0(output_name, "_6_cluster.gpkg"))
+  
+  # Salva il file
+  st_write(dissolved_polygons, output_path, delete_layer = TRUE)
+}
+
+# Loop attraverso i file e processa ciascuno
+for (nir_file in nir_files) {
+  process_raster(nir_file)
+}
