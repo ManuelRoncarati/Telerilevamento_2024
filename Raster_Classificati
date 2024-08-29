@@ -5,6 +5,7 @@ library(RStoolbox)
 library(viridis)
 library(randomForest)
 library(dplyr)
+library(ggplot2)
 
 setwd("C:/esame/falsi colori sila")
 
@@ -78,3 +79,41 @@ process_raster <- function(nir_file) {
 for (nir_file in nir_files) {
   process_raster(nir_file)
 }
+
+
+setwd("C:/esame/falsi colori sila/raster_classificati")
+
+# Lista dei file GeoPackage
+gpk_files <- c("NIR_PN_SILA_84_6_cluster.gpkg", "NIR_PN_SILA_93_6_cluster.gpkg",
+               "NIR_PN_SILA_2000_6_cluster.gpkg", "NIR_PN_SILA_2007_6_cluster.gpkg",
+               "NIR_PN_SILA_2014_6_cluster.gpkg", "NIR_PN_SILA_2024_6_cluster.gpkg")
+
+# Anni corrispondenti ai file
+years <- c("1984", "1993", "2000", "2007", "2014", "2024")
+
+# Funzione per leggere e calcolare l'area per la classe 2 (acqua)
+get_class_2_area <- function(file, year) {
+  gpk <- st_read(file)
+  class_2 <- gpk %>% filter(Classe == 2)
+  
+  # Estrai l'area per la classe 2 e verifica che ci sia solo una riga
+  area_ha <- class_2$Area_ha
+  if (length(area_ha) != 1) {
+    stop(paste("Ci sono più di un'area per la classe 2 nel file:", file))
+  }
+  
+  return(data.frame(Year = year, Area_ha = area_ha))
+}
+
+# Calcola l'area per la classe 2 per tutti i file
+comparison_data <- do.call(rbind, mapply(get_class_2_area, gpk_files, years, SIMPLIFY = FALSE))
+
+# Crea l'istogramma
+ggplot(comparison_data, aes(x = Year, y = Area_ha, fill = Year)) +
+  geom_bar(stat = "identity") +
+  geom_text(aes(label = scales::comma(Area_ha)), vjust = -0.5) +  # Aggiungi i valori sopra le colonne
+  labs(title = "Confronto dell'Area per la Classe 2 (Acqua)",
+       x = "Anno",
+       y = "Area (ha)") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))  # Centra il titolo
