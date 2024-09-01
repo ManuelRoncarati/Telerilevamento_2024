@@ -1,0 +1,72 @@
+library(terra)
+library(ggplot2)
+library(cluster)
+library(mclust)
+library(factoextra)
+
+# Imposta la directory di lavoro
+setwd("C:/esame/falsi colori sila")
+
+# Carica l'immagine NIR
+nir_1984 <- rast("NIR_PN_SILA_84.TIF")
+
+# Converti l'immagine in un vettore di valori pixel e rimuovi i NA
+nir_vector <- na.omit(as.vector(nir_1984[]))
+
+# Prendi un campione casuale di 20.000 pixel
+set.seed(42)  # Per riproducibilità
+sample_size <- 20000
+sample_indices <- sample(seq_along(nir_vector), sample_size)
+sample_vector <- nir_vector[sample_indices]
+
+
+#GOMITO
+# Calcola WCSS per diversi numeri di cluster
+wcss <- sapply(1:10, function(k) {
+  kmeans(sample_vector, centers = k, nstart = 10)$tot.withinss
+})
+
+# Visualizza il metodo dell'Elbow
+plot(1:10, wcss, type = "b", pch = 19, frame = FALSE,
+     xlab = "Numero di cluster", ylab = "Within-Cluster Sum of Squares (WCSS)",
+     main = "Metodo dell'Elbow per Determinare il Numero Ottimale di Cluster")
+
+
+#silhouette
+
+# Calcola l'indice di silhouette per diversi numeri di cluster
+sil_width <- sapply(2:10, function(k) {
+  km <- kmeans(sample_vector, centers = k, nstart = 10)
+  ss <- silhouette(km$cluster, dist(sample_vector))
+  mean(ss[, 3])  # Media dell'indice di silhouette
+})
+
+# Visualizza l'indice di silhouette
+plot(2:10, sil_width, type = "b", pch = 19, frame = FALSE,
+     xlab = "Numero di cluster", ylab = "Silhouette Width",
+     main = "Indice di Silhouette per Determinare il Numero Ottimale di Cluster")
+
+# Bayesian Information Criterion (BIC) con Gaussian Mixture Models (GMM)
+
+library(mclust)
+
+# Applica Gaussian Mixture Models usando mclust
+gmm_model <- Mclust(sample_vector)
+
+# Visualizza il risultato e il BIC
+plot(gmm_model, what = "BIC", main = "BIC per Gaussian Mixture Models")
+
+# Il numero ottimale di cluster
+optimal_clusters_gmm <- gmm_model$G
+print(paste("Numero ottimale di cluster secondo GMM:", optimal_clusters_gmm))
+
+# GAP STATISTIC
+
+library(factoextra)
+
+# Applica Gap Statistic
+set.seed(42)
+gap_stat <- clusGap(as.matrix(sample_vector), FUN = kmeans, nstart = 10, K.max = 10, B = 50)
+
+# Visualizza il Gap Statistic
+fviz_gap_stat(gap_stat, main = "Gap Statistic per Determinare il Numero Ottimale di Cluster")
