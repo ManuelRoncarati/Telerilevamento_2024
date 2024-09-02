@@ -82,6 +82,13 @@ fviz_gap_stat(gap_stat, main = "Gap Statistic per Determinare il Numero Ottimale
 
 
 
+
+
+
+
+
+
+
 #ciclo for per siluette, 20 prove con set.seed variabile, risultato con 9000 pixel è 5
 
 library(cluster)  # Assicurati di avere il pacchetto cluster installato
@@ -121,3 +128,40 @@ plot(3:10, mean_silhouette, type = "b", pch = 19, frame = FALSE,
 
 # Stampa il numero ottimale di cluster
 cat("Il numero ottimale di cluster basato sull'indice di silhouette medio è:", optimal_clusters, "\n")
+
+
+
+
+
+
+
+#ciclo per BIC con 100.000 pixel, 20 CICLI MEDIA 8.55
+
+library(mclust)
+
+# Impostazioni generali
+num_iterations <- 20
+sample_size <- 100000
+optimal_clusters_list <- numeric(num_iterations)  # Vettore per memorizzare i cluster ottimali per ogni iterazione
+
+# Ciclo for per eseguire il clustering con Gaussian Mixture Models (GMM) per diversi seed
+for (i in 1:num_iterations) {
+  set.seed(i)  # Cambia il seed ad ogni iterazione per la riproducibilità
+  
+  # Prendi un campione casuale di 100.000 pixel
+  sample_indices <- sample(seq_along(nir_vector), sample_size)
+  sample_vector <- nir_vector[sample_indices]
+  
+  # Applica Gaussian Mixture Models usando mclust
+  gmm_model <- Mclust(sample_vector)
+  
+  # Salva il numero ottimale di cluster per questa iterazione
+  optimal_clusters_list[i] <- gmm_model$G
+}
+
+# Calcola la media del numero ottimale di cluster
+mean_optimal_clusters <- mean(optimal_clusters_list)
+
+# Visualizza la media del numero ottimale di cluster
+cat("Numero medio ottimale di cluster secondo GMM:", mean_optimal_clusters, "\n")
+
