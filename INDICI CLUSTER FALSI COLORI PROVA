@@ -100,3 +100,79 @@ plot(3:10, sil_width, type = "b", pch = 19, frame = FALSE,
 # Stampa il numero ottimale di cluster
 cat("Il numero ottimale di cluster basato sull'indice di silhouette è:", optimal_clusters, "\n")
 
+
+
+
+# Imposta la directory di lavoro e carica le librerie necessarie
+setwd("C:/esame/falsi colori sila")
+library(terra)
+library(mclust)
+library(ggplot2)  # Per visualizzare i risultati se necessario
+
+# Carica l'immagine multispettrale
+falsi_colori_1984 <- rast("falsi_colori_PN_SILA_84.TIF")
+
+# Estrai i valori delle bande e rimuovi i NA
+values <- as.data.frame(falsi_colori_1984[], na.rm = TRUE)
+colnames(values) <- c("NIR", "RED", "GREEN")
+
+# Verifica e rimuovi eventuali valori NA
+values <- na.omit(values)
+
+# Prendi un campione casuale di 1000 pixel
+set.seed(42)  # Per riproducibilità
+sample_size <- min(100000, nrow(values))  # Assicurati che il campione non superi il numero di righe disponibili
+sample_indices <- sample(seq_len(nrow(values)), sample_size)
+sample_values <- values[sample_indices, ]
+
+# Applica Gaussian Mixture Models usando mclust
+gmm_model <- Mclust(sample_values)
+
+# Visualizza il risultato e il BIC
+plot(gmm_model, what = "BIC", main = "BIC per Gaussian Mixture Models")
+
+# Numero ottimale di cluster secondo GMM
+optimal_clusters_gmm <- gmm_model$G
+print(paste("Numero ottimale di cluster secondo GMM:", optimal_clusters_gmm))
+
+
+
+
+
+# Carica le librerie necessarie
+library(terra)
+library(factoextra)
+
+# Imposta la directory di lavoro
+setwd("C:/esame/falsi colori sila")
+
+# Carica l'immagine multispettrale
+falsi_colori_1984 <- rast("falsi_colori_PN_SILA_84.TIF")
+
+# Estrai i valori delle bande e rimuovi i NA
+values <- as.data.frame(falsi_colori_1984[], na.rm = TRUE)
+colnames(values) <- c("NIR", "RED", "GREEN")
+
+# Verifica e rimuovi eventuali valori NA
+values <- na.omit(values)
+
+# Prendi un campione casuale di 1000 pixel
+set.seed(42)  # Per riproducibilità
+sample_size <- min(1000, nrow(values))  # Assicurati che il campione non superi il numero di righe disponibili
+sample_indices <- sample(seq_len(nrow(values)), sample_size)
+sample_values <- values[sample_indices, ]
+
+# Converti il campione in matrice
+sample_matrix <- as.matrix(sample_values)
+
+# Calcola l'indice di Calinski-Harabasz e determina il numero ottimale di cluster
+fviz_nbclust(sample_matrix, kmeans, method = "wss") +
+  labs(title = "Indice di Calinski-Harabasz per Determinare il Numero Ottimale di Cluster",
+       x = "Numero di cluster", y = "Indice di Calinski-Harabasz")
+
+# Trova il numero ottimale di cluster
+ch_values <- fviz_nbclust(sample_matrix, kmeans, method = "wss")$data$y
+optimal_clusters <- which.max(ch_values) + min(k_values) - 1
+
+# Stampa il numero ottimale di cluster
+cat("Il numero ottimale di cluster basato sull'indice di Calinski-Harabasz è:", optimal_clusters, "\n")
