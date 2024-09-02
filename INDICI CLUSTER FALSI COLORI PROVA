@@ -176,3 +176,62 @@ optimal_clusters <- which.max(ch_values) + min(k_values) - 1
 
 # Stampa il numero ottimale di cluster
 cat("Il numero ottimale di cluster basato sull'indice di Calinski-Harabasz è:", optimal_clusters, "\n")
+
+
+
+
+
+
+
+# Carica le librerie necessarie kmeans++ 500.000
+library(terra)
+library(ggplot2)
+if (!require(ClusterR)) install.packages("ClusterR")
+library(ClusterR)
+
+# Imposta la directory di lavoro
+setwd("C:/esame/falsi colori sila")
+
+# Carica l'immagine multispettrale
+falsi_colori_1984 <- rast("falsi_colori_PN_SILA_84.TIF")
+
+# Estrai i valori delle bande e rimuovi i NA
+values <- as.data.frame(falsi_colori_1984[], na.rm = TRUE)
+colnames(values) <- c("NIR", "RED", "GREEN")
+
+# Verifica e rimuovi eventuali valori NA
+values <- na.omit(values)
+
+# Prendi un campione casuale di 20.000 pixel
+set.seed(42)  # Per riproducibilità
+sample_size <- min(500000, nrow(values))  # Assicurati che il campione non superi il numero di righe disponibili
+sample_indices <- sample(seq_len(nrow(values)), sample_size)
+sample_values <- values[sample_indices, ]
+
+# Converti il campione in una matrice, se necessario
+if (!is.matrix(sample_values)) {
+    sample_values <- as.matrix(sample_values)
+}
+
+# Verifica che non ci siano valori NA o Inf nei dati campionati
+stopifnot(!any(is.na(sample_values)))
+stopifnot(!any(is.infinite(sample_values)))
+
+# Utilizzare ClusterR con inizializzazione k-means++
+wcss_clusterR <- sapply(1:10, function(k) {
+    tryCatch({
+        kmeans_result <- KMeans_rcpp(sample_values, clusters = k, num_init = 10, max_iters = 10000, initializer = 'kmeans++')
+        sum(kmeans_result$WCSS_per_cluster)  # Calcola il WCSS totale
+    }, error = function(e) {
+        NA  # In caso di errore, ritorna NA
+    })
+})
+
+# Verifica e gestisci eventuali valori NA o Inf
+valid_wcss <- !is.na(wcss_clusterR) & !is.infinite(wcss_clusterR)
+wcss_clusterR <- wcss_clusterR[valid_wcss]
+
+# Crea il grafico dell'Elbow
+plot(1:length(wcss_clusterR), wcss_clusterR, type = "b", pch = 19, frame = FALSE,
+     xlab = "Numero di cluster", ylab = "WCSS",
+     main = "Metodo dell'Elbow con ClusterR (k-means++)")
