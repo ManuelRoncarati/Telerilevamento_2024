@@ -517,3 +517,56 @@ ggplot(hierarchical_df, aes(x = pixel_value, y = y, color = cluster)) +
        y = "Cluster") +
   theme_minimal() +
   scale_color_discrete(name = "Cluster")
+
+
+
+
+
+
+#DENDOGRAMMA 
+
+# Carica le librerie necessarie
+library(terra)
+library(cluster)
+library(factoextra)  # Per visualizzare e calcolare l'indice di silhouette
+
+# Imposta la directory di lavoro e carica l'immagine NIR
+setwd("C:/esame/falsi colori sila")
+nir_1984 <- rast("NIR_PN_SILA_84.TIF")
+
+# Estrai i dati NIR come vettore e campiona 1000 pixel
+nir_vector <- values(nir_1984, na.rm = TRUE)
+sample_size <- 1000
+set.seed(42)  # Per riproducibilità
+sample_indices <- sample(seq_along(nir_vector), sample_size)
+sample_vector <- nir_vector[sample_indices]
+sample_matrix <- matrix(sample_vector, ncol = 1)
+
+# Normalizza i dati (opzionale)
+sample_matrix <- scale(sample_matrix)
+
+# Calcola la matrice di distanza
+dist_matrix <- dist(sample_matrix)
+
+# Esegui l'Hierarchical Clustering con linkage completo
+hc_complete <- hclust(dist_matrix, method = "complete")
+
+# Trova il numero ottimale di cluster usando l'indice di silhouette
+silhouette_results <- fviz_nbclust(as.matrix(sample_matrix), FUN = hcut, method = "silhouette")
+
+# Estrai il numero ottimale di cluster
+optimal_k <- silhouette_results$data$clusters[which.max(silhouette_results$data$y)]
+
+# Stampa il numero ottimale di cluster
+cat("Il numero ottimale di cluster è:", optimal_k, "\n")
+
+# Plot del dendrogramma senza etichette
+plot(hc_complete, main = "Dendrogramma del Clustering Gerarchico (Linkage Completo)", 
+     xlab = "", sub = "", cex = 0.9, labels = FALSE)
+
+# Taglia il dendrogramma nel numero ottimale di cluster
+clusters <- cutree(hc_complete, k = optimal_k)
+
+# Visualizza i cluster identificati
+table(clusters)
+
