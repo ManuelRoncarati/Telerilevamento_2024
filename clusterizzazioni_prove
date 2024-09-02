@@ -283,7 +283,7 @@ plot(k_values, ch_values, type = "b", pch = 19, frame = FALSE,
 
 
 
-# monte carlo siluette
+# monte carlo siluette 4/5 cluster
 
 # Imposta la working directory
 setwd("C:/esame/falsi colori sila")
