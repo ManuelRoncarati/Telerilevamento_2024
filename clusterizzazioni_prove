@@ -570,3 +570,5 @@ clusters <- cutree(hc_complete, k = optimal_k)
 # Visualizza i cluster identificati
 table(clusters)
 
+
+# DENDRO + SILUETTE CREDO, 5 CLUSTER A 25000 PIXEL, DI PIU NON RISCHIO
