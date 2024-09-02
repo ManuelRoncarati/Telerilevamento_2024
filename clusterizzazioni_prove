@@ -243,11 +243,26 @@ cat("Numero medio ottimale di cluster secondo GMM:", mean_optimal_clusters, "\n"
 
 # altro indice
 
+# Carica le librerie necessarie
+library(cluster)
+library(factoextra)
+
+# Impostazioni generali
+set.seed(42)
+sample_size <- 1000
+
+# Estrai un campione di 1000 pixel dal tuo dataset
+sample_indices <- sample(seq_along(nir_vector), sample_size)
+sample_vector <- nir_vector[sample_indices]
+
+# Converti il campione in matrice
+sample_matrix <- as.matrix(sample_vector)
+
 # Funzione per calcolare l'indice di Calinski-Harabasz
 calinski_harabasz_index <- function(k, data) {
   km <- kmeans(data, centers = k, nstart = 10)
   # Calcola l'indice di Calinski-Harabasz
-  # calinhara non è disponibile, quindi usiamo la formula manuale:
+  # Nota: calinhara non è disponibile direttamente, quindi usiamo la formula:
   cluster::clusGap(data, FUN = kmeans, K.max = k, B = 50)$Tab[which.max(cluster::clusGap(data, FUN = kmeans, K.max = k, B = 50)$Tab[, "gap"]), "gap"]
 }
 
