@@ -241,7 +241,7 @@ cat("Numero medio ottimale di cluster secondo GMM:", mean_optimal_clusters, "\n"
 
 
 
-# altro indice
+# altro indice Calinski-Harabasz più o meno anche 6/8 cluster
 
 # Carica le librerie necessarie
 library(cluster)
