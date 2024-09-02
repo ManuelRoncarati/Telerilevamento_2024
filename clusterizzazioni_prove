@@ -278,3 +278,60 @@ plot(k_values, ch_values, type = "b", pch = 19, frame = FALSE,
      main = "Indice di Calinski-Harabasz per Determinare il Numero Ottimale di Cluster")
 
 
+
+
+
+
+
+# monte carlo siluette
+
+# Imposta la working directory
+setwd("C:/esame/falsi colori sila")
+
+# Carica le librerie necessarie
+library(terra)  # Per la manipolazione dei raster
+library(cluster)  # Per il clustering e il calcolo dell'indice di silhouette
+library(ggplot2)  # Per la visualizzazione
+library(dplyr)  # Per la manipolazione dei dati
+
+# Carica l'immagine NIR
+nir_1984 <- rast("NIR_PN_SILA_84.TIF")
+
+# Converti il raster in un vettore
+nir_vector <- values(nir_1984, na.rm = TRUE)
+
+# Imposta il campionamento
+set.seed(42)  # Per la riproducibilità
+sample_size <- 1000  # Numero di pixel da campionare
+sample_indices <- sample(seq_along(nir_vector), sample_size)
+sample_vector <- nir_vector[sample_indices]
+
+# Converti il campione in una matrice (necessario per il clustering)
+sample_matrix <- as.matrix(sample_vector)
+
+# Funzione per calcolare l'indice di silhouette medio per una simulazione
+calculate_silhouette_mean <- function(k, data, num_simulations) {
+  silhouette_means <- numeric(num_simulations)
+  for (i in 1:num_simulations) {
+    # Genera dati sintetici basati sui dati originali
+    synthetic_data <- data + matrix(rnorm(n = length(data), sd = 0.1), nrow = length(data), ncol = 1)
+    km <- kmeans(synthetic_data, centers = k, nstart = 10)
+    sil <- silhouette(km$cluster, dist(synthetic_data))
+    silhouette_means[i] <- mean(sil[, "sil_width"])
+  }
+  return(mean(silhouette_means))
+}
+
+# Definisci l'intervallo dei cluster da 3 a 10
+k_values <- 3:10
+
+# Numero di simulazioni Monte Carlo
+num_simulations <- 100
+
+# Calcola l'indice di silhouette medio per ciascun numero di cluster
+silhouette_results <- sapply(k_values, function(k) calculate_silhouette_mean(k, sample_matrix, num_simulations))
+
+# Visualizza i risultati
+plot(k_values, silhouette_results, type = "b", pch = 19, frame = FALSE,
+     xlab = "Numero di cluster", ylab = "Indice di Silhouette Medio",
+     main = "Indice di Silhouette Medio per Diversi Numeri di Cluster (Monte Carlo)")
