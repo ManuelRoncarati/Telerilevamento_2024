@@ -69,7 +69,7 @@ plot(gmm_model, what = "BIC", main = "BIC per Gaussian Mixture Models")
 optimal_clusters_gmm <- gmm_model$G
 print(paste("Numero ottimale di cluster secondo GMM:", optimal_clusters_gmm))
 
-# GAP STATISTIC
+# GAP STATISTIC pare essere un po troppo fragile, solo 1000 pixel... 9 cluster forse?
 library(factoextra)
 
 # Impostazioni generali
@@ -87,8 +87,7 @@ gap_stat <- clusGap(as.matrix(sample_vector), FUN = kmeans, nstart = 10, K.max =
 fviz_gap_stat(gap_stat) + 
   ggtitle("Gap Statistic per Determinare il Numero Ottimale di Cluster")
 
-# Stampa i risultati della Gap Statistic per cluster da 3 a 10
-cat("Risultati della Gap Statistic:\n")
+
 
 
 
