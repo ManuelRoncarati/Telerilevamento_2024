@@ -70,15 +70,26 @@ optimal_clusters_gmm <- gmm_model$G
 print(paste("Numero ottimale di cluster secondo GMM:", optimal_clusters_gmm))
 
 # GAP STATISTIC
-
 library(factoextra)
 
-# Applica Gap Statistic
+# Impostazioni generali
 set.seed(42)
+sample_size <- 1000
+
+# Estrai un campione di 1000 pixel dal tuo dataset
+sample_indices <- sample(seq_along(nir_vector), sample_size)
+sample_vector <- nir_vector[sample_indices]
+
+# Applica Gap Statistic usando k-means
 gap_stat <- clusGap(as.matrix(sample_vector), FUN = kmeans, nstart = 10, K.max = 10, B = 50)
 
-# Visualizza il Gap Statistic
-fviz_gap_stat(gap_stat, main = "Gap Statistic per Determinare il Numero Ottimale di Cluster")
+# Visualizza il Gap Statistic con titolo personalizzato
+fviz_gap_stat(gap_stat) + 
+  ggtitle("Gap Statistic per Determinare il Numero Ottimale di Cluster")
+
+# Stampa i risultati della Gap Statistic per cluster da 3 a 10
+cat("Risultati della Gap Statistic:\n")
+
 
 
 
