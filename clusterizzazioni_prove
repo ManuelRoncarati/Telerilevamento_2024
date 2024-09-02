@@ -414,3 +414,54 @@ ggplot(hierarchical_df, aes(x = pixel_value, y = y, color = cluster)) +
        y = "Cluster") +
   theme_minimal() +
   scale_color_discrete(name = "Cluster")
+
+
+
+
+
+# CLUSTERING SPETTRALE
+# Carica le librerie necessarie
+library(terra)
+library(kernlab)
+library(ggplot2)
+
+# Imposta la directory di lavoro e carica l'immagine NIR
+setwd("C:/esame/falsi colori sila")
+nir_1984 <- rast("NIR_PN_SILA_84.TIF")
+
+# Estrai i dati NIR come vettore e campiona 1000 pixel
+nir_vector <- values(nir_1984, na.rm = TRUE)
+sample_size <- 1000
+set.seed(42)  # Per riproducibilità
+sample_indices <- sample(seq_along(nir_vector), sample_size)
+sample_vector <- nir_vector[sample_indices]
+sample_matrix <- matrix(sample_vector, ncol = 1)
+
+# Normalizza i dati (opzionale)
+sample_matrix <- scale(sample_matrix)
+
+# Calcola la matrice di similarità (kernel gaussiano)
+sigma <- 0.5
+dist_matrix <- as.matrix(dist(sample_matrix))
+similarity_matrix <- exp(-dist_matrix^2 / (2 * sigma^2))
+
+# Applica il clustering spettrale
+num_clusters <- 4  # Numero di cluster desiderato
+spectral_result <- specc(similarity_matrix, centers = num_clusters)
+
+# Crea un dataframe per i risultati del clustering spettrale
+spectral_df <- data.frame(
+  pixel_value = sample_vector,
+  cluster = factor(spectral_result@.Data),
+  y = rep(1, length(sample_vector))  # Asse y costante per visualizzazione
+)
+
+# Visualizza i cluster con ggplot
+ggplot(spectral_df, aes(x = pixel_value, y = y, color = cluster)) +
+  geom_point(alpha = 0.7) +
+  labs(title = "Cluster con Spectral Clustering",
+       x = "Valore NIR",
+       y = "Cluster") +
+  theme_minimal() +
+  scale_color_discrete(name = "Cluster")
+
