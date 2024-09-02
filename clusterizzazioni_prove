@@ -465,3 +465,55 @@ ggplot(spectral_df, aes(x = pixel_value, y = y, color = cluster)) +
   theme_minimal() +
   scale_color_discrete(name = "Cluster")
 
+
+
+
+#GERARCHICO, conoscendo già cluster numero 
+# Carica le librerie necessarie
+library(terra)
+library(cluster)
+library(ggplot2)
+
+# Imposta la directory di lavoro e carica l'immagine NIR
+setwd("C:/esame/falsi colori sila")
+nir_1984 <- rast("NIR_PN_SILA_84.TIF")
+
+# Estrai i dati NIR come vettore e campiona 1000 pixel
+nir_vector <- values(nir_1984, na.rm = TRUE)
+sample_size <- 1000
+set.seed(42)  # Per riproducibilità
+sample_indices <- sample(seq_along(nir_vector), sample_size)
+sample_vector <- nir_vector[sample_indices]
+sample_matrix <- matrix(sample_vector, ncol = 1)
+
+# Normalizza i dati (opzionale)
+sample_matrix <- scale(sample_matrix)
+
+# Calcola la matrice di distanza
+dist_matrix <- dist(sample_matrix)
+
+# Esegui l'Hierarchical Clustering con linkage completo
+hc_complete <- hclust(dist_matrix, method = "complete")
+
+# Visualizza il dendrogramma
+plot(hc_complete, main = "Dendrogramma del Clustering Gerarchico (Linkage Completo)", xlab = "", sub = "", cex = 0.9)
+
+# Taglia l'albero per ottenere un numero specifico di cluster
+k <- 4  # Numero di cluster desiderato
+clusters <- cutree(hc_complete, k)
+
+# Aggiungi i risultati dei cluster al dataframe
+hierarchical_df <- data.frame(
+  pixel_value = sample_vector,
+  cluster = factor(clusters),
+  y = rep(1, length(sample_vector))  # Asse y costante per visualizzazione
+)
+
+# Visualizza i cluster con ggplot
+ggplot(hierarchical_df, aes(x = pixel_value, y = y, color = cluster)) +
+  geom_point(alpha = 0.7) +
+  labs(title = "Cluster con Clustering Gerarchico (Linkage Completo)",
+       x = "Valore NIR",
+       y = "Cluster") +
+  theme_minimal() +
+  scale_color_discrete(name = "Cluster")
