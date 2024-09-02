@@ -335,3 +335,32 @@ silhouette_results <- sapply(k_values, function(k) calculate_silhouette_mean(k, 
 plot(k_values, silhouette_results, type = "b", pch = 19, frame = FALSE,
      xlab = "Numero di cluster", ylab = "Indice di Silhouette Medio",
      main = "Indice di Silhouette Medio per Diversi Numeri di Cluster (Monte Carlo)")
+
+
+
+
+#ALTRO BIC Codice di Esempio per Gaussian Mixture Models (GMM)
+
+# Carica le librerie necessarie
+library(mclust)
+
+# Imposta il seme per la riproducibilità
+set.seed(42)
+
+# Estrai un campione di 1000 pixel dal tuo dataset
+sample_size <- 1000
+sample_indices <- sample(seq_along(nir_vector), sample_size)
+sample_vector <- nir_vector[sample_indices]
+sample_matrix <- matrix(sample_vector, ncol = 1)
+
+# Applica Gaussian Mixture Models
+gmm_model <- Mclust(sample_matrix, G = 1:10)  # Testa per un numero di cluster tra 1 e 10
+
+# Visualizza il risultato e il BIC
+plot(gmm_model, what = "BIC", main = "BIC per Gaussian Mixture Models")
+
+# Numero ottimale di cluster secondo GMM
+optimal_clusters_gmm <- gmm_model$G
+print(paste("Numero ottimale di cluster secondo GMM:", optimal_clusters_gmm))
+
+
