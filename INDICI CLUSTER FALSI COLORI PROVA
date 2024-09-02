@@ -235,3 +235,80 @@ wcss_clusterR <- wcss_clusterR[valid_wcss]
 plot(1:length(wcss_clusterR), wcss_clusterR, type = "b", pch = 19, frame = FALSE,
      xlab = "Numero di cluster", ylab = "WCSS",
      main = "Metodo dell'Elbow con ClusterR (k-means++)")
+
+
+
+
+
+
+# Carica le librerie necessarie
+library(terra)        # Per caricare l'immagine multispettrale
+library(cluster)      # Per calcolare l'indice di silhouette
+library(ggplot2)      # Per visualizzare i risultati
+library(ClusterR)     # Per usare k-means++ 
+
+# Imposta la directory di lavoro
+setwd("C:/esame/falsi colori sila")
+
+# Carica l'immagine multispettrale
+falsi_colori_1984 <- rast("falsi_colori_PN_SILA_84.TIF")
+
+# Estrai i valori delle bande e rimuovi i NA
+values <- as.data.frame(falsi_colori_1984[], na.rm = TRUE)
+colnames(values) <- c("NIR", "RED", "GREEN")
+
+# Verifica e rimuovi eventuali valori NA
+values <- na.omit(values)
+
+# Prendi un campione casuale di 9.000 pixel
+set.seed(42)  # Per riproducibilità
+sample_size <- min(4000, nrow(values))  # Assicurati che il campione non superi il numero di righe disponibili
+sample_indices <- sample(seq_len(nrow(values)), sample_size)
+sample_values <- values[sample_indices, ]
+
+# Controlla i dati campionati
+print("Prime righe dei dati campionati:")
+print(head(sample_values))
+
+# Calcola l'indice di silhouette per diversi numeri di cluster (da 4 a 9) utilizzando k-means++
+sil_width <- sapply(4:9, function(k) {
+    tryCatch({
+        km <- KMeans_rcpp(sample_values, clusters = k, num_init = 5, initializer = 'kmeans++')
+        print(paste("Cluster per k =", k, ":", toString(table(km$clusters))))
+        dist_matrix <- dist(sample_values)
+        print("Matrice delle distanze calcolata.")
+        ss <- silhouette(km$clusters, dist_matrix)
+        mean(ss[, 3], na.rm = TRUE)  # Media dell'indice di silhouette, ignorando eventuali NA
+    }, error = function(e) {
+        print(paste("Errore con k =", k, ":", e$message))
+        NA  # In caso di errore, ritorna NA
+    })
+})
+
+# Stampa i valori di sil_width per il debug
+print("Valori di sil_width:")
+print(sil_width)
+
+# Verifica e gestisci eventuali valori NA o Inf
+valid_sil <- !is.na(sil_width) & !is.infinite(sil_width)
+sil_width <- sil_width[valid_sil]
+
+# Stampa la lunghezza di sil_width dopo il filtraggio
+cat("Lunghezza di sil_width dopo il filtraggio:", length(sil_width), "\n")
+
+# Verifica la lunghezza di sil_width rispetto a 4:9
+if (length(sil_width) == length(4:9)) {
+    # Identifica il numero di cluster con il massimo indice di silhouette
+    optimal_clusters <- which.max(sil_width) + 3  # +3 perché l'indice parte da 4 cluster
+    
+    # Visualizza l'indice di silhouette
+    plot(4:9, sil_width, type = "b", pch = 19, frame = FALSE,
+         xlab = "Numero di cluster", ylab = "Silhouette Width",
+         main = "Indice di Silhouette per Determinare il Numero Ottimale di Cluster con k-means++")
+    
+    # Stampa il numero ottimale di cluster
+    cat("Il numero ottimale di cluster basato sull'indice di silhouette con k-means++ è:", optimal_clusters, "\n")
+} else {
+    cat("Errore: La lunghezza di sil_width non corrisponde a quella di 4:9.\n")
+    cat("Lunghezza di sil_width:", length(sil_width), "\n")
+}
