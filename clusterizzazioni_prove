@@ -34,17 +34,26 @@ plot(1:10, wcss, type = "b", pch = 19, frame = FALSE,
 
 #silhouette
 
+library(cluster)  # Assicurati di avere il pacchetto cluster installato
+
 # Calcola l'indice di silhouette per diversi numeri di cluster
-sil_width <- sapply(2:10, function(k) {
-  km <- kmeans(sample_vector, centers = k, nstart = 10)
+sil_width <- sapply(3:10, function(k) {
+  km <- kmeans(sample_vector, centers = k, nstart = 20)
   ss <- silhouette(km$cluster, dist(sample_vector))
   mean(ss[, 3])  # Media dell'indice di silhouette
 })
 
+# Identifica il numero di cluster con il massimo indice di silhouette
+optimal_clusters <- which.max(sil_width) + 2  # +1 perché l'indice parte da 2 cluster
+
 # Visualizza l'indice di silhouette
-plot(2:10, sil_width, type = "b", pch = 19, frame = FALSE,
+plot(3:10, sil_width, type = "b", pch = 19, frame = FALSE,
      xlab = "Numero di cluster", ylab = "Silhouette Width",
      main = "Indice di Silhouette per Determinare il Numero Ottimale di Cluster")
+
+# Stampa il numero ottimale di cluster
+cat("Il numero ottimale di cluster basato sull'indice di silhouette è:", optimal_clusters, "\n")
+
 
 # Bayesian Information Criterion (BIC) con Gaussian Mixture Models (GMM)
 
@@ -70,3 +79,45 @@ gap_stat <- clusGap(as.matrix(sample_vector), FUN = kmeans, nstart = 10, K.max =
 
 # Visualizza il Gap Statistic
 fviz_gap_stat(gap_stat, main = "Gap Statistic per Determinare il Numero Ottimale di Cluster")
+
+
+
+#ciclo for per siluette, 20 prove con set.seed variabile, risultato con 9000 pixel è 5
+
+library(cluster)  # Assicurati di avere il pacchetto cluster installato
+
+# Impostazioni generali
+num_iterations <- 20
+sample_size <- 9000
+silhouette_results <- matrix(NA, nrow = num_iterations, ncol = 8)  # 8 colonne per cluster da 3 a 10
+
+for (i in 1:num_iterations) {
+  set.seed(i)  # Cambia il seed ad ogni iterazione per la riproducibilità
+  # Prendi un campione casuale di 9000 pixel
+  sample_indices <- sample(seq_along(nir_vector), sample_size)
+  sample_vector <- nir_vector[sample_indices]
+  
+  # Calcola l'indice di silhouette per diversi numeri di cluster (da 3 a 10)
+  sil_width <- sapply(3:10, function(k) {
+    km <- kmeans(sample_vector, centers = k, nstart = 10)
+    ss <- silhouette(km$cluster, dist(sample_vector))
+    mean(ss[, 3])  # Media dell'indice di silhouette
+  })
+  
+  # Salva i risultati in una matrice
+  silhouette_results[i, ] <- sil_width
+}
+
+# Calcola la media dell'indice di silhouette per ciascun numero di cluster
+mean_silhouette <- colMeans(silhouette_results)
+
+# Identifica il numero di cluster con il massimo valore medio di silhouette
+optimal_clusters <- which.max(mean_silhouette) + 2  # +2 perché partiamo da 3 cluster
+
+# Visualizza i risultati
+plot(3:10, mean_silhouette, type = "b", pch = 19, frame = FALSE,
+     xlab = "Numero di cluster", ylab = "Silhouette Width Medio",
+     main = "Indice di Silhouette Medio per Determinare il Numero Ottimale di Cluster")
+
+# Stampa il numero ottimale di cluster
+cat("Il numero ottimale di cluster basato sull'indice di silhouette medio è:", optimal_clusters, "\n")
