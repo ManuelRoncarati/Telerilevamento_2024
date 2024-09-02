@@ -54,3 +54,49 @@ plot(1:length(wcss), wcss, type = "b", pch = 19, frame = FALSE,
 
 # Aggiungi una linea di riferimento per facilitare l'interpretazione, se necessario
 abline(v = which.min(diff(diff(wcss))), col = "red", lty = 2)  # Cambia questa linea se necessario
+
+
+
+
+# Carica le librerie necessarie
+library(terra)        # Per caricare l'immagine multispettrale
+library(cluster)      # Per calcolare l'indice di silhouette
+library(ggplot2)      # Per visualizzare i risultati
+
+# Imposta la directory di lavoro
+setwd("C:/esame/falsi colori sila")
+
+# Carica l'immagine multispettrale
+falsi_colori_1984 <- rast("falsi_colori_PN_SILA_84.TIF")
+
+# Estrai i valori delle bande e rimuovi i NA
+values <- as.data.frame(falsi_colori_1984[], na.rm = TRUE)
+colnames(values) <- c("NIR", "RED", "GREEN")
+
+# Verifica e rimuovi eventuali valori NA
+values <- na.omit(values)
+
+# Prendi un campione casuale di 9.000 pixel
+set.seed(42)  # Per riproducibilità
+sample_size <- min(9000, nrow(values))  # Assicurati che il campione non superi il numero di righe disponibili
+sample_indices <- sample(seq_len(nrow(values)), sample_size)
+sample_values <- values[sample_indices, ]
+
+# Calcola l'indice di silhouette per diversi numeri di cluster
+sil_width <- sapply(3:10, function(k) {
+  km <- kmeans(sample_values, centers = k, nstart = 20)
+  ss <- silhouette(km$cluster, dist(sample_values))
+  mean(ss[, 3])  # Media dell'indice di silhouette
+})
+
+# Identifica il numero di cluster con il massimo indice di silhouette
+optimal_clusters <- which.max(sil_width) + 2  # +2 perché l'indice parte da 3 cluster
+
+# Visualizza l'indice di silhouette
+plot(3:10, sil_width, type = "b", pch = 19, frame = FALSE,
+     xlab = "Numero di cluster", ylab = "Silhouette Width",
+     main = "Indice di Silhouette per Determinare il Numero Ottimale di Cluster")
+
+# Stampa il numero ottimale di cluster
+cat("Il numero ottimale di cluster basato sull'indice di silhouette è:", optimal_clusters, "\n")
+
