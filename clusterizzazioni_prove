@@ -239,3 +239,27 @@ mean_optimal_clusters <- mean(optimal_clusters_list)
 # Visualizza la media del numero ottimale di cluster
 cat("Numero medio ottimale di cluster secondo GMM:", mean_optimal_clusters, "\n")
 
+
+
+# altro indice
+
+# Funzione per calcolare l'indice di Calinski-Harabasz
+calinski_harabasz_index <- function(k, data) {
+  km <- kmeans(data, centers = k, nstart = 10)
+  # Calcola l'indice di Calinski-Harabasz
+  # calinhara non è disponibile, quindi usiamo la formula manuale:
+  cluster::clusGap(data, FUN = kmeans, K.max = k, B = 50)$Tab[which.max(cluster::clusGap(data, FUN = kmeans, K.max = k, B = 50)$Tab[, "gap"]), "gap"]
+}
+
+# Definisci l'intervallo dei cluster da 3 a 10
+k_values <- 3:10
+
+# Calcola l'indice di Calinski-Harabasz per ciascun numero di cluster
+ch_values <- sapply(k_values, function(k) calinski_harabasz_index(k, sample_matrix))
+
+# Visualizza l'indice di Calinski-Harabasz
+plot(k_values, ch_values, type = "b", pch = 19, frame = FALSE,
+     xlab = "Numero di cluster", ylab = "Indice di Calinski-Harabasz",
+     main = "Indice di Calinski-Harabasz per Determinare il Numero Ottimale di Cluster")
+
+
