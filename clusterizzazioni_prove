@@ -468,7 +468,7 @@ ggplot(spectral_df, aes(x = pixel_value, y = y, color = cluster)) +
 
 
 
-#GERARCHICO, conoscendo già cluster numero 
+#GERARCHICO, conoscendo già cluster numero 30K 5 cluster
 # Carica le librerie necessarie
 library(terra)
 library(cluster)
