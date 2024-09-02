@@ -1,0 +1,56 @@
+# Carica le librerie necessarie
+library(terra)
+library(ggplot2)
+library(cluster)
+library(mclust)
+library(factoextra)
+
+# Imposta la directory di lavoro
+setwd("C:/esame/falsi colori sila")
+
+# Carica l'immagine multispettrale
+falsi_colori_1984 <- rast("falsi_colori_PN_SILA_84.TIF")
+
+# Estrai i valori delle bande e rimuovi i NA
+values <- as.data.frame(falsi_colori_1984[], na.rm = TRUE)
+colnames(values) <- c("NIR", "RED", "GREEN")
+
+# Verifica e rimuovi eventuali valori NA
+values <- na.omit(values)
+
+# Prendi un campione casuale di 20.000 pixel
+set.seed(42)  # Per riproducibilità
+sample_size <- min(20000, nrow(values))  # Assicurati che il campione non superi il numero di righe disponibili
+sample_indices <- sample(seq_len(nrow(values)), sample_size)
+sample_values <- values[sample_indices, ]
+
+# Converti il campione in una matrice, se necessario
+if (!is.matrix(sample_values)) {
+  sample_values <- as.matrix(sample_values)
+}
+
+# Verifica che non ci siano valori NA o Inf nei dati campionati
+stopifnot(!any(is.na(sample_values)))
+stopifnot(!any(is.infinite(sample_values)))
+
+# Calcola WCSS per diversi numeri di cluster
+wcss <- sapply(1:10, function(k) {
+  tryCatch({
+    kmeans_result <- kmeans(sample_values, centers = k, nstart = 10)
+    kmeans_result$tot.withinss
+  }, error = function(e) {
+    NA  # In caso di errore, ritorna NA
+  })
+})
+
+# Verifica e gestisci eventuali valori NA o Inf
+valid_wcss <- !is.na(wcss) & !is.infinite(wcss)
+wcss <- wcss[valid_wcss]
+
+# Crea il grafico dell'Elbow
+plot(1:length(wcss), wcss, type = "b", pch = 19, frame = FALSE,
+     xlab = "Numero di cluster", ylab = "Within-Cluster Sum of Squares (WCSS)",
+     main = "Metodo dell'Elbow per Determinare il Numero Ottimale di Cluster")
+
+# Aggiungi una linea di riferimento per facilitare l'interpretazione, se necessario
+abline(v = which.min(diff(diff(wcss))), col = "red", lty = 2)  # Cambia questa linea se necessario
