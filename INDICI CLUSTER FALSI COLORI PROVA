@@ -312,3 +312,69 @@ if (length(sil_width) == length(4:9)) {
     cat("Errore: La lunghezza di sil_width non corrisponde a quella di 4:9.\n")
     cat("Lunghezza di sil_width:", length(sil_width), "\n")
 }
+
+
+
+
+
+
+
+
+
+
+# Imposta la directory di lavoro e carica le librerie necessarie   BIC BATCH 7 CLUSTER
+setwd("C:/esame/falsi colori sila")
+library(terra)
+library(mclust)
+library(ggplot2)  # Per visualizzare i risultati se necessario
+
+# Carica l'immagine multispettrale
+falsi_colori_1984 <- rast("falsi_colori_PN_SILA_84.TIF")
+
+# Estrai i valori delle bande e rimuovi i NA
+values <- as.data.frame(falsi_colori_1984[], na.rm = TRUE)
+colnames(values) <- c("NIR", "RED", "GREEN")
+
+# Verifica e rimuovi eventuali valori NA
+values <- na.omit(values)
+
+# Verifica la dimensione dei dati
+cat("Numero totale di pixel:", nrow(values), "\n")
+
+# Imposta la dimensione del batch
+batch_size <- 10000  # Numero di pixel per batch
+n_batches <- ceiling(nrow(values) / batch_size)  # Numero totale di batch
+
+# Inizializza una lista per memorizzare i risultati
+gmm_results <- list()
+
+# Elaborazione in batch
+for (i in 1:n_batches) {
+    cat("Elaborazione del batch", i, "di", n_batches, "\n")
+    
+    # Calcola l'indice di inizio e fine per il batch
+    start_index <- (i - 1) * batch_size + 1
+    end_index <- min(i * batch_size, nrow(values))
+    
+    # Estrai i dati per il batch corrente
+    batch_values <- values[start_index:end_index, ]
+    
+    # Applica Gaussian Mixture Models usando mclust
+    gmm_model <- Mclust(batch_values)
+    
+    # Memorizza i risultati
+    gmm_results[[i]] <- gmm_model
+}
+
+# Combina i risultati dei batch (questo passaggio può variare a seconda del tuo obiettivo)
+# Ad esempio, puoi calcolare un consenso tra i modelli di tutti i batch o fare altre analisi.
+
+# Visualizza e interpreta i risultati
+# Qui si visualizzano i risultati del primo batch come esempio
+if (length(gmm_results) > 0) {
+    first_batch_model <- gmm_results[[1]]
+    plot(first_batch_model, what = "BIC", main = "BIC per Gaussian Mixture Models (Batch 1)")
+    
+    optimal_clusters_gmm <- first_batch_model$G
+    cat("Numero ottimale di cluster secondo GMM per il primo batch:", optimal_clusters_gmm, "\n")
+}
