@@ -38,3 +38,65 @@ mean_optimal_clusters <- mean(optimal_clusters_list)
 
 # Visualizza la media del numero ottimale di cluster
 cat("Numero medio ottimale di cluster secondo GMM:", mean_optimal_clusters, "\n")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Carica le librerie necessarie  INCREDIBILE AAHAHA 18.2 CON 50 ITERAZIONI E TUTTI I DATI 
+library(terra)
+library(mclust)
+
+# Imposta la directory di lavoro
+setwd("C:/esame/falsi colori sila")
+
+# Carica l'immagine NIR
+nir_1984 <- rast("NIR_PN_SILA_84.TIF")
+
+# Converti l'immagine raster direttamente in un dataframe
+# Converti l'immagine raster in un dataframe a lungo formato (long format)
+nir_df <- as.data.frame(nir_1984, xy = TRUE)  # 'xy = TRUE' aggiunge le coordinate spaziali
+
+# Rimuovi eventuali righe con NA
+nir_df <- na.omit(nir_df)
+
+# Impostazioni generali per il clustering
+num_iterations <- 50
+sample_size <- 828690
+optimal_clusters_list <- numeric(num_iterations)
+
+# Ciclo per eseguire il clustering con Gaussian Mixture Models (GMM)
+for (i in 1:num_iterations) {
+    set.seed(i)  # Cambia il seed ad ogni iterazione per la riproducibilità
+    
+    # Prendi un campione casuale di righe dal dataframe
+    sample_indices <- sample(nrow(nir_df), sample_size)
+    sample_df <- nir_df[sample_indices, ]
+    
+    # Applica Gaussian Mixture Models usando mclust
+    gmm_model <- Mclust(sample_df[ , -c(1:2)], G = 1:25)  # Escludi le colonne xy se presenti
+    optimal_clusters_list[i] <- gmm_model$G
+}
+
+# Calcola la media del numero ottimale di cluster
+mean_optimal_clusters <- mean(optimal_clusters_list)
+
+# Visualizza la media del numero ottimale di cluster
+cat("Numero medio ottimale di cluster secondo GMM:", mean_optimal_clusters, "\n")
