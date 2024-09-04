@@ -144,3 +144,60 @@ plot(bic_model, what = "BIC")
 # Stampa il numero ottimale di cluster secondo il BIC
 cat("Numero ottimale di cluster secondo BIC:", bic_model$G, "\n")
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Carica le librerie necessarie
+library(terra)
+library(mclust)
+
+# Imposta la directory di lavoro
+setwd("C:/esame/falsi colori sila")
+
+# Carica l'immagine a 3 bande
+falsi_colori_1984 <- rast("falsi_colori_PN_SILA_84.TIF")
+
+# Assegna le bande alle rispettive variabili
+nir <- falsi_colori_1984[[1]]   # Prima banda: NIR
+red <- falsi_colori_1984[[2]]   # Seconda banda: RED
+
+# Calcola l'NDVI
+ndvi <- (nir - red) / (nir + red)
+
+# Estrai i valori NDVI e crea un DataFrame
+ndvi_values <- values(ndvi, na.rm = TRUE)  # Estrai i valori NDVI, ignorando i NA
+ndvi_df <- data.frame(NDVI = ndvi_values)  # Crea un DataFrame con una sola colonna
+
+# Impostazione per il campionamento
+sample_size <- 50000  # Dimensione del campione
+
+# Prendi un campione casuale di righe dal dataframe
+set.seed(123)  # Per la riproducibilità
+sample_indices <- sample(nrow(ndvi_df), sample_size)
+sample_df <- ndvi_df[sample_indices, ]
+
+# Applica Gaussian Mixture Models usando mclust
+gmm_model <- Mclust(sample_df, G=1:40)
+
+# Visualizza il numero ottimale di cluster
+cat("Il numero ottimale di cluster secondo GMM è:", gmm_model$G, "\n")
+
+plot(gmm_model, what = "classification")
+plot(gmm_model, what = "BIC", main = "BIC per Gaussian Mixture Models")
+
