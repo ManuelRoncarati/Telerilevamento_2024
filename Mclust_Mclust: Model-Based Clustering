@@ -60,7 +60,8 @@ cat("Numero medio ottimale di cluster secondo GMM:", mean_optimal_clusters, "\n"
 
 
 
-# Carica le librerie necessarie  INCREDIBILE AAHAHA 18.2 CON 50 ITERAZIONI E TUTTI I DATI 
+# Carica le librerie necessarie  INCREDIBILE AAHAHA 18.2 CON 50 ITERAZIONI E TUTTI I DATI , ma anche con nir il risultato è simile
+
 library(terra)
 library(mclust)
 
