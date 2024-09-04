@@ -101,3 +101,46 @@ mean_optimal_clusters <- mean(optimal_clusters_list)
 
 # Visualizza la media del numero ottimale di cluster
 cat("Numero medio ottimale di cluster secondo GMM:", mean_optimal_clusters, "\n")
+
+
+
+
+
+
+
+
+# Carica i pacchetti necessari  DOPO ALMENO 2 ORE, IL RISULTATO è DI 10 CLUSTER
+library(terra)
+library(raster)
+library(sf)
+library(RStoolbox)
+library(viridis)
+library(randomForest)
+library(mclust)
+
+# Imposta la directory di lavoro
+setwd("C:/esame/falsi colori sila")
+
+# Carica l'immagine raster
+falsi_colori_1984 <- rast("falsi_colori_PN_SILA_84.TIF")
+
+# Assegna le bande alle rispettive variabili
+nir <- falsi_colori_1984[[1]]   # Prima banda: NIR
+red <- falsi_colori_1984[[2]]   # Seconda banda: RED
+
+# Calcola l'NDVI
+ndvi <- (nir - red) / (nir + red)
+
+# Campionamento casuale di 10.000 punti dal raster NDVI
+ndvi_values <- values(ndvi, na.rm = TRUE) # Estrai i valori NDVI, ignorando i NA
+sample_ndvi <- sample(ndvi_values, 828690, replace = TRUE) # Campiona 10.000 punti
+
+# Applica il modello GMM utilizzando Mclust
+bic_model <- Mclust(sample_ndvi, G = 1:35)
+
+# Visualizza i risultati BIC
+plot(bic_model, what = "BIC")
+
+# Stampa il numero ottimale di cluster secondo il BIC
+cat("Numero ottimale di cluster secondo BIC:", bic_model$G, "\n")
+
