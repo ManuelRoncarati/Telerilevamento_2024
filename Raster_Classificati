@@ -117,3 +117,52 @@ ggplot(comparison_data, aes(x = Year, y = Area_ha, fill = Year)) +
        y = "Area (ha)") +
   theme_minimal() +
   theme(plot.title = element_text(hjust = 0.5))  # Centra il titolo
+
+
+
+
+CLUSTER A 10 CLUSTER MCLUST CON ANCHE RASTER CLASSIFICATO
+
+# Carica le librerie necessarie
+library(terra)
+library(mclust)
+library(viridis)
+
+# Imposta la directory di lavoro
+setwd("C:/esame/falsi colori sila")
+
+# Carica l'immagine a 3 bande
+falsi_colori_1984 <- rast("falsi_colori_PN_SILA_84.TIF")
+
+# Assegna le bande alle rispettive variabili
+nir <- falsi_colori_1984[[1]]   # Prima banda: NIR
+red <- falsi_colori_1984[[2]]   # Seconda banda: RED
+
+# Calcola l'NDVI
+ndvi <- (nir - red) / (nir + red)
+
+# Estrai i valori NDVI, ignorando i NA
+ndvi_values <- values(ndvi, na.rm = FALSE)
+valid_ndvi_values <- ndvi_values[!is.na(ndvi_values)]  # Filtra i valori non NA
+
+# Crea una matrice con i valori NDVI validi
+ndvi_matrix <- matrix(valid_ndvi_values, ncol = 1)  # Matrice con una sola colonna
+
+# Esegui il clustering GMM con 3 cluster
+gmm_model <- Mclust(ndvi_matrix, G = 10)
+
+# Predici i cluster per tutti i valori NDVI
+cluster_assignments <- predict(gmm_model)$classification
+
+# Crea una matrice per assegnare i cluster a tutte le celle del raster
+full_cluster_assignments <- rep(NA, length(ndvi_values))
+full_cluster_assignments[!is.na(ndvi_values)] <- cluster_assignments
+
+# Crea un raster vuoto con le stesse dimensioni dell'immagine originale
+cluster_raster <- rast(ndvi)
+
+# Assegna i valori di cluster all'immagine
+values(cluster_raster) <- full_cluster_assignments
+
+# Visualizza l'immagine dei cluster
+plot(cluster_raster, main = "Cluster NDVI", col = magma(10))
