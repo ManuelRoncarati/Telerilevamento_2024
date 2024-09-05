@@ -154,6 +154,63 @@ cat("Numero ottimale di cluster secondo BIC:", bic_model$G, "\n")
 
 
 
+# Carica le librerie necessarie
+library(terra)
+library(mclust)
+
+# Imposta la directory di lavoro
+setwd("C:/esame/falsi colori sila")
+
+# Carica l'immagine a 3 bande
+falsi_colori_1984 <- rast("falsi_colori_PN_SILA_84.TIF")
+
+# Assegna le bande alle rispettive variabili
+nir <- falsi_colori_1984[[1]]   # Prima banda: NIR
+red <- falsi_colori_1984[[2]]   # Seconda banda: RED
+
+# Calcola l'NDVI
+ndvi <- (nir - red) / (nir + red)
+
+# Estrai i valori NDVI e crea una matrice
+ndvi_values <- values(ndvi, na.rm = FALSE)  # Estrai i valori NDVI, includendo NA
+ndvi_matrix <- matrix(ndvi_values, ncol = 1)  # Crea una matrice con una sola colonna
+
+# Esegui il clustering GMM con 3 cluster
+gmm_model <- Mclust(ndvi_matrix, G = 3)
+
+# Predici i cluster per tutti i dati NDVI
+cluster_assignments <- predict(gmm_model)$classification
+
+# Gestisci i valori NA e assegna un valore predefinito ai cluster per le celle NA
+cluster_assignments <- ifelse(is.na(ndvi_values), NA, cluster_assignments)
+
+# Verifica la dimensione dell'immagine e dei cluster
+n_cells <- ncell(ndvi)
+num_values <- length(ndvi_values)
+num_clusters_final <- length(cluster_assignments)
+
+cat("Numero di celle nel raster:", n_cells, "\n")
+cat("Numero di valori NDVI estratti:", num_values, "\n")
+cat("Numero di valori di cluster:", num_clusters_final, "\n")
+
+# Assicurati che il numero di valori di cluster corrisponda al numero di celle nel raster
+if (num_values != n_cells) {
+  # Crea un raster vuoto con le stesse dimensioni dell'immagine originale
+  cluster_raster <- rast(ndvi)
+  
+  # Assegna i valori di cluster all'immagine
+  values(cluster_raster) <- cluster_assignments
+  
+  # Visualizza l'immagine dei cluster
+  plot(cluster_raster, main = "Cluster NDVI", col = c("red", "green", "blue", NA))
+} else {
+  stop("Il numero di valori NDVI estratti non corrisponde al numero di celle nel raster.")
+}
+
+
+
+
+
 
 
 
