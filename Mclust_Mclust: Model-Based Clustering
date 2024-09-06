@@ -109,7 +109,7 @@ cat("Numero medio ottimale di cluster secondo GMM:", mean_optimal_clusters, "\n"
 
 
 
-# Carica i pacchetti necessari  DOPO ALMENO 2 ORE, IL RISULTATO è DI 10 CLUSTER
+# Carica i pacchetti necessari  DOPO ALMENO 2 ORE, IL RISULTATO è DI 10 CLUSTER, con NDVI immagine corretta 16 cluster
 library(terra)
 library(raster)
 library(sf)
