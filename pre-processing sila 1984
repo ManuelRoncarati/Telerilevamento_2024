@@ -1,0 +1,65 @@
+setwd("C:/esame/landsat_5_1984_sila")
+
+library(sp)
+library(terra)
+library(raster)
+library(RStoolbox)
+library(ggplot2)
+library(gridExtra)
+library(sf)
+
+
+metaData<- readMeta("LT05_L1TP_188033_19840620_20200918_02_T1_MTL.txt")
+
+stack_calabria_1984 <- stackMeta(metaData)
+
+plot(stack_calabria_1984)
+
+shape_parco <- st_read("shape_sila.shp")
+
+crop_sila_1984 <- crop(stack_calabria_1984, shape_parco[1])
+
+sila_1984<-mask(crop_sila_1984, shape_parco[1])
+
+#sila_1984[sila_1984 == Inf] <- NA
+#sila_1984[sila_1984 == -Inf] <- NA
+
+df_sila_1984 <- as.data.frame(sila_1984)
+
+#df_sila_1984_clean <- na.omit(df_sila_1984)
+
+# Inizio misurazione del tempo di computazione
+timeStart <- proc.time()
+
+# Genera grafici per ogni banda del DataFrame pulito
+B1_dn <- ggplot(df_sila_1984, aes(B1_dn)) + 
+  geom_histogram(aes(y = after_stat(density)), binwidth = 10) + 
+  geom_density()
+
+B2_dn <- ggplot(df_sila_1984, aes(B2_dn)) + 
+  geom_histogram(aes(y = after_stat(density)), binwidth = 10) + 
+  geom_density()
+
+B3_dn <- ggplot(df_sila_1984, aes(B3_dn)) + 
+  geom_histogram(aes(y = after_stat(density)), binwidth = 10) + 
+  geom_density()
+
+B4_dn <- ggplot(df_sila_1984, aes(B4_dn)) + 
+  geom_histogram(aes(y = after_stat(density)), binwidth = 10) + 
+  geom_density()
+
+B5_dn <- ggplot(df_sila_1984, aes(B5_dn)) + 
+  geom_histogram(aes(y = after_stat(density)), binwidth = 10) + 
+  geom_density()
+
+B7_dn <- ggplot(df_sila_1984, aes(B7_dn)) + 
+  geom_histogram(aes(y = after_stat(density)), binwidth = 10) + 
+  geom_density()
+
+# Fine misurazione del tempo di computazione
+proc.time() - timeStart
+
+grid.arrange(B1_dn, B2_dn, B3_dn, B4_dn, B5_dn, B7_dn, ncol=2)
+
+sila_1984_radParameters <- metaData$CALRAD
+sila_1984_radParameters
