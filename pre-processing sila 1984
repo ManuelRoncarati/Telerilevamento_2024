@@ -103,6 +103,6 @@ B7_rad <- ggplot(df_rad_sila_1984, aes(B7_tra)) +
 
 # Fine misurazione del tempo di computazione
 proc.time() - timeStart
-
+grid.arrange(B1_rad, B2_rad, B3_rad, B4_rad, B5_rad, B7_rad, ncol=2)
 
 apref_sila_1984<-radCor(sila_1984, metaData = metaData, method = "apref")# Dn to top-of-the-atmosphere reflectance
