@@ -63,3 +63,46 @@ grid.arrange(B1_dn, B2_dn, B3_dn, B4_dn, B5_dn, B7_dn, ncol=2)
 
 sila_1984_radParameters <- metaData$CALRAD
 sila_1984_radParameters
+
+rad_sila_1984 <-radCor(sila_1984, metaData = metaData, method = "rad") # DN to top-of-the-atmosphere radiance
+
+
+df_rad_sila_1984<- as.data.frame(rad_sila_1984)
+
+
+
+
+
+# Inizio misurazione del tempo di computazione
+timeStart <- proc.time()
+
+# Genera grafici per ogni banda del DataFrame pulito
+B1_rad <- ggplot(df_rad_sila_1984, aes(B1_tra)) + 
+  geom_histogram(aes(y = after_stat(density)), binwidth = 10) + 
+  geom_density()
+
+B2_rad <- ggplot(df_rad_sila_1984, aes(B2_tra)) + 
+  geom_histogram(aes(y = after_stat(density)), binwidth = 10) + 
+  geom_density()
+
+B3_rad <- ggplot(df_rad_sila_1984, aes(B3_tra)) + 
+  geom_histogram(aes(y = after_stat(density)), binwidth = 10) + 
+  geom_density()
+
+B4_rad <- ggplot(df_rad_sila_1984, aes(B4_tra)) + 
+  geom_histogram(aes(y = after_stat(density)), binwidth = 10) + 
+  geom_density()
+
+B5_rad <- ggplot(df_rad_sila_1984, aes(B5_tra)) + 
+  geom_histogram(aes(y = after_stat(density)), binwidth = 10) + 
+  geom_density()
+
+B7_rad <- ggplot(df_rad_sila_1984, aes(B7_tra)) + 
+  geom_histogram(aes(y = after_stat(density)), binwidth = 10) + 
+  geom_density()
+
+# Fine misurazione del tempo di computazione
+proc.time() - timeStart
+
+
+apref_sila_1984<-radCor(sila_1984, metaData = metaData, method = "apref")# Dn to top-of-the-atmosphere reflectance
