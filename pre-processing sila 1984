@@ -103,6 +103,55 @@ B7_rad <- ggplot(df_rad_sila_1984, aes(B7_tra)) +
 
 # Fine misurazione del tempo di computazione
 proc.time() - timeStart
+
 grid.arrange(B1_rad, B2_rad, B3_rad, B4_rad, B5_rad, B7_rad, ncol=2)
 
 apref_sila_1984<-radCor(sila_1984, metaData = metaData, method = "apref")# Dn to top-of-the-atmosphere reflectance
+df_apref_sila_1984<- as.data.frame(apref_sila_1984)
+
+
+# Inizio misurazione del tempo di computazione
+timeStart <- proc.time()
+
+# Genera grafici per ogni banda del DataFrame pulito
+B1_apref<- ggplot(df_apref_sila_1984, aes(B1_tre)) + 
+  geom_histogram(aes(y = after_stat(density)), binwidth = 10) + 
+  geom_density()
+
+B2_apref <- ggplot(df_apref_sila_1984, aes(B2_tre)) + 
+  geom_histogram(aes(y = after_stat(density)), binwidth = 10) + 
+  geom_density()
+
+B3_apref <- ggplot(df_apref_sila_1984, aes(B3_tre)) + 
+  geom_histogram(aes(y = after_stat(density)), binwidth = 10) + 
+  geom_density()
+
+B4_apref <- ggplot(df_apref_sila_1984, aes(B4_tre)) + 
+  geom_histogram(aes(y = after_stat(density)), binwidth = 10) + 
+  geom_density()
+
+B5_apref <- ggplot(df_apref_sila_1984, aes(B5_tre)) + 
+  geom_histogram(aes(y = after_stat(density)), binwidth = 10) + 
+  geom_density()
+
+B7_apref <- ggplot(df_apref_sila_1984, aes(B7_tre)) + 
+  geom_histogram(aes(y = after_stat(density)), binwidth = 10) + 
+  geom_density()
+
+# Fine misurazione del tempo di computazione
+proc.time() - timeStart
+
+grid.arrange(B1_apref, B2_apref, B3_apref, B4_apref, ncol=1)
+
+
+hazeDN <- estimateHaze(sila_1984, hazeBands = 1:4,darkProp = 0.01, plot = TRUE)#  automatic haze estimation
+
+sdos_sila_1984 <- radCor(sila_1984, metaData = metaData, method = "sdos",hazeValues = hazeDN, hazeBands = 1:4)# radiometric correction using the SDOS method
+
+dos_sila_1984 <- radCor(sila_1984, metaData = metaData, method = "dos")# DOS
+
+plotRGB(dos_sila_1984,5,4,3,stretch="lin")
+
+costz_sila_1984 <-radCor(sila_1984, metaData=metaData,method="costz",hazeValues=hazeDN, hazeBands = 1:4)# COST
+
+plotRGB(costz_sila_1984,5,4,3,stretch="lin")
