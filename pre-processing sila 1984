@@ -223,7 +223,7 @@ plot(sila_1986)
 dev.off()
 
 # Rimuove il sesto layer (B6_tra)
-sila_1986_subset <- subset(sila_1986, c("B1_tra", "B2_tra", "B3_tra", "B4_tra", "B5_tra", "B7_tra"))
+sila_1986_subset <- subset(sila_1986, c("B1_dn", "B2_dn", "B3_dn", "B4_dn", "B5_dn", "B7_dn"))
 
 # Visualizza i layer rimanenti
 print(rad_sila_1986_subset)
