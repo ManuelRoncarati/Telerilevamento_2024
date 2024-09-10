@@ -226,7 +226,7 @@ dev.off()
 sila_1986_subset <- subset(sila_1986, c("B1_dn", "B2_dn", "B3_dn", "B4_dn", "B5_dn", "B7_dn"))
 
 # Visualizza i layer rimanenti
-print(rad_sila_1986_subset)
+print(sila_1986_subset)
 
 
 sila_1986_radParameters <- metaData$CALRAD
