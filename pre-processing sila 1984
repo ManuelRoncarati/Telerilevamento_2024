@@ -155,3 +155,114 @@ plotRGB(dos_sila_1984,5,4,3,stretch="lin")
 costz_sila_1984 <-radCor(sila_1984, metaData=metaData,method="costz",hazeValues=hazeDN, hazeBands = 1:4)# COST
 
 plotRGB(costz_sila_1984,5,4,3,stretch="lin")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+library(sp)
+library(terra)
+library(raster)
+library(RStoolbox)
+library(ggplot2)
+library(gridExtra)
+library(sf)
+
+setwd("C:/sila_1986")
+
+list.files()
+
+metaData<- readMeta("LT05_L1TP_187033_19860603_20200918_02_T1_MTL.txt")
+stack_calabria_1986 <- stackMeta(metaData)
+
+plot(stack_calabria_1986)
+
+shape_parco <- st_read("shape_sila.shp")
+
+crop_sila_1986 <- crop(stack_calabria_1986, shape_parco[1])
+
+sila_1986<-mask(crop_sila_1986, shape_parco[1])
+
+plot(sila_1986)
+
+dev.off()
+
+# Rimuove il sesto layer (B6_tra)
+sila_1986_subset <- subset(sila_1986, c("B1_tra", "B2_tra", "B3_tra", "B4_tra", "B5_tra", "B7_tra"))
+
+# Visualizza i layer rimanenti
+print(rad_sila_1986_subset)
+
+
+sila_1986_radParameters <- metaData$CALRAD
+sila_1986_radParameters
+
+
+
+rad_sila_1986 <-radCor(sila_1986, metaData = metaData, method = "rad") # DN to top-of-the-atmosphere radiance
+
+apref_sila_1986<-radCor(sila_1986, metaData = metaData, method = "apref")# Dn to top-of-the-atmosphere reflectance
+
+hazeDN <- estimateHaze(sila_1986, hazeBands = 1:4,darkProp = 0.01, plot = TRUE)#  automatic haze estimation
+
+sdos_sila_1986 <- radCor(sila_1986, metaData = metaData, method = "sdos",hazeValues = hazeDN, hazeBands = 1:4)# radiometric correction using the SDOS method
+
+dos_sila_1986 <- radCor(sila_1986, metaData = metaData, method = "dos")# DOS
+
+costz_sila_1986 <-radCor(sila_1986, metaData=metaData,method="costz",hazeValues=hazeDN, hazeBands = 1:4)# COST
+
+dev.off()
+
+
+par(mfrow=c(2,3))
+
+
+plotRGB(sila_1986,5,4,3,stretch="lin")
+plotRGB(rad_sila_1986,5,4,3,stretch="lin")
+plotRGB(apref_sila_1986,5,4,3,stretch="lin")
+plotRGB(sdos_sila_1986,5,4,3,stretch="lin")
+plotRGB(dos_sila_1986,5,4,3,stretch="lin")
+plotRGB(costz_sila_1986,5,4,3,stretch="lin")
+
+nir_1986 <- sila_1986[[4]]
+nir_1986_cost <- costz_sila_1986[[4]]
+nir_1986_dos <- dos_sila_1986[[4]]
+
+#writeRaster(nir_1986, filename = "nir_1986.TIF")
+#writeRaster(nir_1986_cost, filename = "nir_1986_cost.TIF")
+#writeRaster(nir_1986_dos, filename = "nir_1986_dos.TIF")
