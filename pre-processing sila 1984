@@ -266,3 +266,10 @@ nir_1986_dos <- dos_sila_1986[[4]]
 #writeRaster(nir_1986, filename = "nir_1986.TIF")
 #writeRaster(nir_1986_cost, filename = "nir_1986_cost.TIF")
 #writeRaster(nir_1986_dos, filename = "nir_1986_dos.TIF")
+
+falsi_colori_sila_1986 <- subset(sila_1986, c("B4_dn", "B3_dn", "B2_dn"))
+falsi_colori_sila_1986_cost <- subset(costz_sila_1986, c("B4_sre", "B3_sre", "B2_sre"))
+
+#writeRaster(falsi_colori_sila_1986, filename = "falsi_1986.TIF")
+#writeRaster(falsi_colori_sila_1986_cost, filename = "falsi_cost_1986.TIF")
+
