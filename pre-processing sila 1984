@@ -248,17 +248,6 @@ costz_sila_1986 <-radCor(sila_1986, metaData=metaData,method="costz",hazeValues=
 
 dev.off()
 
-
-par(mfrow=c(2,3))
-
-
-plotRGB(sila_1986,5,4,3,stretch="lin")
-plotRGB(rad_sila_1986,5,4,3,stretch="lin")
-plotRGB(apref_sila_1986,5,4,3,stretch="lin")
-plotRGB(sdos_sila_1986,5,4,3,stretch="lin")
-plotRGB(dos_sila_1986,5,4,3,stretch="lin")
-plotRGB(costz_sila_1986,5,4,3,stretch="lin")
-
 nir_1986 <- sila_1986[[4]]
 nir_1986_cost <- costz_sila_1986[[4]]
 nir_1986_dos <- dos_sila_1986[[4]]
@@ -273,3 +262,6 @@ falsi_colori_sila_1986_cost <- subset(costz_sila_1986, c("B4_sre", "B3_sre", "B2
 #writeRaster(falsi_colori_sila_1986, filename = "falsi_1986.TIF")
 #writeRaster(falsi_colori_sila_1986_cost, filename = "falsi_cost_1986.TIF")
 
+par(mfrow=c(1,2))
+plotRGB(falsi_colori_sila_1986, stretch="lin", main="DN")
+plotRGB(falsi_colori_sila_1986_cost, stretch="lin", main="COST")
