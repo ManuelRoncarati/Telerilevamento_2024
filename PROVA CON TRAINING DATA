@@ -19,7 +19,7 @@ falsi_86 <- rast("falsi_1986.TIF")  # Carica il raster
 indici <- spectralIndices(falsi_86, nir=1, red=2, green=2, indices = "SAVI")  # Calcola l'indice SAVI
 
 # Leggi i dati di addestramento da shapefile
-training_data <- st_read("training_data_5.shp")
+training_data <- st_read("aiuto.shp")
 
 # Estrai i valori dei pixel per i poligoni dello shapefile
 extracted_values <- extract(indici, training_data)
