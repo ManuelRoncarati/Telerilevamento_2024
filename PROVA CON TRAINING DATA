@@ -50,7 +50,7 @@ testData$classe <- as.factor(testData$classe)
 rf_model <- randomForest(classe ~ ., data = trainData, ntree = 100)
 
 classificato <- predict(indici, rf_model, na.rm=TRUE)
-
+plot(classificato, col=magma(6))
 
 
 
