@@ -49,6 +49,32 @@ testData$classe <- as.factor(testData$classe)
 # Addestra il modello di Random Forest
 rf_model <- randomForest(classe ~ ., data = trainData, ntree = 100)
 
+classificato <- predict(indici, rf_model, na.rm=TRUE)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # Estrai i valori dal raster per la predizione
 raster_values <- as.data.frame(indici, xy = TRUE)  # Converte il raster in dataframe con coordinate
 # Crea un dataframe solo con le colonne necessarie per la predizione
