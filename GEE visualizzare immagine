@@ -1,0 +1,30 @@
+// Importa una geometria dell'area di Bologna
+var bologna = ee.Geometry.Polygon(
+  [[
+    [11.0, 44.0], 
+    [11.5, 44.0], 
+    [11.5, 44.5], 
+    [11.0, 44.5]
+  ]]
+);
+
+// Filtra le immagini Landsat 5 per luglio 1984
+var landsat5 = ee.ImageCollection('LANDSAT/LT05/C02/T1_L2')
+  .filterBounds(bologna)
+  .filterDate('1984-07-01', '1984-07-31');
+
+// Verifica il numero di immagini disponibili
+print('Landsat 5 images in July 1984:', landsat5.size());
+
+// Seleziona un'immagine specifica (ad esempio, la prima disponibile)
+var image = landsat5.first();
+
+// Definisci la visualizzazione (RGB)
+var visParams = {
+  bands: ['SR_B4','SR_B3','SR_B2'] // Banda RGB per Landsat 5
+ 
+};
+
+// Aggiungi l'immagine alla mappa
+Map.centerObject(bologna, 10); // Centra sulla zona di Bologna con uno zoom appropriato
+Map.addLayer(image, visParams, 'Landsat 5 July 1984');
