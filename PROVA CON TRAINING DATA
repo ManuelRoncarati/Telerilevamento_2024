@@ -1,34 +1,37 @@
-library(terra)
-library(raster)
-library(sf)
-library(RStoolbox)
-library(viridis)
-library(randomForest)
-library(dplyr)
-library(mapedit)
-library(mapview)
-library(leaflet)
-library(caret)
-library(terra)
-library(viridis)
+# Carica le librerie necessarie
+library(terra)        # Per la manipolazione dei raster
+library(raster)       # Per la manipolazione dei raster (anche se terra può coprire molte delle sue funzionalità)
+library(sf)           # Per la manipolazione dei dati spaziali
+library(RStoolbox)    # Per il calcolo degli indici spettrali
+library(viridis)      # Per le palette di colori
+library(randomForest) # Per il modello di Random Forest
+library(dplyr)        # Per la manipolazione dei dati
+library(mapedit)      # Per l'editing dei dati spaziali
+library(mapview)      # Per la visualizzazione dei dati spaziali
+library(leaflet)      # Per le mappe interattive
+library(caret)        # Per la creazione e valutazione dei modelli
 
+# Imposta la directory di lavoro
 setwd("C:/sila_1986")
-falsi_86 <- rast("falsi_1986.TIF")
-indici <-spectralIndices(falsi_86, nir=1, red=2, green=2, indices = "SAVI")
 
+# Carica il raster e calcola l'indice SAVI
+falsi_86 <- rast("falsi_1986.TIF")  # Carica il raster
+indici <- spectralIndices(falsi_86, nir=1, red=2, green=2, indices = "SAVI")  # Calcola l'indice SAVI
 
-training_data<- st_read("training_data_5.shp")
+# Leggi i dati di addestramento da shapefile
+training_data <- st_read("training_data_5.shp")
 
+# Estrai i valori dei pixel per i poligoni dello shapefile
 extracted_values <- extract(indici, training_data)
-head(extracted_values)
+head(extracted_values)  # Mostra le prime righe dei valori estratti
 
-
-# Estrai i valori dei pixel per i poligoni
+# Estrai i valori dei pixel per i poligoni e restituisci un dataframe
 extracted_values <- extract(indici, training_data, df = TRUE)
 
-# Aggiungi le classi ai valori estratti
+# Aggiungi le classi ai valori estratti usando l'abbinamento degli ID
 extracted_values$classe <- training_data$classe[match(extracted_values$ID, training_data$id)]
-# Prepara il dataframe finale
+
+# Prepara il dataframe finale con le classi e i valori dell'indice SAVI
 training_data_final <- extracted_values %>%
   select(classe, SAVI)
 
@@ -36,9 +39,8 @@ training_data_final <- extracted_values %>%
 trainIndex <- createDataPartition(training_data_final$classe, p = .8, 
                                   list = FALSE, 
                                   times = 1)
-trainData <- training_data_final[trainIndex, ]
-testData <- training_data_final[-trainIndex, ]
-
+trainData <- training_data_final[trainIndex, ]  # Set di addestramento
+testData <- training_data_final[-trainIndex, ]   # Set di test
 
 # Converti la variabile classe in fattore
 trainData$classe <- as.factor(trainData$classe)
@@ -47,25 +49,18 @@ testData$classe <- as.factor(testData$classe)
 # Addestra il modello di Random Forest
 rf_model <- randomForest(classe ~ ., data = trainData, ntree = 100)
 
-
-# Estrai i valori dal raster
-raster_values <- as.data.frame(indici, xy = TRUE)
-# Crea un dataframe per la predizione
+# Estrai i valori dal raster per la predizione
+raster_values <- as.data.frame(indici, xy = TRUE)  # Converte il raster in dataframe con coordinate
+# Crea un dataframe solo con le colonne necessarie per la predizione
 raster_df <- raster_values %>%
-  select(SAVI)  # Usa solo le colonne necessarie per la predizione
+  select(SAVI)
 
-# Predici le classi per i dati del raster
+# Predici le classi per i dati del raster utilizzando il modello addestrato
 raster_df$predictions <- predict(rf_model, raster_df)
 
-
-
-
-
-
-# Supponiamo che 'raster_values' contenga i valori del raster e 'raster_df$predictions' le predizioni
 # Crea una matrice per assegnare le predizioni a tutte le celle del raster
 full_predictions <- rep(NA, ncell(indici))  # ncell ritorna il numero totale di celle nel raster
-full_predictions[!is.na(values(indici))] <- raster_df$predictions
+full_predictions[!is.na(values(indici))] <- raster_df$predictions  # Assegna le predizioni alle celle non NA
 
 # Crea un raster vuoto con le stesse dimensioni dell'immagine originale
 predicted_raster <- rast(indici)
@@ -74,4 +69,5 @@ predicted_raster <- rast(indici)
 values(predicted_raster) <- full_predictions
 
 # Visualizza l'immagine delle predizioni
-plot(predicted_raster, main = "Predizioni del Modello RF", col = viridis(10))
+plot(predicted_raster, main = "Predizioni del Modello RF", col = magma(6))
+
