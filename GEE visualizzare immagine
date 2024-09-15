@@ -1,30 +1,75 @@
-// Importa una geometria dell'area di Bologna
-var bologna = ee.Geometry.Polygon(
-  [[
-    [11.0, 44.0], 
-    [11.5, 44.0], 
-    [11.5, 44.5], 
-    [11.0, 44.5]
-  ]]
-);
+// Definisci l'AOI dal tuo shapefile
+var aoi = ee.FeatureCollection('projects/ee-manuelroncarati1/assets/shape_sila');
 
-// Filtra le immagini Landsat 5 per luglio 1984
-var landsat5 = ee.ImageCollection('LANDSAT/LT05/C02/T1_L2')
-  .filterBounds(bologna)
-  .filterDate('1984-07-01', '1984-07-31');
+// Centra la mappa sull'AOI
+Map.centerObject(aoi, 10);
 
-// Verifica il numero di immagini disponibili
-print('Landsat 5 images in July 1984:', landsat5.size());
+// Definisci le variabili temporali
+var startDate = '2019-01-01';
+var endDate = '2019-12-31';
 
-// Seleziona un'immagine specifica (ad esempio, la prima disponibile)
-var image = landsat5.first();
+// Carica e filtra la collezione Landsat 8
+var landsat8 = ee.ImageCollection('LANDSAT/LC08/C02/T1_L2')
+    .filterBounds(aoi)
+    .filterDate(startDate, endDate);
 
-// Definisci la visualizzazione (RGB)
+// Applica i fattori di scala
+function applyScaleFactors(image) {
+    var opticalBands = image.select('SR_B.').multiply(0.0000275).add(-0.2);
+    var thermalBands = image.select('ST_B.*').multiply(0.00341802).add(149.0);
+    return image.addBands(opticalBands, null, true)
+        .addBands(thermalBands, null, true);
+}
+
+landsat8 = landsat8.map(applyScaleFactors);
+
+// Crea una composite (mediana) e ritaglia l'AOI
+var composite = landsat8.median().clip(aoi);
+
 var visParams = {
-  bands: ['SR_B4','SR_B3','SR_B2'] // Banda RGB per Landsat 5
- 
+    bands: ['SR_B4', 'SR_B3', 'SR_B2'],
+    min: 0,
+    max: 0.2
 };
+Map.addLayer(composite, visParams, 'L8 Composite');
 
-// Aggiungi l'immagine alla mappa
-Map.centerObject(bologna, 10); // Centra sulla zona di Bologna con uno zoom appropriato
-Map.addLayer(image, visParams, 'Landsat 5 July 1984');
+// Filtra in base alla copertura nuvolosa (CLOUD_COVER)
+var landsat8FiltClouds = landsat8
+    .filterBounds(aoi)
+    .filterDate(startDate, endDate)
+    .filter(ee.Filter.lessThan('CLOUD_COVER', 50));
+
+// Crea un composite dalle immagini filtrate
+var compositeFiltClouds = landsat8FiltClouds.median().clip(aoi);
+
+Map.addLayer(compositeFiltClouds, visParams, 'L8 Composite cloud filter');
+
+// Stampa la dimensione delle collezioni per confronto
+print('Dimensione collezione landsat8', landsat8.size());
+print('Dimensione collezione landsat8 con filtro nuvole', landsat8FiltClouds.size());
+
+// Definisci la funzione di mascheratura delle nuvole
+function maskSrClouds(image) {
+    // Bit 0 - Fill
+    // Bit 1 - Dilated Cloud
+    // Bit 2 - Cirrus
+    // Bit 3 - Cloud
+    // Bit 4 - Cloud Shadow
+    var qaMask = image.select('QA_PIXEL').bitwiseAnd(parseInt('11111', 2)).eq(0);
+    var saturationMask = image.select('QA_RADSAT').eq(0);
+
+    return image.updateMask(qaMask)
+        .updateMask(saturationMask);
+}
+
+// Applica la maschera per le nuvole alla collezione
+var landsat8FiltMasked = landsat8FiltClouds.map(maskSrClouds);
+
+// Crea un composite mascherato
+var landsat8compositeMasked = landsat8FiltMasked.median().clip(aoi);
+
+Map.addLayer(landsat8compositeMasked, visParams, 'L8 composite masked');
+
+//  -----------------------------------------------------------------------
+//  CHECKPOINT 
+//  -----------------------------------------------------------------------
