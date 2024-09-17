@@ -1,0 +1,71 @@
+# Carica le librerie necessarie
+library(terra)
+library(xgboost)
+library(dplyr)
+library(viridis)
+library(mapview)
+
+# Imposta la directory di lavoro
+setwd("C:/sila_1986")
+
+# Carica il raster
+falsi_86 <- rast("falsi_1986.TIF")
+
+# Estrai i valori delle bande dal raster come dataframe
+values_bande <- as.data.frame(values(falsi_86))
+
+# Filtra solo i valori non nulli
+non_na_mask <- complete.cases(values_bande)
+values_bande_non_na <- values_bande[non_na_mask, ]
+
+# Supponiamo di avere i dati di addestramento già pronti
+# Carica i dati di addestramento dallo shapefile
+training_data <- st_read("aiuto.shp")
+
+# Estrai i valori dei pixel per i poligoni dello shapefile
+extracted_values <- extract(falsi_86, training_data, df = TRUE)
+
+# Aggiungi le classi ai valori estratti abbinando gli ID
+extracted_values$classe <- training_data$classe[match(extracted_values$ID, training_data$id)]
+
+# Prepara il dataframe finale con le classi e i valori dei raster (B4, B3, B2)
+training_data_final <- extracted_values %>% select(classe, B4_dn, B3_dn, B2_dn)
+
+# Converti le classi in numeri che partono da 0 (se applicabile)
+training_data_final$classe <- as.numeric(factor(training_data_final$classe)) - 1
+
+# Prepara i dati per XGBoost
+X_train <- as.matrix(training_data_final %>% select(B4_dn, B3_dn, B2_dn))
+y_train <- training_data_final$classe
+dtrain <- xgb.DMatrix(data = X_train, label = y_train)
+
+# Definisci i parametri del modello XGBoost
+params <- list(
+  objective = "multi:softmax",  # Classificazione multi-classe
+  num_class = length(unique(y_train)), # Numero di classi
+  eta = 0.3,                    # Tasso di apprendimento
+  max_depth = 6                 # Profondità massima degli alberi
+)
+
+# Allena il modello XGBoost
+xgb_model <- xgb.train(params, dtrain, nrounds = 100)
+
+# Usa i dati non nulli per preparare il dataset di test
+X_pred <- as.matrix(values_bande_non_na %>% select(B4_dn, B3_dn, B2_dn))
+dtest <- xgb.DMatrix(data = X_pred)
+
+# Effettua le previsioni sul raster
+preds <- predict(xgb_model, dtest)
+
+# Verifica che il numero di previsioni corrisponda ai valori non nulli
+print(length(preds))  # Deve essere uguale a nrow(values_bande_non_na)
+
+# Crea un raster vuoto con le stesse dimensioni e risoluzione del raster originale
+pred_raster <- rast(nrow = nrow(falsi_86), ncol = ncol(falsi_86), crs = crs(falsi_86), ext = ext(falsi_86))
+
+# Riempie il raster con le previsioni solo per i pixel non nulli
+values(pred_raster) <- NA  # Inizialmente setta tutto a NA
+values(pred_raster)[non_na_mask] <- preds
+
+# Visualizza il raster classificato
+mapview(pred_raster, col.regions = viridis(length(unique(preds))), main = "Raster Classificato", maxpixels = ncell(pred_raster))
