@@ -1,0 +1,59 @@
+setwd("C:/composite prove")
+list.files()
+library(terra)
+library(RStoolbox)
+library(viridis)
+img_all_bands_84_90<-rast("L5 Composite 1984-1990_masked.tif")
+names(img_all_bands_84_90)
+bande_utili_84_90<-img_all_bands_84_90[[c(1,2,3,4,5,9,6)]]
+plot(bande_utili_84_90)
+
+
+blue<-bande_utili_84_90[[1]]
+red<-bande_utili_84_90[[2]]
+green<-bande_utili_84_90[[3]]
+nir<-bande_utili_84_90[[4]]
+swir1<-bande_utili_84_90[[5]]
+swir2<-bande_utili_84_90[[7]]
+tir<-bande_utili_84_90[[6]]
+
+index_vegetation_water<- spectralIndices(
+  bande_utili_84_90, 
+  blue = 1, 
+  green = 2, 
+  red = 3, 
+  nir = 4, 
+  indices = c("NDVI", "EVI", "GNDVI", "SAVI", "NDWI")
+)
+plot(alcuni_indici)
+
+
+BSI <- (swir2 + red - (nir + blue)) / (swir2 + red + nir + blue)
+BSI1 <- (swir1 + red - (nir + blue)) / (swir1 + red + nir + blue)
+BSI2 <- 100 * sqrt((swir2 - green) / (swir2 + green))
+BSI3 <- ((swir1 + red - (nir + blue)) / (swir1 + red + nir + blue)) * 100 + 100
+
+NDSI1 <- (swir1 - nir) / (swir1 + nir)
+NDSI2 <- (swir2 - green) / (swir2 + green)
+
+NDBaI <- (swir1 - tir) / (swir1 + tir)
+BI <- red + swir1 - nir
+NBLI <- (red - tir) / (red + tir)
+
+# Assegna nomi ai rasters
+names(BSI) <- "BSI"
+names(BSI1) <- "BSI1"
+names(BSI2) <- "BSI2"
+names(BSI3) <- "BSI3"
+names(NDSI1) <- "NDSI1"
+names(NDSI2) <- "NDSI2"
+names(NDBaI) <- "NDBaI"
+names(BI) <- "BI"
+names(NBLI) <- "NBLI"
+
+# Crea lo stack degli indici
+indici_suolo <- c(BSI, BSI1, BSI2, BSI3, NDSI1, NDSI2, NDBaI, BI, NBLI)
+indici_suolo_veg_acqua<-c(index_vegetation_water,indici_suolo)
+
+bande_utili_84_90_no_TIR<-bande_utili_84_90[[c(1,2,3,4,5,7)]]
+bande_indici_tutto<-c(bande_utili_84_90_no_TIR,indici_suolo_veg_acqua)
