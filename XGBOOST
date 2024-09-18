@@ -297,3 +297,90 @@ library(mapview)
 
 # Visualizza il raster classificato
 mapview(pred_raster, col.regions = magma(num_clusters), main = "Raster Classificato", maxpixels = ncell(pred_raster))
+
+
+
+
+#Fuzzy C-Means
+
+# Carica le librerie necessarie
+library(terra)
+library(xgboost)
+library(dplyr)
+library(viridis)
+library(caret)
+library(sf)
+library(e1071)  # Per Fuzzy C-Means
+
+# Imposta la directory di lavoro
+setwd("C:/sila_1986")
+
+# Carica il raster
+immagine <- stack  # LE PRIME 6 BANDE DEL RASTER MASKERA 84-90 + INDICI SELEZIONATI 
+
+# Estrai i valori delle bande dal raster come dataframe
+values_bande <- as.data.frame(values(immagine))
+
+# Filtra solo i valori non nulli
+non_na_mask <- complete.cases(values_bande)
+values_bande_non_na <- values_bande[non_na_mask, ]
+
+# Identifica automaticamente le colonne delle bande (escludendo eventuali altre colonne)
+band_columns <- names(values_bande_non_na)
+
+# Prepara i dati per il clustering Fuzzy C-Means
+X_fcm <- as.matrix(values_bande_non_na %>% select(all_of(band_columns)))
+
+# Applica Fuzzy C-Means per creare cluster (ad esempio, 4 cluster)
+num_clusters <- 5  # Puoi cambiare il numero di cluster
+fcm_result <- cmeans(X_fcm, centers = num_clusters, iter.max = 200, m = 5)
+
+# Aggiungi le etichette dei cluster ai dati non nulli (basate sulla massima appartenenza)
+values_bande_non_na$classe <- apply(fcm_result$membership, 1, which.max) - 1  # Le etichette devono partire da 0
+
+# Prepara i dati di training usando i cluster creati
+X_train <- X_fcm
+y_train <- values_bande_non_na$classe
+
+# Crea il DMatrix per XGBoost
+dtrain <- xgb.DMatrix(data = X_train, label = y_train)
+
+# Imposta i parametri fissi per XGBoost
+xgb_params <- list(
+    objective = "multi:softmax",
+    num_class = num_clusters,  # Numero di classi (cluster)
+    eta = 0.01,  # Tasso di apprendimento fisso
+    max_depth = 6  # Profondità massima dell'albero
+)
+
+# Addestra il modello XGBoost
+xgb_model <- xgb.train(
+    params = xgb_params,
+    data = dtrain,
+    nrounds = 200,  # Numero fisso di round di addestramento
+    verbose = 0
+)
+
+# Prepara i dati per la previsione
+X_pred <- X_fcm  # Poiché stiamo predicendo sugli stessi dati non nulli
+dtest <- xgb.DMatrix(data = X_pred)
+
+# Effettua le previsioni sul raster
+preds <- predict(xgb_model, dtest)
+
+# Verifica che il numero di previsioni corrisponda ai valori non nulli
+print(length(preds))  # Deve essere uguale a nrow(values_bande_non_na)
+
+# Crea un raster vuoto con le stesse dimensioni e risoluzione del raster originale
+pred_raster <- rast(nrow = nrow(immagine), ncol = ncol(immagine), crs = crs(immagine), ext = ext(immagine))
+
+# Riempie il raster con le previsioni solo per i pixel non nulli
+values(pred_raster) <- NA  # Inizialmente setta tutto a NA
+values(pred_raster)[non_na_mask] <- preds
+
+# Visualizza il raster classificato usando plot()
+plot(pred_raster, col = magma(num_clusters), main = "Raster Classificato con FCM e XGBoost")
+
+# Visualizza il raster classificato con mapview
+library(mapview)
+mapview(pred_raster, col.regions = magma(num_clusters), main = "Raster Classificato", maxpixels = ncell(pred_raster))
