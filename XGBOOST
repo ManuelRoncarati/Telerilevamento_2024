@@ -292,3 +292,8 @@ values(pred_raster)[non_na_mask] <- preds
 
 # Visualizza il raster classificato usando plot()
 plot(pred_raster, col = magma(num_clusters), main = "Raster Classificato")
+
+library(mapview)
+
+# Visualizza il raster classificato
+mapview(pred_raster, col.regions = magma(num_clusters), main = "Raster Classificato", maxpixels = ncell(pred_raster))
