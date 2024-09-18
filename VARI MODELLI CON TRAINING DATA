@@ -1,0 +1,108 @@
+
+
+# Carica le librerie necessarie
+library(terra)
+library(raster)
+library(sf)
+library(RStoolbox)
+library(viridis)
+library(randomForest)
+library(dplyr)
+library(mapedit)
+library(mapview)
+library(leaflet)
+library(caret)
+library(rpart)
+library(e1071)
+library(class) # per k-NN
+
+# Imposta la directory di lavoro
+setwd("C:/sila_1986")
+
+# Carica il raster
+falsi_86 <- rast("falsi_1986.TIF")
+
+# Leggi i dati di addestramento da shapefile
+training_data <- st_read("aiuto.shp")
+
+# Estrai i valori dei pixel per i poligoni dello shapefile
+extracted_values <- extract(falsi_86, training_data, df = TRUE)
+
+# Aggiungi le classi ai valori estratti abbinando gli ID
+extracted_values$classe <- training_data$classe[match(extracted_values$ID, training_data$id)]
+
+# Prepara il dataframe finale con le classi e i valori dei raster (B4, B3, B2)
+training_data_final <- extracted_values %>% select(classe, B4_dn, B3_dn, B2_dn)
+
+# Dividi i dati in set di addestramento e di test
+trainIndex <- createDataPartition(training_data_final$classe, p = 0.8, list = FALSE, times = 1)
+trainData <- training_data_final[trainIndex, ]
+testData <- training_data_final[-trainIndex, ]
+
+# Converti la variabile classe in fattore
+trainData$classe <- as.factor(trainData$classe)
+testData$classe <- as.factor(testData$classe)
+
+# Addestra il modello di Random Forest
+rf_model <- randomForest(classe ~ ., data = trainData, ntree = 100)
+
+# Classifica l'immagine raster usando il modello addestrato
+classificato <- predict(falsi_86, rf_model, na.rm = TRUE)
+
+# Visualizza il risultato della classificazione
+plot(classificato, col = magma(6))
+
+# Filtra la classe "latifoglie" (adatta il nome della classe a quello corretto)
+class_latifoglie <- ifel(classificato == "latifoglie", classificato, NA)
+
+# Visualizza il raster con solo la classe "latifoglie"
+plot(class_latifoglie, col = "red")
+
+# Classificazione con CART (Decision Tree)
+cart_model <- rpart(classe ~ ., data = trainData, method = 'class', minsplit = 5)
+
+# Visualizza l'albero decisionale
+plot(cart_model, uniform = TRUE, main = "Classification Tree")
+text(cart_model, cex = 1)
+
+# Classifica l'immagine raster usando il modello CART
+classified_cart <- predict(falsi_86, cart_model, na.rm = TRUE)
+plot(classified_cart)
+
+# Aggiungi classi alle previsioni
+lulc <- which.max(classified_cart)
+cls <- c("acqua", "pietro", "carlo", "franco")
+df <- data.frame(id = 1:4, class = cls)
+levels(lulc) <- df
+
+# Visualizza il raster con le classi e colori personalizzati
+mycolor <- c("darkred", "yellow", "burlywood", "blue")
+plot(lulc, col = mycolor)
+
+# Classificazione con Naive Bayes
+nb_model <- naiveBayes(classe ~ ., data = trainData)
+nb_predictions <- predict(falsi_86, nb_model, na.rm = TRUE)
+plot(nb_predictions)
+
+# Classificazione con SVM
+svm_model <- svm(classe ~ ., data = trainData)
+svm_predictions <- predict(falsi_86, svm_model, na.rm = TRUE)
+plot(svm_predictions)
+
+# Pre-elaborazione dei dati per k-NN
+# Assicurati che il numero di righe sia lo stesso nei dati di addestramento
+raster_matrix <- as.matrix(falsi_86) # Trasformazione del raster in matrice
+raster_matrix_clean <- na.omit(raster_matrix) # Rimozione dei valori NA
+trainData_clean <- na.omit(trainData)
+
+# Esegui k-NN sui dati puliti
+knn_predictions <- knn(train = trainData_clean[, -1], test = raster_matrix_clean, cl = trainData_clean$classe, k = 3)
+
+# Crea un raster per le previsioni
+classified_raster <- falsi_86
+
+# Assegna solo le previsioni ai pixel che non erano NA
+values(classified_raster)[!is.na(values(falsi_86))] <- as.numeric(knn_predictions)
+
+# Visualizza il raster classificato con k-NN
+plot(classified_raster, col = magma(length(unique(knn_predictions))))
