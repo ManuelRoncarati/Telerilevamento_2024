@@ -384,6 +384,84 @@ mapview(pred_raster, col.regions = magma(num_clusters), main = "Raster Classific
 
 
 
+#CON QUESTE TRE BANDE FUNZIONA DA DIO
+
+# Carica le librerie necessarie
+library(terra)
+library(dplyr)
+library(randomForest)
+library(mapview)
+library(viridis)
+library(mclust)  # Per il clustering basato su modelli
+
+# Imposta la directory di lavoro
+setwd("C:/composite prove")
+
+# Carica il raster multibanda
+nuove_bande_selezionate <- rast("nuove_bande_selezionate.tif")
+
+# Estrai i valori delle bande come dataframe
+values_bande <- as.data.frame(values(nuove_bande_selezionate))
+
+# Filtra solo i valori non nulli
+non_na_mask <- complete.cases(values_bande)
+values_bande_non_na <- values_bande[non_na_mask, ]
+
+# Imposta una semina per la riproducibilità
+set.seed(123)
+
+# Percentuale di pixel da campionare
+percentuale <- 0.1  # 20% dei pixel
+
+# Calcola il numero di pixel da campionare basandoti solo sulla percentuale
+num_samples <- ceiling(nrow(values_bande_non_na) * percentuale)
+
+# Campiona i pixel casualmente
+sample_indices <- sample(seq_len(nrow(values_bande_non_na)), size = num_samples, replace = FALSE)
+sampled_data <- values_bande_non_na[sample_indices, ]
+
+# Identifica le colonne delle bande
+band_columns <- names(sampled_data)
+
+# Prepara i dati per il clustering basato su modelli
+X <- as.matrix(sampled_data %>% select(all_of(band_columns)))
+
+# Applica il clustering basato su modelli
+num_clusters <- 6  # Cambia questo valore se necessario
+mclust_result <- Mclust(X, G = num_clusters)
+
+# Aggiungi le etichette dei cluster ai dati
+sampled_data$classe <- mclust_result$classification - 1  # Le etichette devono partire da 0
+
+# Prepara i dati di training
+X_train <- as.data.frame(X)
+y_train <- as.factor(sampled_data$classe)  # Converti le etichette in un fattore
+train_data <- cbind(X_train, classe = y_train)
+
+# Addestra il modello Random Forest
+rf_model <- randomForest(classe ~ ., data = train_data, ntree = 100, mtry = 3)  # Imposta parametri manuali
+
+# Carica il raster su cui effettuare le previsioni
+values_bande_full <- as.data.frame(values(nuove_bande_selezionate))
+values_bande_non_na_full <- values_bande_full[complete.cases(values_bande_full), ]
+X_pred <- as.data.frame(values_bande_non_na_full)
+names(X_pred) <- band_columns  # Assicurati che i nomi delle colonne corrispondano
+
+# Effettua le previsioni
+preds <- predict(rf_model, X_pred)
+
+# Verifica che il numero di previsioni corrisponda ai valori non nulli
+print(length(preds))  # Deve essere uguale a nrow(values_bande_non_na_full)
+
+# Crea un raster vuoto con le stesse dimensioni e risoluzione del raster originale
+pred_raster <- rast(nrow = nrow(nuove_bande_selezionate), ncol = ncol(nuove_bande_selezionate), crs = crs(nuove_bande_selezionate), ext = ext(nuove_bande_selezionate))
+
+# Riempie il raster con le previsioni solo per i pixel non nulli
+values(pred_raster) <- NA  # Inizialmente setta tutto a NA
+values(pred_raster)[complete.cases(values_bande_full)] <- preds
+
+# Visualizza il raster classificato utilizzando mapview
+mapview(pred_raster, col.regions = magma(num_clusters), main = "Raster Classificato con Random Forest", maxpixels = ncell(pred_raster))
 
 
 
