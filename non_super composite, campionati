@@ -465,3 +465,41 @@ mapview(pred_raster, col.regions = magma(num_clusters), main = "Raster Classific
 
 
 
+
+
+
+#gomitoooo
+
+library(mclust)
+
+# Imposta una semina per la riproducibilità
+set.seed(123)
+
+# Percentuale di pixel da campionare (ad esempio, il 10%)
+percentuale <- 0.01  # Puoi modificare questa percentuale
+
+# Calcola il numero di pixel da campionare
+num_samples <- ceiling(nrow(values_bande_non_na) * percentuale)
+
+# Campiona i pixel casualmente
+sample_indices <- sample(seq_len(nrow(values_bande_non_na)), size = num_samples, replace = FALSE)
+sampled_data <- values_bande_non_na[sample_indices, ]
+
+# Prepara i dati per il clustering
+X_sample <- as.matrix(sampled_data)
+
+# Imposta un intervallo di numero di cluster da testare
+num_clusters_to_test <- 1:15  # Puoi modificare questo range
+
+# Prepara un vettore per memorizzare i valori del BIC
+bic_values <- numeric(length(num_clusters_to_test))
+
+# Calcola il BIC per ciascun numero di cluster su un campione
+for (i in num_clusters_to_test) {
+    mclust_result <- Mclust(X_sample, G = i)
+    bic_values[i] <- mclust_result$bic  # Memorizza il BIC
+}
+
+# Traccia il grafico del BIC per visualizzare il metodo del gomito
+plot(num_clusters_to_test, bic_values, type = "b", pch = 19, col = "blue", 
+     xlab = "Numero di cluster", ylab = "BIC", main = "Metodo del Gomito con BIC su un Campione")
