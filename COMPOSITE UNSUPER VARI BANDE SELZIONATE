@@ -316,3 +316,4 @@ values(pred_raster)[complete.cases(values_bande_full)] <- preds
 # Visualizza il raster classificato utilizzando mapview
 mapview(pred_raster, col.regions = magma(num_clusters), main = "Raster Classificato con Naive Bayes", maxpixels = ncell(pred_raster))
 
+#MANCANO SVM E KNN
