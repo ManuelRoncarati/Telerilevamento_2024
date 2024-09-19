@@ -1,0 +1,33 @@
+# Carica le librerie necessarie
+library(terra)
+library(mclust)
+
+# Imposta la directory di lavoro
+setwd("C:/composite prove")
+
+# Carica il raster multibanda
+nuove_bande_selezionate <- rast("nuove_bande_selezionate.tif")
+
+# Estrai i valori delle bande come matrice
+values_bande <- values(nuove_bande_selezionate)
+values_bande_non_na <- na.omit(values_bande)  # Rimuovi i valori NA
+
+# Prepara i dati per il clustering basato su modelli
+X <- as.matrix(values_bande_non_na)
+
+# Definisci il numero massimo di cluster da testare
+max_clusters <- 20  # Modifica questo valore se necessario
+
+# Esegui il clustering basato su modelli per un intervallo di numeri di cluster
+mclust_result <- Mclust(X, G = 1:max_clusters)
+
+# Estrai il numero ottimale di cluster basato sul BIC
+best_num_clusters <- mclust_result$G
+best_bic <- mclust_result$bic[best_num_clusters]
+
+# Stampa il numero migliore di cluster e il BIC associato
+cat("Numero ottimale di cluster:", best_num_clusters, "\n")
+cat("BIC associato:", best_bic, "\n")
+
+# Visualizza il BIC per ogni numero di cluster
+plot(mclust_result, what = "BIC")
