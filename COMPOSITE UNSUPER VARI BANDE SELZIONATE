@@ -375,4 +375,76 @@ mapview(pred_raster,
         maxpixels = ncell(pred_raster))  # Aumenta maxpixels al numero totale di celle del raster per visualizzare tutto
 
 
+
+
+
+
+#MCLUST ANN
+
+# Carica le librerie necessarie
+library(terra)
+library(dplyr)
+library(nnet)  # Per ANN (Rete Neurale)
+library(mapview)
+library(viridis)
+library(mclust)  # Per il clustering basato su modelli
+
+# Imposta la directory di lavoro
+setwd("C:/composite prove")
+
+# Carica il raster multibanda
+nuove_bande_selezionate <- rast("nuove_bande_selezionate.tif")
+
+# Estrai i valori delle bande come dataframe
+values_bande <- as.data.frame(values(nuove_bande_selezionate))
+
+# Filtra solo i valori non nulli
+non_na_mask <- complete.cases(values_bande)
+values_bande_non_na <- values_bande[non_na_mask, ]
+
+# Identifica le colonne delle bande
+band_columns <- names(values_bande_non_na)
+
+# Prepara i dati per il clustering basato su modelli
+X <- as.matrix(values_bande_non_na %>% select(all_of(band_columns)))
+
+# Applica il clustering basato su modelli
+num_clusters <- 7  # Cambia questo valore se necessario
+mclust_result <- Mclust(X, G = num_clusters)
+
+# Aggiungi le etichette dei cluster ai dati
+values_bande_non_na$classe <- mclust_result$classification - 1  # Le etichette devono partire da 0
+
+# Prepara i dati di training per ANN
+X_train <- as.matrix(values_bande_non_na %>% select(-classe))  # Input
+y_train <- class.ind(as.factor(values_bande_non_na$classe))  # One-hot encoding per le etichette
+
+# Crea il modello ANN utilizzando nnet
+# 'size' indica il numero di neuroni nello strato nascosto, puoi modificare questo valore
+ann_model <- nnet(X_train, y_train, size = 5, softmax = TRUE, maxit = 200)
+
+# Effettua previsioni su tutto il raster
+values_bande_full <- as.data.frame(values(nuove_bande_selezionate))
+values_bande_non_na_full <- values_bande_full[complete.cases(values_bande_full), ]
+X_pred <- as.matrix(values_bande_non_na_full)
+
+# Previsione con ANN
+preds <- predict(ann_model, X_pred, type = "class")
+
+# Verifica che il numero di previsioni corrisponda ai valori non nulli
+print(length(preds))  # Deve essere uguale a nrow(values_bande_non_na_full)
+
+# Crea un raster vuoto con le stesse dimensioni e risoluzione del raster originale
+pred_raster <- rast(nrow = nrow(nuove_bande_selezionate), ncol = ncol(nuove_bande_selezionate), crs = crs(nuove_bande_selezionate), ext = ext(nuove_bande_selezionate))
+
+# Riempie il raster con le previsioni solo per i pixel non nulli
+values(pred_raster) <- NA  # Inizialmente setta tutto a NA
+values(pred_raster)[complete.cases(values_bande_full)] <- preds
+
+# Visualizza il raster classificato utilizzando mapview
+mapview(pred_raster, col.regions = magma(num_clusters), main = "Raster Classificato con ANN", maxpixels = ncell(pred_raster))
+
+
+
+
 #MANCANO SVM E KNN
