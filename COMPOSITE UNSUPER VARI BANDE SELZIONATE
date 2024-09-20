@@ -514,5 +514,66 @@ mapview(pred_raster, col.regions = magma(num_clusters), main = "Raster Classific
 
 
 
-# SVM 
+# fuzzy con RF
 
+# Carica le librerie necessarie
+library(terra)
+library(dplyr)
+library(e1071)  # Per Fuzzy C-Means
+library(randomForest)  # Per Random Forest
+library(mapview)
+library(viridis)
+
+# Imposta la directory di lavoro
+setwd("C:/composite prove")
+
+# Carica il raster multibanda
+nuove_bande_selezionate <- rast("nuove_bande_selezionate.tif")
+
+# Estrai i valori delle bande come dataframe
+values_bande <- as.data.frame(values(nuove_bande_selezionate))
+
+# Filtra solo i valori non nulli
+non_na_mask <- complete.cases(values_bande)
+values_bande_non_na <- values_bande[non_na_mask, ]
+
+# Identifica le colonne delle bande
+band_columns <- names(values_bande_non_na)
+
+# Prepara i dati per il clustering con Fuzzy C-Means
+X <- as.matrix(values_bande_non_na %>% select(all_of(band_columns)))
+
+# Applica il clustering Fuzzy C-Means con la libreria e1071
+num_clusters <- 7  # Cambia questo valore se necessario
+fcm_result <- cmeans(X, centers = num_clusters, m = 2, iter.max = 100, verbose = FALSE)
+
+# Aggiungi le etichette dei cluster fuzzy ai dati
+values_bande_non_na$classe <- as.factor(apply(fcm_result$membership, 1, which.max) - 1)  # Le etichette devono partire da 0
+
+# Prepara i dati di training per Random Forest
+X_train <- values_bande_non_na %>% select(-classe)  # Tutte le colonne tranne 'classe'
+y_train <- values_bande_non_na$classe  # Le etichette devono essere fattori
+
+# Crea il modello Random Forest
+rf_model <- randomForest(classe ~ ., data = data.frame(X_train, classe = y_train), ntree = 100, mtry = 3)
+
+# Effettua previsioni su tutto il raster
+values_bande_full <- as.data.frame(values(nuove_bande_selezionate))
+values_bande_non_na_full <- values_bande_full[complete.cases(values_bande_full), ]
+X_pred <- values_bande_non_na_full
+
+# Effettua le previsioni con Random Forest
+preds <- predict(rf_model, newdata = X_pred)
+
+# Verifica che il numero di previsioni corrisponda ai valori non nulli
+print(length(preds))  # Deve essere uguale a nrow(values_bande_non_na_full)
+
+# Crea un raster vuoto con le stesse dimensioni e risoluzione del raster originale
+pred_raster <- rast(nrow = nrow(nuove_bande_selezionate), ncol = ncol(nuove_bande_selezionate), crs = crs(nuove_bande_selezionate), ext = ext(nuove_bande_selezionate))
+
+# Riempie il raster con le previsioni solo per i pixel non nulli
+values(pred_raster) <- NA  # Inizialmente setta tutto a NA
+values(pred_raster)[complete.cases(values_bande_full)] <- as.numeric(preds) - 1  # Converte le classi predette a partire da 0
+
+# Visualizza il raster classificato utilizzando mapview
+mapview(pred_raster, col.regions = magma(num_clusters), main = "Raster Classificato con Random Forest e Fuzzy C-Means", maxpixels = ncell(pred_raster))
