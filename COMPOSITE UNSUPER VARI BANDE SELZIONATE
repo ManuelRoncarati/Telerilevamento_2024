@@ -577,3 +577,69 @@ values(pred_raster)[complete.cases(values_bande_full)] <- as.numeric(preds) - 1 
 
 # Visualizza il raster classificato utilizzando mapview
 mapview(pred_raster, col.regions = magma(num_clusters), main = "Raster Classificato con Random Forest e Fuzzy C-Means", maxpixels = ncell(pred_raster))
+
+
+
+
+#12 ore ma  A MANI BASSE IL MIGLIORE SVM
+
+# Carica le librerie necessarie
+library(terra)       # Per la manipolazione di dati raster e spaziali
+library(e1071)       # Per l'implementazione del Support Vector Machine (SVM)
+library(mapview)     # Per la visualizzazione interattiva dei dati spaziali
+library(viridis)     # Per le palette di colori
+library(mclust)      # Per il clustering basato su modelli
+
+# Imposta la directory di lavoro
+setwd("C:/composite prove")  # Cambia la directory di lavoro al percorso specificato
+
+# Carica il raster multibanda
+nuove_bande_selezionate <- rast("nuove_bande_selezionate.tif")  # Carica un raster da un file TIFF
+
+# Estrai i valori delle bande come dataframe
+values_bande <- as.data.frame(values(nuove_bande_selezionate))  # Estrae i valori del raster in un dataframe
+
+# Filtra solo i valori non nulli
+non_na_mask <- complete.cases(values_bande)  # Crea una maschera per i valori non nulli
+values_bande_non_na <- values_bande[non_na_mask, ]  # Filtra il dataframe per mantenere solo i valori non nulli
+
+# Identifica le colonne delle bande
+band_columns <- names(values_bande_non_na)  # Ottiene i nomi delle colonne del dataframe
+
+# Prepara i dati per il clustering basato su modelli
+X <- as.matrix(values_bande_non_na[, band_columns])  # Converte i valori non nulli in una matrice
+
+# Applica il clustering basato su modelli
+num_clusters <- 7  # Definisce il numero di cluster desiderato
+mclust_result <- Mclust(X, G = num_clusters)  # Esegue il clustering con il modello Mclust
+
+# Aggiungi le etichette dei cluster ai dati
+values_bande_non_na$classe <- mclust_result$classification - 1  # Aggiunge le etichette dei cluster al dataframe (partendo da 0)
+
+# Prepara i dati di training per SVM
+X_train <- values_bande_non_na[, band_columns]  # Seleziona le colonne delle bande per l'input
+y_train <- as.factor(values_bande_non_na$classe)  # Converte le etichette in fattori per il modello SVM
+
+# Crea il modello SVM
+svm_model <- svm(X_train, y_train, probability = TRUE)  # Allena il modello SVM sui dati di training
+
+# Effettua previsioni su tutto il raster
+values_bande_full <- as.data.frame(values(nuove_bande_selezionate))  # Estrae i valori dal raster completo
+values_bande_non_na_full <- values_bande_full[complete.cases(values_bande_full), ]  # Filtra per i valori non nulli
+X_pred <- as.matrix(values_bande_non_na_full)  # Converte i dati di previsione in una matrice
+
+# Previsione con SVM
+preds <- predict(svm_model, X_pred)  # Effettua le previsioni utilizzando il modello SVM
+
+# Verifica che il numero di previsioni corrisponda ai valori non nulli
+print(length(preds))  # Stampa la lunghezza delle previsioni (dovrebbe corrispondere al numero di righe di valori non nulli)
+
+# Crea un raster vuoto con le stesse dimensioni e risoluzione del raster originale
+pred_raster <- rast(nrow = nrow(nuove_bande_selezionate), ncol = ncol(nuove_bande_selezionate), crs = crs(nuove_bande_selezionate), ext = ext(nuove_bande_selezionate))  # Inizializza un raster vuoto
+
+# Riempie il raster con le previsioni solo per i pixel non nulli
+values(pred_raster) <- NA  # Inizialmente imposta tutti i valori a NA
+values(pred_raster)[complete.cases(values_bande_full)] <- preds  # Sostituisce i valori NA con le previsioni
+
+# Visualizza il raster classificato utilizzando mapview
+mapview(pred_raster, col.regions = magma(num_clusters), main = "Raster Classificato con SVM", maxpixels = ncell(pred_raster))  # Visualizza il raster classificato con la palette di colori magma
