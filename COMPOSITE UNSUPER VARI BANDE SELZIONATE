@@ -379,7 +379,7 @@ mapview(pred_raster,
 
 
 
-#MCLUST ANN
+#MCLUST ANN, NON DISTINGUE ACQUA DA CASE..
 
 # Carica le librerie necessarie
 library(terra)
