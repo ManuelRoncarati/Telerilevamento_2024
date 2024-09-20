@@ -514,5 +514,5 @@ mapview(pred_raster, col.regions = magma(num_clusters), main = "Raster Classific
 
 
 
-#MANCANO SVM E KNN
+# SVM 
 
