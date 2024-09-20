@@ -316,4 +316,63 @@ values(pred_raster)[complete.cases(values_bande_full)] <- preds
 # Visualizza il raster classificato utilizzando mapview
 mapview(pred_raster, col.regions = magma(num_clusters), main = "Raster Classificato con Naive Bayes", maxpixels = ncell(pred_raster))
 
+
+#DBSCAN e RF, complesso capire i parametri...
+
+# Carica le librerie necessarie
+library(terra)        # Per la manipolazione dei raster
+library(dplyr)        # Per la manipolazione dei dati
+library(dbscan)       # Per l'algoritmo di clustering DBSCAN
+library(randomForest) # Per il modello di classificazione Random Forest
+library(mapview)      # Per la visualizzazione dei raster
+library(viridis)      # Per le palette di colori viridis
+
+# Imposta la directory di lavoro
+setwd("C:/composite prove")  # Imposta la directory di lavoro dove sono salvati i file
+
+# Carica il raster multibanda
+nuove_bande_selezionate <- rast("nuove_bande_selezionate.tif")  # Carica il raster multibanda da file TIFF
+
+# Estrai i valori delle bande come dataframe
+values_bande <- as.data.frame(values(nuove_bande_selezionate))  # Estrae i valori delle bande dal raster e li converte in un dataframe
+
+# Filtra solo i valori non nulli
+values_bande_non_na <- values_bande[complete.cases(values_bande), ]  # Rimuove le righe con valori NA
+
+# Applica il clustering DBSCAN sull'intero dataset
+eps_value <- 0.009  # Distanza massima tra i punti per considerarli come parte dello stesso cluster; regola in base ai tuoi dati
+minPts_value <- 400  # Numero minimo di punti in un cluster; regola in base ai tuoi dati, andare a ribasso
+sample_matrix <- as.matrix(values_bande_non_na)  # Converte i dati in una matrice per DBSCAN
+db_result <- dbscan(sample_matrix, eps = eps_value, minPts = minPts_value)  # Applica il clustering DBSCAN
+
+# Aggiungi i cluster ai dati
+values_bande_non_na$cluster <- db_result$cluster  # Aggiunge i risultati del clustering come nuova colonna nel dataframe
+
+# Addestra il modello di Random Forest
+rf_model <- randomForest(x = sample_matrix, y = as.factor(values_bande_non_na$cluster), ntree = 100)  # Addestra il modello Random Forest con i dati di clustering come etichette
+
+# Predici i cluster per tutto il raster
+# Nota: Questo passo può richiedere molta memoria a causa delle dimensioni del dataset
+preds <- predict(rf_model, sample_matrix)  # Predice i cluster per tutti i pixel usando il modello Random Forest
+
+# Verifica che il numero di previsioni corrisponda ai valori non nulli
+print(length(preds))  # Controlla la lunghezza delle previsioni; dovrebbe corrispondere al numero di righe nel dataframe
+
+# Crea un raster vuoto con le stesse dimensioni e risoluzione del raster originale
+pred_raster <- rast(nrow = nrow(nuove_bande_selezionate), 
+                    ncol = ncol(nuove_bande_selezionate), 
+                    crs = crs(nuove_bande_selezionate), 
+                    ext = ext(nuove_bande_selezionate))  # Crea un raster vuoto con le stesse dimensioni e proiezione dell'originale
+
+# Riempie il raster con le previsioni solo per i pixel non nulli
+values(pred_raster) <- NA  # Inizialmente setta tutti i valori del raster a NA
+values(pred_raster)[complete.cases(values_bande)] <- preds  # Assegna le previsioni ai pixel non nulli nel raster
+
+# Visualizza il raster classificato utilizzando viridis per i colori
+mapview(pred_raster, 
+        col.regions = viridis(length(unique(preds))),  # Usa la palette di colori viridis basata sul numero di classi uniche
+        main = "Raster Classificato con Random Forest",  # Titolo della mappa
+        maxpixels = ncell(pred_raster))  # Aumenta maxpixels al numero totale di celle del raster per visualizzare tutto
+
+
 #MANCANO SVM E KNN
