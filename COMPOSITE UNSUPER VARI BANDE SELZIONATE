@@ -857,3 +857,62 @@ values(pred_raster)[non_na_mask] <- preds  # Usa la maschera per riempire i pixe
 # Visualizza il raster classificato utilizzando mapview
 mapview(pred_raster, col.regions = magma(num_clusters), main = "Raster Classificato con XGBoost", maxpixels = ncell(pred_raster))
 
+
+#GOMITO
+# Carica le librerie necessarie
+library(terra)
+library(ClusterR)  # Per l'algoritmo k-means++
+library(factoextra)  # Per la visualizzazione del gomito
+library(ggplot2)  # Per i grafici
+
+# Imposta la directory di lavoro
+setwd("C:/composite")
+
+# Carica il raster multibanda (stack raster con bande e indici)
+img_84 <- rast("L5 Composite 1984-1990_masked.tif")
+
+# Seleziona le bande necessarie (B1, B2, B3, B4, B5, B7) e gli indici (ad esempio NDVI, MNDWI, NDBI)
+l1984 <- img_84[[c(1, 2, 3, 4, 5, 6)]]
+
+# Calcola gli indici NDVI, MNDWI e NDBI
+ndvi_1984 <- (l1984[[4]] - l1984[[3]]) / (l1984[[4]] + l1984[[3]])
+mndwi_1984 <- (l1984[[2]] - l1984[[5]]) / (l1984[[2]] + l1984[[5]])
+ndbi_1984 <- (l1984[[5]] - l1984[[4]]) / (l1984[[5]] + l1984[[4]])
+
+# Assegna i nomi specifici agli indici
+names(ndvi_1984) <- "NDVI_1984"
+names(mndwi_1984) <- "MNDWI_1984"
+names(ndbi_1984) <- "NDBI_1984"
+
+# Crea lo stack per il periodo 1984-1990 (bande + indici)
+stack_1984 <- c(l1984, ndvi_1984, mndwi_1984, ndbi_1984)
+
+# Estrai i valori dallo stack raster come dataframe
+values_bande <- as.data.frame(values(stack_1984))
+
+# Filtra solo i valori non nulli
+non_na_mask <- complete.cases(values_bande)
+values_bande_non_na <- values_bande[non_na_mask, ]
+
+# Identifica le colonne delle bande e degli indici
+band_columns <- names(values_bande_non_na)
+
+# Prepara i dati per il clustering
+X <- as.matrix(values_bande_non_na %>% select(all_of(band_columns)))
+
+# Funzione per calcolare WSS (somma dei quadrati intra-cluster) per diversi valori di K usando K-means++
+wss_kmeanspp <- function(k) {
+  kmeans_result <- KMeans_rcpp(X, clusters = k, initializer = 'kmeans++')
+  return(sum(kmeans_result$WCSS_per_cluster))  # Somma dei quadrati intra-cluster per tutti i cluster
+}
+
+# Definisci l'intervallo di K da provare (ad esempio, da 1 a 10 cluster)
+k_values <- 1:10
+wss_values <- sapply(k_values, wss_kmeanspp)
+
+# Crea il grafico del metodo del gomito
+plot(k_values, wss_values, type = "b", pch = 19, frame = FALSE,
+     xlab = "Numero di cluster K",
+     ylab = "Somma dei quadrati intra-cluster (WSS)",
+     main = "Metodo del Gomito per K-means++")
+
