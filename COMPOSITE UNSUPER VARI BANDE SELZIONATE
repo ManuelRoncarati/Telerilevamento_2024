@@ -916,3 +916,23 @@ plot(k_values, wss_values, type = "b", pch = 19, frame = FALSE,
      ylab = "Somma dei quadrati intra-cluster (WSS)",
      main = "Metodo del Gomito per K-means++")
 
+
+#DBI
+library(clusterSim)  # Per il calcolo dell'indice DBI
+
+# Funzione per calcolare l'indice di Davies-Bouldin (DBI) per K-means++
+dbi_kmeanspp <- function(k) {
+  kmeans_result <- KMeans_rcpp(X, clusters = k, initializer = 'kmeans++')
+  return(index.DB(X, kmeans_result$clusters)$DB)  # Restituisce il valore DB
+}
+
+# Calcola l'indice DB per una serie di K
+k_values <- 2:10
+dbi_values <- sapply(k_values, dbi_kmeanspp)
+
+# Crea il grafico dell'indice DB
+plot(k_values, dbi_values, type = "b", pch = 19, frame = FALSE,
+     xlab = "Numero di cluster K",
+     ylab = "Indice di Davies-Bouldin (DB)",
+     main = "Indice di Davies-Bouldin per K-means++")
+
