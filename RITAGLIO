@@ -105,3 +105,135 @@ values(pred_raster)[complete.cases(values_bande_full)] <- preds
 
 # Visualizza il raster classificato utilizzando mapview
 mapview(pred_raster, col.regions = magma(num_clusters), main = "Raster Classificato con XGBoost", maxpixels = ncell(pred_raster))
+
+
+
+
+
+
+#bootstrap
+
+# Carica le librerie necessarie
+library(terra)
+library(dplyr)
+library(xgboost)
+library(mapview)
+library(viridis)
+library(ClusterR)  # Per l'algoritmo k-means++
+library(fpc)       # Per clusterboot()
+
+# Imposta la directory di lavoro
+setwd("C:/composite")
+
+# Carica il raster multibanda (stack raster con bande e indici)
+img_84 <- rast("ritaglio.tif")
+
+# Seleziona le bande necessarie (B1, B2, B3, B4, B5, B7) e gli indici (ad esempio NDVI, MNDWI, NDBI)
+l1984 <- img_84[[c(1, 2, 3, 4, 5, 6)]]
+
+# Calcola gli indici NDVI, MNDWI e NDBI
+ndvi_1984 <- (l1984[[4]] - l1984[[3]]) / (l1984[[4]] + l1984[[3]])
+mndwi_1984 <- (l1984[[2]] - l1984[[5]]) / (l1984[[2]] + l1984[[5]])
+ndbi_1984 <- (l1984[[5]] - l1984[[4]]) / (l1984[[5]] + l1984[[4]])
+
+# Assegna i nomi specifici agli indici
+names(ndvi_1984) <- "NDVI_1984"
+names(mndwi_1984) <- "MNDWI_1984"
+names(ndbi_1984) <- "NDBI_1984"
+
+# Crea lo stack per il periodo 1984-1990 (bande + indici)
+stack_1984 <- c(l1984, ndvi_1984, mndwi_1984, ndbi_1984)
+
+# Estrai i valori dallo stack raster come dataframe
+values_bande <- as.data.frame(values(stack_1984))
+
+# Filtra solo i valori non nulli
+non_na_mask <- complete.cases(values_bande)
+values_bande_non_na <- values_bande[non_na_mask, ]
+
+# Identifica le colonne delle bande e degli indici
+band_columns <- names(values_bande_non_na)
+
+# Prepara i dati per il clustering
+X <- as.matrix(values_bande_non_na %>% select(all_of(band_columns)))
+
+# Applica il clustering K-means++ utilizzando ClusterR
+num_clusters <- 5  # Cambia questo valore se necessario
+set.seed(123)  # Per riproducibilità
+kmeans_result <- KMeans_rcpp(X, clusters = num_clusters, initializer = 'kmeans++')
+
+# Aggiungi le etichette dei cluster ai dati
+values_bande_non_na$classe <- kmeans_result$clusters - 1  # Le etichette devono partire da 0
+
+# Valutazione della stabilità dei cluster utilizzando clusterboot()
+set.seed(123)
+cluster_stability <- clusterboot(
+  X,                         # Dati di input
+  B = 100,                   # Numero di bootstrap (puoi aumentare se necessario)
+  clustermethod = kmeansCBI, # Metodo di clustering, qui k-means
+  k = num_clusters,          # Numero di cluster
+  bootmethod = "boot"        # Metodo di bootstrapping
+)
+
+# Stampa i risultati della stabilità dei cluster
+cat("Stabilità dei cluster (Jaccard Index per cluster):", cluster_stability$bootmean, "\n")
+cat("Cluster che sono stati ritenuti stabili:", cluster_stability$result$nc, "\n")
+
+# Visualizza la stabilità per ciascun cluster
+print(cluster_stability$bootmean)
+
+# Prepara i dati di training per XGBoost (se necessario)
+X_train <- as.matrix(values_bande_non_na %>% select(-classe))  # Tutte le colonne tranne 'classe'
+y_train <- as.numeric(values_bande_non_na$classe)  # XGBoost richiede etichette numeriche
+
+# Crea una matrice DMatrix per XGBoost
+dtrain <- xgb.DMatrix(data = X_train, label = y_train)
+
+# Parametri per XGBoost
+params <- list(
+  objective = "multi:softmax",  # Classificazione multiclasse
+  num_class = num_clusters,     # Numero di classi (cluster)
+  eval_metric = "mlogloss",     # Log-loss multiclasse
+  
+  # Parametri aggiuntivi
+  eta = 0.01,                   # Tasso di apprendimento
+  max_depth = 6,                # Profondità massima degli alberi
+  subsample = 0.8,              # Percentuale di dati da campionare per ogni albero
+  colsample_bytree = 0.8,       # Percentuale di colonne da campionare per ogni albero
+  min_child_weight = 1,         # Peso minimo dei nodi foglia per la divisione
+  gamma = 0,                    # Regolarizzazione per il controllo dell'overfitting
+  lambda = 1,                   # Regolarizzazione L2 (Ridge)
+  alpha = 0                     # Regolarizzazione L1 (Lasso)
+)
+
+# Addestra il modello XGBoost (opzionale)
+xgb_model <- xgb.train(
+  params = params,
+  data = dtrain,
+  nrounds = 500,  # Numero di iterazioni (boosting rounds)
+  early_stopping_rounds = 50,  # Arresto anticipato
+  watchlist = list(train = dtrain),  # Monitoraggio delle prestazioni
+  verbose = 1
+)
+
+# Effettua previsioni su tutto il raster
+values_bande_full <- as.data.frame(values(stack_1984))
+values_bande_non_na_full <- values_bande_full[complete.cases(values_bande_full), ]
+X_pred <- as.matrix(values_bande_non_na_full)
+dpred <- xgb.DMatrix(data = X_pred)
+
+# Effettua le previsioni con XGBoost
+preds <- predict(xgb_model, dpred)
+
+# Verifica che il numero di previsioni corrisponda ai valori non nulli
+print(length(preds))  # Deve essere uguale a nrow(values_bande_non_na_full)
+
+# Crea un raster vuoto con le stesse dimensioni e risoluzione del raster originale
+pred_raster <- rast(nrow = nrow(stack_1984), ncol = ncol(stack_1984), crs = crs(stack_1984), ext = ext(stack_1984))
+
+# Riempie il raster con le previsioni solo per i pixel non nulli
+values(pred_raster) <- NA  # Inizialmente setta tutto a NA
+values(pred_raster)[non_na_mask] <- preds  # Usa la maschera per riempire i pixel
+
+# Visualizza il raster classificato utilizzando mapview
+mapview(pred_raster, col.regions = magma(num_clusters), main = "Raster Classificato con XGBoost", maxpixels = ncell(pred_raster))
