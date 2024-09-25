@@ -1,0 +1,107 @@
+#xgboost mclust
+
+# Carica le librerie necessarie
+library(terra)
+library(dplyr)
+library(xgboost)
+library(mapview)
+library(viridis)
+library(mclust)  # Per il clustering basato su modelli
+
+# Imposta la directory di lavoro
+setwd("C:/composite")
+
+# Carica il raster multibanda (img_84)
+img_84 <- rast("ritaglio.tif")
+
+# Seleziona le bande necessarie (B1, B2, B3, B4, B5, B7)
+l1984 <- img_84[[c(1, 2, 3, 4, 5, 6)]]
+
+# Calcola gli indici NDVI, MNDWI e NDBI
+ndvi_1984 <- (l1984[[4]] - l1984[[3]]) / (l1984[[4]] + l1984[[3]])
+mndwi_1984 <- (l1984[[2]] - l1984[[5]]) / (l1984[[2]] + l1984[[5]])
+ndbi_1984 <- (l1984[[5]] - l1984[[4]]) / (l1984[[5]] + l1984[[4]])
+
+# Assegna i nomi specifici agli indici
+names(ndvi_1984) <- "NDVI_1984"
+names(mndwi_1984) <- "MNDWI_1984"
+names(ndbi_1984) <- "NDBI_1984"
+
+# Crea lo stack per il periodo 1984-1990 (bande + indici)
+stack_1984 <- c(l1984, ndvi_1984, mndwi_1984, ndbi_1984)
+
+# Estrai i valori delle bande e indici come dataframe
+values_bande <- as.data.frame(values(stack_1984))
+
+# Filtra solo i valori non nulli
+non_na_mask <- complete.cases(values_bande)
+values_bande_non_na <- values_bande[non_na_mask, ]
+
+# Identifica le colonne delle bande e indici
+band_columns <- names(values_bande_non_na)
+
+# Prepara i dati per il clustering basato su modelli
+X <- as.matrix(values_bande_non_na %>% select(all_of(band_columns)))
+
+# Applica il clustering basato su modelli
+num_clusters <- 7  # Cambia questo valore se necessario
+mclust_result <- Mclust(X, G = num_clusters)
+
+# Aggiungi le etichette dei cluster ai dati
+values_bande_non_na$classe <- mclust_result$classification - 1  # Le etichette devono partire da 0
+
+# Prepara i dati di training per XGBoost
+X_train <- as.matrix(values_bande_non_na %>% select(-classe))  # Tutte le colonne tranne 'classe'
+y_train <- as.numeric(values_bande_non_na$classe)  # XGBoost richiede etichette numeriche
+
+# Crea una matrice DMatrix per XGBoost
+dtrain <- xgb.DMatrix(data = X_train, label = y_train)
+
+# Parametri per XGBoost
+params <- list(
+    objective = "multi:softmax",  # Classificazione multiclasse
+    num_class = num_clusters,     # Numero di classi (cluster)
+    eval_metric = "mlogloss",     # Log-loss multiclasse (puoi cambiarlo in "merror" se vuoi la precisione)
+    
+    # Parametri aggiuntivi
+    eta = 0.01,                    # Tasso di apprendimento
+    max_depth = 6,                # Profondità massima degli alberi
+    subsample = 0.8,              # Percentuale di dati da campionare per ogni albero (evita l'overfitting)
+    colsample_bytree = 0.8,       # Percentuale di colonne da campionare per ogni albero
+    min_child_weight = 1,         # Peso minimo dei nodi foglia per la divisione
+    gamma = 0,                    # Regolarizzazione per il controllo dell'overfitting
+    lambda = 1,                   # Regolarizzazione L2 (Ridge)
+    alpha = 0                     # Regolarizzazione L1 (Lasso)
+)
+
+# Addestra il modello XGBoost
+xgb_model <- xgb.train(
+    params = params,
+    data = dtrain,
+    nrounds = 500,  # Numero di iterazioni (boosting rounds)
+    early_stopping_rounds = 50,  # Arresto anticipato
+    watchlist = list(train = dtrain),  # Lista per monitorare le prestazioni
+    verbose = 1
+)
+
+# Effettua previsioni su tutto il raster
+values_bande_full <- as.data.frame(values(stack_1984))
+values_bande_non_na_full <- values_bande_full[complete.cases(values_bande_full), ]
+X_pred <- as.matrix(values_bande_non_na_full)
+dpred <- xgb.DMatrix(data = X_pred)
+
+# Effettua le previsioni con XGBoost
+preds <- predict(xgb_model, dpred)
+
+# Verifica che il numero di previsioni corrisponda ai valori non nulli
+print(length(preds))  # Deve essere uguale a nrow(values_bande_non_na_full)
+
+# Crea un raster vuoto con le stesse dimensioni e risoluzione del raster originale
+pred_raster <- rast(nrow = nrow(stack_1984), ncol = ncol(stack_1984), crs = crs(stack_1984), ext = ext(stack_1984))
+
+# Riempie il raster con le previsioni solo per i pixel non nulli
+values(pred_raster) <- NA  # Inizialmente setta tutto a NA
+values(pred_raster)[complete.cases(values_bande_full)] <- preds
+
+# Visualizza il raster classificato utilizzando mapview
+mapview(pred_raster, col.regions = magma(num_clusters), main = "Raster Classificato con XGBoost", maxpixels = ncell(pred_raster))
