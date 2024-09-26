@@ -235,5 +235,75 @@ pred_raster <- rast(nrow = nrow(stack_1984), ncol = ncol(stack_1984), crs = crs(
 values(pred_raster) <- NA  # Inizialmente setta tutto a NA
 values(pred_raster)[non_na_mask] <- preds  # Usa la maschera per riempire i pixel
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Carica le librerie necessarie
+library(terra)
+library(ClusterR)
+library(clusterSim)
+
+# Estrai i valori dal raster stack come matrice e rimuovi i valori NA
+values_stack_1984 <- as.data.frame(values(stack_1984))
+values_stack_1984_non_na <- values_stack_1984[complete.cases(values_stack_1984), ]
+
+# Esegui la PCA su tutti i dati scalati
+pca_result <- prcomp(values_stack_1984_non_na, scale. = TRUE)
+
+# Seleziona le prime 2 componenti principali dalla PCA
+pca_2comp <- pca_result$x[, 1:2]
+
+# Definisci il numero massimo di cluster da testare
+k_max <- 15
+
+# Inizializza le variabili per memorizzare i valori degli indici Calinski-Harabasz e Davies-Bouldin
+ch_index_values <- numeric()
+db_index_values <- numeric()
+
+# Ciclo per eseguire K-means++ sulle prime 2 componenti principali e calcolare gli indici CH e DB
+for (k in 2:k_max) {
+    # Esegui K-means++ con ClusterR utilizzando le prime 2 componenti principali
+    kmeans_pp <- KMeans_rcpp(pca_2comp, clusters = k, num_init = 5, initializer = 'kmeans++')
+    
+    # Calcola l'indice Calinski-Harabasz
+    ch_index <- index.G1(pca_2comp, kmeans_pp$clusters)
+    ch_index_values[k] <- ch_index
+    
+    # Calcola l'indice Davies-Bouldin
+    db_index <- index.DB(pca_2comp, kmeans_pp$clusters)$DB
+    db_index_values[k] <- db_index
+}
+
+# Determina e stampa il numero ottimale di cluster secondo il Calinski-Harabasz Index
+optimal_ch_clusters <- which.max(ch_index_values)
+cat("Numero ottimale di cluster secondo il Calinski-Harabasz Index con K-means++ sulle prime 2 componenti principali:", optimal_ch_clusters, "\n")
+
+# Determina e stampa il numero ottimale di cluster secondo il Davies-Bouldin Index
+optimal_db_clusters <- which.min(db_index_values)
+cat("Numero ottimale di cluster secondo il Davies-Bouldin Index con K-means++ sulle prime 2 componenti principali:", optimal_db_clusters, "\n")
+
+# Grafico dell'indice Calinski-Harabasz per ciascun numero di cluster
+plot(2:k_max, ch_index_values[2:k_max], type = "b", main = "Calinski-Harabasz Index con K-means++ sulle prime 2 componenti",
+     xlab = "Numero di Cluster", ylab = "Calinski-Harabasz Index")
+
+# Grafico dell'indice Davies-Bouldin per ciascun numero di cluster
+plot(2:k_max, db_index_values[2:k_max], type = "b", main = "Davies-Bouldin Index con K-means++ sulle prime 2 componenti",
+     xlab = "Numero di Cluster", ylab = "Davies-Bouldin Index")
+
+
 # Visualizza il raster classificato utilizzando mapview
 mapview(pred_raster, col.regions = magma(num_clusters), main = "Raster Classificato con XGBoost", maxpixels = ncell(pred_raster))
