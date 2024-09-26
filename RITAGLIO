@@ -254,8 +254,36 @@ values(pred_raster)[non_na_mask] <- preds  # Usa la maschera per riempire i pixe
 
 # Carica le librerie necessarie
 library(terra)
-library(ClusterR)
+library(dplyr)
+library(xgboost)
+library(mapview)
+library(viridis)
+library(ClusterR)  # Per l'algoritmo k-means++
+library(fpc)       # Per clusterboot()
+library(e1071)     # Per Fuzzy C-means
 library(clusterSim)
+
+# Imposta la directory di lavoro
+setwd("C:/composite")
+
+# Carica il raster multibanda (stack raster con bande e indici)
+img_84 <- rast("L5 Composite 1984-1990_masked.tif")
+
+# Seleziona le bande necessarie (B1, B2, B3, B4, B5, B7) e gli indici (ad esempio NDVI, MNDWI, NDBI)
+l1984 <- img_84[[c(1, 2, 3, 4, 5, 6)]]
+
+# Calcola gli indici NDVI, MNDWI e NDBI
+ndvi_1984 <- (l1984[[4]] - l1984[[3]]) / (l1984[[4]] + l1984[[3]])
+mndwi_1984 <- (l1984[[2]] - l1984[[5]]) / (l1984[[2]] + l1984[[5]])
+ndbi_1984 <- (l1984[[5]] - l1984[[4]]) / (l1984[[5]] + l1984[[4]])
+
+# Assegna i nomi specifici agli indici
+names(ndvi_1984) <- "NDVI_1984"
+names(mndwi_1984) <- "MNDWI_1984"
+names(ndbi_1984) <- "NDBI_1984"
+
+# Crea lo stack per il periodo 1984-1990 (bande + indici)
+stack_1984 <- c(l1984, ndvi_1984, mndwi_1984, ndbi_1984)
 
 # Estrai i valori dal raster stack come matrice e rimuovi i valori NA
 values_stack_1984 <- as.data.frame(values(stack_1984))
@@ -274,36 +302,36 @@ k_max <- 15
 ch_index_values <- numeric()
 db_index_values <- numeric()
 
-# Ciclo per eseguire K-means++ sulle prime 2 componenti principali e calcolare gli indici CH e DB
+# Ciclo per eseguire Fuzzy C-means sulle prime 2 componenti principali e calcolare gli indici CH e DB
 for (k in 2:k_max) {
-    # Esegui K-means++ con ClusterR utilizzando le prime 2 componenti principali
-    kmeans_pp <- KMeans_rcpp(pca_2comp, clusters = k, num_init = 5, initializer = 'kmeans++')
+    # Esegui Fuzzy C-means con e1071 utilizzando le prime 2 componenti principali
+    fcm_result <- cmeans(pca_2comp, centers = k, m = 2, iter.max = 100, verbose = FALSE)
+    
+    # Converti i risultati fuzzy in assegnazioni dure (cluster con il massimo grado di appartenenza)
+    hard_clusters <- apply(fcm_result$membership, 1, which.max)
     
     # Calcola l'indice Calinski-Harabasz
-    ch_index <- index.G1(pca_2comp, kmeans_pp$clusters)
+    ch_index <- index.G1(pca_2comp, hard_clusters)
     ch_index_values[k] <- ch_index
     
     # Calcola l'indice Davies-Bouldin
-    db_index <- index.DB(pca_2comp, kmeans_pp$clusters)$DB
+    db_index <- index.DB(pca_2comp, hard_clusters)$DB
     db_index_values[k] <- db_index
 }
 
 # Determina e stampa il numero ottimale di cluster secondo il Calinski-Harabasz Index
 optimal_ch_clusters <- which.max(ch_index_values)
-cat("Numero ottimale di cluster secondo il Calinski-Harabasz Index con K-means++ sulle prime 2 componenti principali:", optimal_ch_clusters, "\n")
+cat("Numero ottimale di cluster secondo il Calinski-Harabasz Index con Fuzzy C-means sulle prime 2 componenti principali:", optimal_ch_clusters, "\n")
 
 # Determina e stampa il numero ottimale di cluster secondo il Davies-Bouldin Index
 optimal_db_clusters <- which.min(db_index_values)
-cat("Numero ottimale di cluster secondo il Davies-Bouldin Index con K-means++ sulle prime 2 componenti principali:", optimal_db_clusters, "\n")
+cat("Numero ottimale di cluster secondo il Davies-Bouldin Index con Fuzzy C-means sulle prime 2 componenti principali:", optimal_db_clusters, "\n")
 
 # Grafico dell'indice Calinski-Harabasz per ciascun numero di cluster
-plot(2:k_max, ch_index_values[2:k_max], type = "b", main = "Calinski-Harabasz Index con K-means++ sulle prime 2 componenti",
+plot(2:k_max, ch_index_values[2:k_max], type = "b", main = "Calinski-Harabasz Index con Fuzzy C-means sulle prime 2 componenti",
      xlab = "Numero di Cluster", ylab = "Calinski-Harabasz Index")
 
 # Grafico dell'indice Davies-Bouldin per ciascun numero di cluster
-plot(2:k_max, db_index_values[2:k_max], type = "b", main = "Davies-Bouldin Index con K-means++ sulle prime 2 componenti",
+plot(2:k_max, db_index_values[2:k_max], type = "b", main = "Davies-Bouldin Index con Fuzzy C-means sulle prime 2 componenti",
      xlab = "Numero di Cluster", ylab = "Davies-Bouldin Index")
 
-
-# Visualizza il raster classificato utilizzando mapview
-mapview(pred_raster, col.regions = magma(num_clusters), main = "Raster Classificato con XGBoost", maxpixels = ncell(pred_raster))
