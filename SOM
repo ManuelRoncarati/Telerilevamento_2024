@@ -461,3 +461,42 @@ leaflet() %>%
     # Centra la mappa sul raster (modifica i valori per il tuo AOI)
     setView(lng = 16.5, lat = 39.0, zoom = 10)
 
+
+
+
+
+
+
+
+
+
+
+# --- Fase 1: Kernel PCA ---
+# Esegui Kernel PCA sui dati con kernel radiale
+kpca_result <- kpca(~., data = as.data.frame(data_input), kernel = "rbfdot", features = 3)
+
+# Estrai le prime 3 componenti ridotte da Kernel PCA
+kpca_3comp <- rotated(kpca_result)
+
+# --- Fase 2: Self-Organizing Map (SOM) ---
+# Definisci una griglia SOM
+som_grid_kpca <- somgrid(xdim = 25, ydim = 25, topo = "hexagonal")
+
+# Esegui l'algoritmo SOM sui risultati di Kernel PCA
+som_model_kpca <- som(scale(kpca_3comp), grid = som_grid_kpca, rlen = 200)
+
+# Estrai i codici (centroidi) dai neuroni della SOM
+som_codes_kpca <- som_model_kpca$codes[[1]]
+
+# --- Fase 3: Determinazione del Numero Ottimale di Cluster con NbClust ---
+nbclust_result_kpca <- NbClust(data = som_codes_kpca,
+                               distance = "euclidean",
+                               min.nc = 2,
+                               max.nc = 15,
+                               method = "kmeans",
+                               index = "all")
+
+# Determinazione automatica del numero ottimale di cluster
+best_cluster_numbers_kpca <- nbclust_result_kpca$Best.nc[1, ]
+optimal_clusters_kpca <- as.numeric(names(which.max(table(best_cluster_numbers_kpca))))
+cat("Numero ottimale di cluster secondo NbClust (Kernel PCA):", optimal_clusters_kpca, "\n")
