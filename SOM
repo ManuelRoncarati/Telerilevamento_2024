@@ -471,25 +471,25 @@ leaflet() %>%
 
 
 
-# --- Fase 1: Kernel PCA ---
-# Esegui Kernel PCA sui dati con kernel radiale
-kpca_result <- kpca(~., data = as.data.frame(data_input), kernel = "rbfdot", features = 3)
+# --- Fase 1: UMAP ---
+# Esegui UMAP sui dati
+umap_result <- umap(data_input, n_neighbors = 15, min_dist = 0.1, n_components = 3)
 
-# Estrai le prime 3 componenti ridotte da Kernel PCA
-kpca_3comp <- rotated(kpca_result)
+# Estrai le prime 3 componenti ridotte da UMAP
+umap_3comp <- umap_result$layout
 
 # --- Fase 2: Self-Organizing Map (SOM) ---
 # Definisci una griglia SOM
-som_grid_kpca <- somgrid(xdim = 25, ydim = 25, topo = "hexagonal")
+som_grid_umap <- somgrid(xdim = 25, ydim = 25, topo = "hexagonal")
 
-# Esegui l'algoritmo SOM sui risultati di Kernel PCA
-som_model_kpca <- som(scale(kpca_3comp), grid = som_grid_kpca, rlen = 200)
+# Esegui l'algoritmo SOM sui risultati di UMAP
+som_model_umap <- som(scale(umap_3comp), grid = som_grid_umap, rlen = 200)
 
 # Estrai i codici (centroidi) dai neuroni della SOM
-som_codes_kpca <- som_model_kpca$codes[[1]]
+som_codes_umap <- som_model_umap$codes[[1]]
 
 # --- Fase 3: Determinazione del Numero Ottimale di Cluster con NbClust ---
-nbclust_result_kpca <- NbClust(data = som_codes_kpca,
+nbclust_result_umap <- NbClust(data = som_codes_umap,
                                distance = "euclidean",
                                min.nc = 2,
                                max.nc = 15,
@@ -497,6 +497,6 @@ nbclust_result_kpca <- NbClust(data = som_codes_kpca,
                                index = "all")
 
 # Determinazione automatica del numero ottimale di cluster
-best_cluster_numbers_kpca <- nbclust_result_kpca$Best.nc[1, ]
-optimal_clusters_kpca <- as.numeric(names(which.max(table(best_cluster_numbers_kpca))))
-cat("Numero ottimale di cluster secondo NbClust (Kernel PCA):", optimal_clusters_kpca, "\n")
+best_cluster_numbers_umap <- nbclust_result_umap$Best.nc[1, ]
+optimal_clusters_umap <- as.numeric(names(which.max(table(best_cluster_numbers_umap))))
+cat("Numero ottimale di cluster secondo NbClust (UMAP):", optimal_clusters_umap, "\n")
