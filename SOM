@@ -1,0 +1,91 @@
+# Codice per il clustering usando SOM e determinazione del numero ottimale di cluster con NbClust, poi K-means per la classificazione finale e visualizzazione del raster classificato
+
+# Carica le librerie necessarie
+library(terra)       # Per la gestione dei raster
+library(dplyr)       # Per la manipolazione dei dati
+library(kohonen)     # Per l'algoritmo SOM
+library(ggplot2)     # Per la visualizzazione
+library(NbClust)     # Per determinare il numero ottimale di cluster
+library(stats)       # Per K-means
+library(mapview)     # Per la visualizzazione interattiva del raster
+
+# Imposta la directory di lavoro (modifica con la tua directory corretta)
+setwd("C:/composite")
+
+# Carica il raster multibanda
+img_84 <- rast("L5 Composite 1984-1990_masked.tif")  # Modifica il nome del file raster se necessario
+
+# Seleziona le bande necessarie (B1, B2, B3, B4, B5, B7)
+l1984 <- img_84[[c(1, 2, 3, 4, 5, 6)]]
+
+# Calcola gli indici NDVI, MNDWI e NDBI
+ndvi_1984 <- (l1984[[4]] - l1984[[3]]) / (l1984[[4]] + l1984[[3]])
+mndwi_1984 <- (l1984[[2]] - l1984[[5]]) / (l1984[[2]] + l1984[[5]])
+ndbi_1984 <- (l1984[[5]] - l1984[[4]]) / (l1984[[5]] + l1984[[4]])
+
+# Assegna i nomi specifici agli indici
+names(ndvi_1984) <- "NDVI_1984"
+names(mndwi_1984) <- "MNDWI_1984"
+names(ndbi_1984) <- "NDBI_1984"
+
+# Crea lo stack per il periodo 1984-1990 (bande + indici)
+stack_1984 <- c(l1984, ndvi_1984, mndwi_1984, ndbi_1984)
+
+# Estrai i valori dal raster stack come dataframe e rimuovi i valori NA
+values_stack_1984 <- as.data.frame(values(stack_1984))
+values_stack_1984_non_na <- values_stack_1984[complete.cases(values_stack_1984), ]
+
+# Scala i dati (opzionale, ma consigliato)
+data_input <- scale(values_stack_1984_non_na)
+
+# Definisci una griglia SOM 20x20
+som_grid <- somgrid(xdim = 20, ydim = 20, topo = "hexagonal")
+
+# Esegui l'algoritmo SOM sui dati scalati
+som_model <- som(data_input, grid = som_grid, rlen = 500)
+
+# Estrai i codici (centroidi) dai neuroni della SOM
+codes <- som_model$codes[[1]]
+
+# Determina il numero ottimale di cluster sui codici della SOM usando NbClust
+nbclust_result <- NbClust(data = codes,
+                          distance = "euclidean",
+                          min.nc = 2,
+                          max.nc = 10,    # Impostato il numero massimo di cluster a 10
+                          method = "kmeans",
+                          index = "all")
+
+# Determinazione automatica del numero ottimale di cluster
+# Trova il numero di cluster più frequentemente suggerito dagli indici
+best_cluster_numbers <- nbclust_result$Best.nc[1, ]  # Estrae il numero di cluster suggerito da ciascun indice
+optimal_clusters <- as.numeric(names(which.max(table(best_cluster_numbers))))  # Calcola la modalità
+
+cat("Numero ottimale di cluster secondo la maggioranza degli indici:", optimal_clusters, "\n")
+
+# Esegui K-means sui codici della SOM specificando il numero ottimale di cluster trovato
+set.seed(42)  # Imposta il seme per garantire la riproducibilità
+kmeans_result <- kmeans(codes, centers = optimal_clusters, nstart = 25)
+
+# Assegna i cluster ai nodi della SOM
+som_cluster <- kmeans_result$cluster
+
+# Visualizza i cluster sui primi due componenti principali
+ggplot(data.frame(codes), aes(x = codes[, 1], y = codes[, 2], color = as.factor(som_cluster))) +
+  geom_point() +
+  labs(color = "Cluster") +
+  ggtitle(paste("Cluster individuati con SOM e K-means (", optimal_clusters, " cluster)", sep = "")) +
+  theme_minimal()
+
+# Crea un nuovo raster vuoto con la stessa estensione e risoluzione dell'immagine originale
+classified_raster <- rast(img_84)
+values(classified_raster) <- NA  # Imposta tutti i valori a NA
+
+# Crea una maschera per i pixel non NA nell'immagine originale e assegna i cluster trovati
+mask <- !is.na(values(img_84[[1]]))
+values(classified_raster)[mask] <- som_cluster[som_model$unit.classif]
+
+# Visualizza il raster classificato con la palette di colori viridis
+plot(classified_raster, col = viridis::viridis(optimal_clusters), main = paste("Raster Classificato (", optimal_clusters, " Cluster)", sep = ""))
+
+# Visualizzazione interattiva del raster classificato
+mapview(classified_raster, col.regions = viridis::viridis(optimal_clusters), layer.name = "Raster Classificato")
