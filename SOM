@@ -287,3 +287,177 @@ leaflet() %>%
   
   # Centra la mappa sul raster (modifica i valori per il tuo AOI)
   setView(lng = 16.5, lat = 39.0, zoom = 10)
+
+
+
+
+
+
+
+
+
+
+
+
+
+#FA e FASTICA con som
+
+# Funzione per verificare e installare i pacchetti mancanti
+install_if_missing <- function(packages) {
+    for (pkg in packages) {
+        if (!require(pkg, character.only = TRUE)) {
+            install.packages(pkg, dependencies = TRUE)
+            library(pkg, character.only = TRUE)
+        }
+    }
+}
+
+# Lista dei pacchetti necessari
+required_packages <- c("terra", "dplyr", "psych", "fastICA", "kohonen", "NbClust", "viridis", "viridisLite", "leaflet", "raster")
+
+# Verifica e installa i pacchetti mancanti
+install_if_missing(required_packages)
+
+# Carica le librerie necessarie
+library(terra)
+library(dplyr)
+library(psych)       # Per l'analisi fattoriale
+library(fastICA)     # Per FastICA
+library(kohonen)     # Per Self-Organizing Maps (SOM)
+library(NbClust)     # Per determinare il numero ottimale di cluster
+library(viridis)     # Carica la libreria viridis per la palette 'turbo'
+library(viridisLite) # Supporto per viridisLite
+library(leaflet)
+library(raster)
+
+# Imposta la directory di lavoro (modifica con la tua directory corretta)
+setwd("D:/composite")
+
+# --- Fase 1: Preparazione del Raster ---
+# Carica il raster multibanda
+img_84 <- rast("L5 Composite 1984-1990_masked.tif")
+
+# Seleziona le bande necessarie (B1, B2, B3, B4, B5, B7)
+l1984 <- img_84[[c(1, 2, 3, 4, 5, 6)]]
+
+# Calcola gli indici NDVI, MNDWI e NDBI
+ndvi_1984 <- (l1984[[4]] - l1984[[3]]) / (l1984[[4]] + l1984[[3]])
+mndwi_1984 <- (l1984[[2]] - l1984[[5]]) / (l1984[[2]] + l1984[[5]])
+ndbi_1984 <- (l1984[[5]] - l1984[[4]]) / (l1984[[5]] + l1984[[4]])
+
+# Assegna i nomi specifici agli indici
+names(ndvi_1984) <- "NDVI_1984"
+names(mndwi_1984) <- "MNDWI_1984"
+names(ndbi_1984) <- "NDBI_1984"
+
+# Crea lo stack per il periodo 1984-1990 (bande + indici)
+stack_1984 <- c(l1984, ndvi_1984, mndwi_1984, ndbi_1984)
+
+# Estrai i valori dal raster stack come dataframe e rimuovi i valori NA
+values_stack_1984 <- as.data.frame(values(stack_1984))
+values_stack_1984_non_na <- values_stack_1984[complete.cases(values_stack_1984), ]
+
+# Scala i dati (opzionale, ma consigliato)
+data_input <- scale(values_stack_1984_non_na)
+
+# Crea una maschera per i pixel non NA nell'immagine originale
+mask_logical <- !is.na(terra::values(img_84[[1]]))
+
+# --- Fase 2: Riduzione della Dimensionalità ---
+## FastICA
+# Esegui FastICA sui dati con 3 componenti
+fastica_result <- fastICA(data_input, n.comp = 3)
+fastica_3comp <- fastica_result$S
+
+## Factor Analysis
+# Esegui l'analisi fattoriale con 3 componenti
+fa_result <- fa(data_input, nfactors = 3, rotate = "varimax", scores = "regression")
+fa_3comp <- fa_result$scores
+
+# --- Fase 3: Self-Organizing Maps (SOM) ---
+## SOM per FastICA
+som_grid_fastica <- somgrid(xdim = 25, ydim = 25, topo = "hexagonal")
+som_model_fastica <- som(scale(fastica_3comp), grid = som_grid_fastica, rlen = 200)
+som_codes_fastica <- som_model_fastica$codes[[1]]
+
+## SOM per Factor Analysis
+som_grid_fa <- somgrid(xdim = 25, ydim = 25, topo = "hexagonal")
+som_model_fa <- som(scale(fa_3comp), grid = som_grid_fa, rlen = 200)
+som_codes_fa <- som_model_fa$codes[[1]]
+
+# --- Fase 4: Determinazione del Numero Ottimale di Cluster con NbClust ---
+## NbClust per FastICA
+nbclust_result_fastica <- NbClust(data = som_codes_fastica,
+                                  distance = "euclidean",
+                                  min.nc = 2,
+                                  max.nc = 15,
+                                  method = "kmeans",
+                                  index = "all")
+optimal_clusters_fastica <- as.numeric(names(which.max(table(nbclust_result_fastica$Best.nc[1, ]))))
+cat("Numero ottimale di cluster secondo NbClust (FastICA):", optimal_clusters_fastica, "\n")
+
+## NbClust per Factor Analysis
+nbclust_result_fa <- NbClust(data = som_codes_fa,
+                             distance = "euclidean",
+                             min.nc = 2,
+                             max.nc = 15,
+                             method = "kmeans",
+                             index = "all")
+optimal_clusters_fa <- as.numeric(names(which.max(table(nbclust_result_fa$Best.nc[1, ]))))
+cat("Numero ottimale di cluster secondo NbClust (Factor Analysis):", optimal_clusters_fa, "\n")
+
+# --- Fase 5: Clusterizzazione e Creazione del Raster Classificato ---
+## Clusterizzazione per FastICA
+kmeans_fastica <- kmeans(som_codes_fastica, centers = optimal_clusters_fastica, nstart = 100)
+som_cluster_fastica <- kmeans_fastica$cluster
+
+# Crea un raster classificato usando la maschera logica corretta
+classified_raster_fastica <- rast(img_84)
+terra::values(classified_raster_fastica) <- NA
+terra::values(classified_raster_fastica)[mask_logical] <- som_cluster_fastica[som_model_fastica$unit.classif]
+
+## Clusterizzazione per Factor Analysis
+kmeans_fa <- kmeans(som_codes_fa, centers = optimal_clusters_fa, nstart = 100)
+som_cluster_fa <- kmeans_fa$cluster
+
+# Crea un raster classificato usando la maschera logica corretta
+classified_raster_fa <- rast(img_84)
+terra::values(classified_raster_fa) <- NA
+terra::values(classified_raster_fa)[mask_logical] <- som_cluster_fa[som_model_fa$unit.classif]
+
+# Converti i raster di `terra` in oggetti `RasterLayer` compatibili con Leaflet
+classified_raster_fastica_leaflet <- raster::raster(classified_raster_fastica)
+classified_raster_fa_leaflet <- raster::raster(classified_raster_fa)
+
+# --- Fase 6: Visualizzazione con Leaflet ---
+leaflet() %>%
+    # Aggiungi le tiles di base
+    addTiles(group = "OpenStreetMap") %>%
+    addProviderTiles("Esri.WorldImagery", group = "Immagine Satellitare") %>%
+    addProviderTiles("CartoDB.Positron", group = "Mappa Chiara") %>%
+    
+    # Aggiungi il raster classificato da FastICA con trasparenza
+    addRasterImage(classified_raster_fastica_leaflet, 
+                   colors = viridis::turbo(optimal_clusters_fastica), 
+                   opacity = 0.6, 
+                   group = "Classificato con FastICA") %>%
+    
+    # Aggiungi il raster classificato da Factor Analysis con trasparenza
+    addRasterImage(classified_raster_fa_leaflet, 
+                   colors = viridis::turbo(optimal_clusters_fa), 
+                   opacity = 0.6, 
+                   group = "Classificato con Factor Analysis") %>%
+    
+    # Aggiungi i controlli per cambiare i layer di base e i gruppi di layer
+    addLayersControl(
+        baseGroups = c("OpenStreetMap", "Immagine Satellitare", "Mappa Chiara"),  # Layer di base
+        overlayGroups = c("Classificato con FastICA", "Classificato con Factor Analysis"),  # Layer classificati
+        options = layersControlOptions(collapsed = FALSE)  # Espandi il menu dei layer di default
+    ) %>%
+    
+    # Aggiungi una barra di scala
+    addScaleBar(position = "bottomright", options = scaleBarOptions(imperial = FALSE)) %>%
+    
+    # Centra la mappa sul raster (modifica i valori per il tuo AOI)
+    setView(lng = 16.5, lat = 39.0, zoom = 10)
+
