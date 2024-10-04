@@ -95,29 +95,56 @@ mapview(classified_raster, col.regions = viridis::viridis(optimal_clusters), lay
 
 
 
-# Codice per il clustering usando SOM e determinazione del numero ottimale di cluster con NbClust, poi K-means per la classificazione finale e visualizzazione del raster classificato
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#PCA + SOM + NBCLUST + GA + VISUALIZZAZIONE
+
 
 # Funzione per verificare e installare i pacchetti mancanti
 install_if_missing <- function(packages) {
-  for (pkg in packages) {
-    if (!require(pkg, character.only = TRUE)) {
-      install.packages(pkg, dependencies = TRUE)
-      library(pkg, character.only = TRUE)
+    for (pkg in packages) {
+        if (!require(pkg, character.only = TRUE)) {
+            install.packages(pkg, dependencies = TRUE)
+            library(pkg, character.only = TRUE)
+        }
     }
-  }
 }
 
 # Lista dei pacchetti necessari
-required_packages <- c("terra", "dplyr", "kohonen", "ggplot2", "NbClust", "stats", "mapview", "viridis")
+required_packages <- c("terra", "dplyr", "kohonen", "ggplot2", "NbClust", "stats", "mapview", "viridisLite", "GA", "cluster", "leaflet")
 
 # Verifica e installa i pacchetti mancanti
 install_if_missing(required_packages)
 
+# Carica le librerie necessarie
+library(terra)
+library(dplyr)
+library(kohonen)
+library(NbClust)
+library(GA)
+library(leaflet)
+library(viridisLite)
+
 # Imposta la directory di lavoro (modifica con la tua directory corretta)
-setwd("C:/composite")
+setwd("D:/composite")
 
 # Carica il raster multibanda
-img_84 <- rast("ritaglio.tif")  # Modifica il nome del file raster se necessario
+img_84 <- rast("ritaglino.tif")  # Modifica il nome del file raster se necessario
 
 # Seleziona le bande necessarie (B1, B2, B3, B4, B5, B7)
 l1984 <- img_84[[c(1, 2, 3, 4, 5, 6)]]
@@ -142,54 +169,121 @@ values_stack_1984_non_na <- values_stack_1984[complete.cases(values_stack_1984),
 # Scala i dati (opzionale, ma consigliato)
 data_input <- scale(values_stack_1984_non_na)
 
-# Definisci una griglia SOM 20x20
-som_grid <- somgrid(xdim = 20, ydim = 20, topo = "hexagonal")
+# Esegui la PCA sui dati scalati
+pca_result <- prcomp(data_input, scale. = TRUE)
 
-# Esegui l'algoritmo SOM sui dati scalati
-som_model <- som(data_input, grid = som_grid, rlen = 500)
+# Seleziona le prime 3 componenti principali dalla PCA
+pca_3comp <- pca_result$x[, 1:3]
+
+# Definisci una griglia SOM 30x30
+som_grid <- somgrid(xdim = 30, ydim = 30, topo = "hexagonal")
+
+# Esegui l'algoritmo SOM sulle prime tre componenti principali con 200 iterazioni
+som_model <- som(scale(pca_3comp), grid = som_grid, rlen = 200)
 
 # Estrai i codici (centroidi) dai neuroni della SOM
 codes <- som_model$codes[[1]]
 
-# Determina il numero ottimale di cluster sui codici della SOM usando NbClust
+# 1. Determinazione del numero ottimale di cluster con NbClust (aumentato a 15)
 nbclust_result <- NbClust(data = codes,
                           distance = "euclidean",
                           min.nc = 2,
-                          max.nc = 10,    # Impostato il numero massimo di cluster a 10
+                          max.nc = 15,    # Aumentato il numero massimo di cluster a 15
                           method = "kmeans",
                           index = "all")
 
-# Determinazione automatica del numero ottimale di cluster
-# Trova il numero di cluster più frequentemente suggerito dagli indici
-best_cluster_numbers <- nbclust_result$Best.nc[1, ]  # Estrae il numero di cluster suggerito da ciascun indice
-optimal_clusters <- as.numeric(names(which.max(table(best_cluster_numbers))))  # Calcola la modalità
+# Determinazione automatica del numero ottimale di cluster con NbClust
+best_cluster_numbers_nbclust <- nbclust_result$Best.nc[1, ]  # Estrae il numero di cluster suggerito da ciascun indice
+optimal_clusters_nbclust <- as.numeric(names(which.max(table(best_cluster_numbers_nbclust))))  # Calcola la modalità
+cat("Numero ottimale di cluster secondo NbClust:", optimal_clusters_nbclust, "\n")
 
-cat("Numero ottimale di cluster secondo la maggioranza degli indici:", optimal_clusters, "\n")
+# 2. Determinazione del numero ottimale di cluster con l'algoritmo genetico (aumentato a 15 e iterazioni aumentate)
+fitness_function <- function(num_clusters) {
+  set.seed(42)  # Fissa il seme per garantire la riproducibilità
 
-# Esegui K-means sui codici della SOM specificando il numero ottimale di cluster trovato
-set.seed(42)  # Imposta il seme per garantire la riproducibilità
-kmeans_result <- kmeans(codes, centers = optimal_clusters, nstart = 25)
+  # Esegui K-means con il numero di cluster specificato
+  kmeans_result <- kmeans(codes, centers = as.integer(num_clusters), nstart = 20)
 
-# Assegna i cluster ai nodi della SOM
-som_cluster <- kmeans_result$cluster
+  # Calcola il silhouette score come misura di qualità
+  silhouette_values <- silhouette(kmeans_result$cluster, dist(codes))
+  mean_silhouette <- mean(silhouette_values[, 3])  # Ottieni il valore medio del silhouette score
 
-# Visualizza i cluster sui primi due componenti principali
-ggplot(data.frame(codes), aes(x = codes[, 1], y = codes[, 2], color = as.factor(som_cluster))) +
-  geom_point() +
-  labs(color = "Cluster") +
-  ggtitle(paste("Cluster individuati con SOM e K-means (", optimal_clusters, " cluster)", sep = "")) +
-  theme_minimal()
+  # Restituisci il valore del silhouette score (da massimizzare)
+  return(mean_silhouette)
+}
 
-# Crea un nuovo raster vuoto con la stessa estensione e risoluzione dell'immagine originale
-classified_raster <- rast(img_84)
-values(classified_raster) <- NA  # Imposta tutti i valori a NA
+# Esegui l'algoritmo genetico per ottimizzare il numero di cluster (numero massimo di cluster aumentato a 15)
+ga_result <- ga(type = "real-valued",
+                fitness = fitness_function,
+                lower = 2,     # Numero minimo di cluster
+                upper = 15,    # Numero massimo di cluster aumentato a 15
+                popSize = 20,  # Dimensione della popolazione
+                maxiter = 100, # Numero massimo di iterazioni aumentato
+                run = 50)      # Numero massimo di iterazioni senza miglioramento aumentato
 
-# Crea una maschera per i pixel non NA nell'immagine originale e assegna i cluster trovati
-mask <- !is.na(values(img_84[[1]]))
-values(classified_raster)[mask] <- som_cluster[som_model$unit.classif]
+# Estrai il numero ottimale di cluster trovato dall'algoritmo genetico
+optimal_clusters_ga <- round(ga_result@solution)
 
-# Visualizza il raster classificato con la palette di colori viridis
-plot(classified_raster, col = viridis::viridis(optimal_clusters), main = paste("Raster Classificato (", optimal_clusters, " Cluster)", sep = ""))
+# Verifica se `optimal_clusters_ga` è un vettore con più di un valore
+if (length(optimal_clusters_ga) > 1) {
+  cat("`optimal_clusters_ga` contiene più valori. Utilizzo del primo valore:", optimal_clusters_ga[1], "\n")
+  optimal_clusters_ga <- optimal_clusters_ga[1]  # Utilizza il primo valore del vettore
+} else {
+  cat("Numero ottimale di cluster trovato con GA (singolo valore):", optimal_clusters_ga, "\n")
+}
 
-# Visualizzazione interattiva del raster classificato
-mapview(classified_raster, col.regions = viridis::viridis(optimal_clusters), layer.name = "Raster Classificato")
+# Esegui K-means con il numero di cluster ottimale trovato da NbClust
+kmeans_nbclust <- kmeans(codes, centers = optimal_clusters_nbclust, nstart = 100)
+
+# Esegui K-means con il numero di cluster ottimale trovato da GA
+kmeans_ga <- kmeans(codes, centers = optimal_clusters_ga, nstart = 100)
+
+# Crea un raster classificato usando i cluster di NbClust
+classified_raster_nbclust <- rast(img_84)
+values(classified_raster_nbclust) <- NA
+mask <- !is.na(values(img_84[[1]]))  # Crea una maschera dai valori non NA del raster originale
+values(classified_raster_nbclust)[mask] <- kmeans_nbclust$cluster[som_model$unit.classif]
+
+# Crea un raster classificato usando i cluster di GA
+classified_raster_ga <- rast(img_84)
+values(classified_raster_ga) <- NA
+values(classified_raster_ga)[mask] <- kmeans_ga$cluster[som_model$unit.classif]
+
+# Seleziona solo la prima banda dei raster per evitare messaggi di avvertimento
+classified_raster_nbclust_single <- classified_raster_nbclust[[1]]
+classified_raster_ga_single <- classified_raster_ga[[1]]
+
+# Carica la palette turbo
+palette_turbo <- viridisLite::turbo
+
+# Visualizza i raster classificati con leaflet
+leaflet() %>%
+  # Aggiungi le tiles di base
+  addTiles(group = "OpenStreetMap") %>%
+  addProviderTiles("Esri.WorldImagery", group = "Immagine Satellitare") %>%
+  addProviderTiles("CartoDB.Positron", group = "Mappa Chiara") %>%
+  
+  # Aggiungi il raster classificato da NbClust con trasparenza
+  addRasterImage(classified_raster_nbclust_single, 
+                 colors = palette_turbo(optimal_clusters_nbclust), 
+                 opacity = 0.6, 
+                 group = "Classificato con NbClust") %>%
+  
+  # Aggiungi il raster classificato da GA con trasparenza
+  addRasterImage(classified_raster_ga_single, 
+                 colors = palette_turbo(optimal_clusters_ga), 
+                 opacity = 0.6, 
+                 group = "Classificato con GA") %>%
+  
+  # Aggiungi i controlli per cambiare i layer di base e i gruppi di layer
+  addLayersControl(
+    baseGroups = c("OpenStreetMap", "Immagine Satellitare", "Mappa Chiara"),  # Layer di base
+    overlayGroups = c("Classificato con NbClust", "Classificato con GA"),  # Layer classificati
+    options = layersControlOptions(collapsed = FALSE)  # Espandi il menu dei layer di default
+  ) %>%
+  
+  # Aggiungi una barra di scala
+  addScaleBar(position = "bottomright", options = scaleBarOptions(imperial = FALSE)) %>%
+  
+  # Centra la mappa sul raster (modifica i valori per il tuo AOI)
+  setView(lng = 16.5, lat = 39.0, zoom = 10)
