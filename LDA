@@ -1,5 +1,3 @@
-#LDA
-
 # Funzione per verificare e installare i pacchetti mancanti
 install_if_missing <- function(packages) {
     for (pkg in packages) {
@@ -66,36 +64,34 @@ lda_model <- lda(class ~ ., data = data_input_with_labels)
 # Trasforma i dati utilizzando le componenti di LDA
 lda_projection <- predict(lda_model)$x
 
-# Utilizza le prime 2 componenti di LDA per creare un raster
-lda_raster_list <- list()  # Inizializza una lista vuota per i raster LDA
+# Utilizza solo le prime 2 componenti di LDA (LD1 e LD2)
+lda_projection_subset <- lda_projection[, 1:2]
 
-for (i in 1:ncol(lda_projection)) {
-    # Crea una nuova banda raster con la componente i-esima
+# Crea raster solo con LD1 e LD2
+lda_raster_list <- list()
+for (i in 1:ncol(lda_projection_subset)) {
     component_raster <- rast(img_84)  # Inizializza un raster con la stessa dimensione dell'originale
     values(component_raster) <- NA  # Imposta valori NA
-    
-    # Riempie i valori con la componente LDA calcolata
-    mask <- !is.na(values(img_84[[1]]))
-    values(component_raster)[mask] <- lda_projection[, i]
-    
-    # Aggiungi il raster alla lista
-    lda_raster_list[[i]] <- component_raster
+    mask <- !is.na(values(img_84[[1]]))  # Crea una maschera per i valori non NA del raster originale
+    values(component_raster)[mask] <- lda_projection_subset[, i]  # Assegna i valori della componente LDA
+    lda_raster_list[[i]] <- component_raster  # Aggiungi il raster alla lista
 }
 
-# Combina i raster in un unico oggetto SpatRaster
-lda_raster <- do.call(c, lda_raster_list)  # Crea un oggetto SpatRaster unendo i raster della lista
+# Combina LD1 e LD2 in un unico oggetto SpatRaster
+lda_raster <- do.call(c, lda_raster_list)
 
-# Estrai i valori dai raster delle componenti LDA come dataframe
-values_lda <- as.data.frame(values(lda_raster))
-values_lda_non_na <- values_lda[complete.cases(values_lda), ]
+# Estrai i valori dalle prime 2 componenti LDA e rimuovi i NA
+values_lda_subset <- as.data.frame(values(lda_raster))
+values_lda_subset_non_na <- values_lda_subset[complete.cases(values_lda_subset), ]
 
-# Esegui K-means sui valori delle componenti LDA
-kmeans_result <- kmeans(values_lda_non_na, centers = 5, nstart = 25)  # Numero di cluster desiderato
+# Esegui K-means sui valori delle prime 2 componenti LDA
+set.seed(42)
+kmeans_result <- kmeans(values_lda_subset_non_na, centers = 5, nstart = 25)
 
 # Crea un raster classificato usando i cluster di K-means
-classified_raster <- rast(img_84)
-values(classified_raster) <- NA
-values(classified_raster)[mask] <- kmeans_result$cluster
+classified_raster <- rast(img_84)  # Crea un raster con la stessa dimensione e risoluzione
+values(classified_raster) <- NA  # Imposta tutti i valori a NA
+values(classified_raster)[mask] <- kmeans_result$cluster  # Assegna i cluster trovati
 
 # Seleziona solo la prima banda del raster per evitare il messaggio di avvertimento
 classified_raster_single <- classified_raster[[1]]
