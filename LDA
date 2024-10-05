@@ -1,0 +1,132 @@
+#LDA
+
+# Funzione per verificare e installare i pacchetti mancanti
+install_if_missing <- function(packages) {
+    for (pkg in packages) {
+        if (!require(pkg, character.only = TRUE)) {
+            install.packages(pkg, dependencies = TRUE)
+            library(pkg, character.only = TRUE)
+        }
+    }
+}
+
+# Lista dei pacchetti necessari
+required_packages <- c("terra", "dplyr", "kohonen", "NbClust", "GA", "cluster", "leaflet", "MASS", "viridisLite")
+
+# Verifica e installa i pacchetti mancanti
+install_if_missing(required_packages)
+
+# Carica le librerie necessarie
+library(terra)
+library(dplyr)
+library(kohonen)
+library(NbClust)
+library(GA)
+library(leaflet)
+library(viridisLite)
+library(MASS)   # Per LDA
+
+# Imposta la directory di lavoro (modifica con la tua directory corretta)
+setwd("D:/composite")
+
+# Carica il raster multibanda
+img_84 <- rast("ritaglino.tif")  # Modifica il nome del file raster se necessario
+
+# Seleziona le bande necessarie (B1, B2, B3, B4, B5, B7)
+l1984 <- img_84[[c(1, 2, 3, 4, 5, 6)]]
+
+# Calcola gli indici NDVI, MNDWI e NDBI
+ndvi_1984 <- (l1984[[4]] - l1984[[3]]) / (l1984[[4]] + l1984[[3]])
+mndwi_1984 <- (l1984[[2]] - l1984[[5]]) / (l1984[[2]] + l1984[[5]])
+ndbi_1984 <- (l1984[[5]] - l1984[[4]]) / (l1984[[5]] + l1984[[4]])
+
+# Assegna i nomi specifici agli indici
+names(ndvi_1984) <- "NDVI_1984"
+names(mndwi_1984) <- "MNDWI_1984"
+names(ndbi_1984) <- "NDBI_1984"
+
+# Crea lo stack per il periodo 1984-1990 (bande + indici)
+stack_1984 <- c(l1984, ndvi_1984, mndwi_1984, ndbi_1984)
+
+# Estrai i valori dal raster stack come dataframe e rimuovi i valori NA
+values_stack_1984 <- as.data.frame(values(stack_1984))
+values_stack_1984_non_na <- values_stack_1984[complete.cases(values_stack_1984), ]
+
+# Scala i dati (opzionale, ma consigliato)
+data_input <- scale(values_stack_1984_non_na)
+
+# Esegui K-means per ottenere etichette iniziali per LDA
+set.seed(42)
+initial_clusters <- kmeans(data_input, centers = 5, nstart = 25)  # 5 classi fittizie temporanee
+data_input_with_labels <- data.frame(data_input, class = initial_clusters$cluster)
+
+# Esegui LDA usando le etichette temporanee
+lda_model <- lda(class ~ ., data = data_input_with_labels)
+
+# Trasforma i dati utilizzando le componenti di LDA
+lda_projection <- predict(lda_model)$x
+
+# Utilizza le prime 2 componenti di LDA per creare un raster
+lda_raster_list <- list()  # Inizializza una lista vuota per i raster LDA
+
+for (i in 1:ncol(lda_projection)) {
+    # Crea una nuova banda raster con la componente i-esima
+    component_raster <- rast(img_84)  # Inizializza un raster con la stessa dimensione dell'originale
+    values(component_raster) <- NA  # Imposta valori NA
+    
+    # Riempie i valori con la componente LDA calcolata
+    mask <- !is.na(values(img_84[[1]]))
+    values(component_raster)[mask] <- lda_projection[, i]
+    
+    # Aggiungi il raster alla lista
+    lda_raster_list[[i]] <- component_raster
+}
+
+# Combina i raster in un unico oggetto SpatRaster
+lda_raster <- do.call(c, lda_raster_list)  # Crea un oggetto SpatRaster unendo i raster della lista
+
+# Estrai i valori dai raster delle componenti LDA come dataframe
+values_lda <- as.data.frame(values(lda_raster))
+values_lda_non_na <- values_lda[complete.cases(values_lda), ]
+
+# Esegui K-means sui valori delle componenti LDA
+kmeans_result <- kmeans(values_lda_non_na, centers = 5, nstart = 25)  # Numero di cluster desiderato
+
+# Crea un raster classificato usando i cluster di K-means
+classified_raster <- rast(img_84)
+values(classified_raster) <- NA
+values(classified_raster)[mask] <- kmeans_result$cluster
+
+# Seleziona solo la prima banda del raster per evitare il messaggio di avvertimento
+classified_raster_single <- classified_raster[[1]]
+
+# Crea una palette di colori per la visualizzazione dei cluster utilizzando 'magma'
+optimal_clusters <- length(unique(kmeans_result$cluster))  # Determina il numero di cluster trovati
+palette <- colorNumeric(palette = viridisLite::magma(optimal_clusters), domain = values(classified_raster_single), na.color = "transparent")
+
+# Visualizzazione interattiva con leaflet
+leaflet() %>%
+  # Aggiungi le tiles di base
+  addTiles(group = "OpenStreetMap") %>%  # Mappa base OpenStreetMap
+  addProviderTiles("Esri.WorldImagery", group = "Immagine Satellitare") %>%  # Mappa Satellitare
+  addProviderTiles("CartoDB.Positron", group = "Mappa Chiara") %>%  # Mappa Chiara
+
+  # Aggiungi il raster classificato (banda singola)
+  addRasterImage(classified_raster_single, colors = palette, opacity = 0.8, group = "Raster Classificato") %>%
+
+  # Aggiungi una legenda per i cluster
+  addLegend(pal = palette, values = values(classified_raster_single),
+            title = paste("Classi (", optimal_clusters, " Cluster)", sep = ""), opacity = 1) %>%
+
+  # Aggiungi i controlli per cambiare i layer di base e il gruppo dei layer
+  addLayersControl(
+    baseGroups = c("OpenStreetMap", "Immagine Satellitare", "Mappa Chiara"),  # Layer di base
+    overlayGroups = c("Raster Classificato"),  # Layer raster classificato
+    options = layersControlOptions(collapsed = FALSE)  # Espandi il menu dei layer di default
+  ) %>%
+
+  # Aggiungi una barra di scala
+  addScaleBar(position = "bottomright", options = scaleBarOptions(imperial = FALSE)) %>%
+
+  # Centra la mappa sull'estensione del raster classificato
+  setView(lng = mean(ext(classified_raster_single)[1:2]), lat = mean(ext(classified_raster_single)[3:4]), zoom = 10)
