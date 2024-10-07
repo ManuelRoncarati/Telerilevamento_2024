@@ -1,0 +1,132 @@
+# Carica le librerie necessarie
+library(terra)
+library(dplyr)
+library(xgboost)
+library(mapview)
+library(viridis)
+library(ClusterR)  # Per l'algoritmo K-means++
+library(fpc)       # Per clusterboot()
+library(clusterSim)
+library(doParallel) # Per il parallelismo
+
+# Imposta la directory di lavoro
+setwd("D:/composite")
+
+# Carica il raster multibanda (stack raster con bande e indici)
+img_84 <- rast("L5 Composite 1984-1990_masked.tif")
+
+# Seleziona le bande necessarie (B1, B2, B3, B4, B5, B7) e gli indici (ad esempio NDVI, MNDWI, NDBI)
+l1984 <- img_84[[c(1, 2, 3, 4, 5, 6)]]
+
+# Calcola gli indici NDVI, MNDWI e NDBI
+ndvi_1984 <- (l1984[[4]] - l1984[[3]]) / (l1984[[4]] + l1984[[3]])
+mndwi_1984 <- (l1984[[2]] - l1984[[5]]) / (l1984[[2]] + l1984[[5]])
+ndbi_1984 <- (l1984[[5]] - l1984[[4]]) / (l1984[[5]] + l1984[[4]])
+
+# Assegna i nomi specifici agli indici
+names(ndvi_1984) <- "NDVI_1984"
+names(mndwi_1984) <- "MNDWI_1984"
+names(ndbi_1984) <- "NDBI_1984"
+
+# Crea lo stack per il periodo 1984-1990 (bande + indici)
+stack_1984 <- c(l1984, ndvi_1984, mndwi_1984, ndbi_1984)
+
+# Estrai i valori dal raster stack come matrice e rimuovi i valori NA
+values_stack_1984 <- as.data.frame(values(stack_1984))
+values_stack_1984_non_na <- values_stack_1984[complete.cases(values_stack_1984), ]
+
+# Esegui la PCA su tutti i dati scalati
+pca_result <- prcomp(values_stack_1984_non_na, scale. = TRUE)
+
+# Seleziona le prime 2 componenti principali dalla PCA
+pca_2comp <- pca_result$x[, 1:2]  # Seleziona le prime 2 componenti principali
+
+# Definisci il numero massimo di cluster da testare
+k_max <- 15
+
+# Inizializza le variabili per memorizzare i valori degli indici Calinski-Harabasz e Davies-Bouldin
+ch_index_values_no_parallel <- numeric(k_max)
+db_index_values_no_parallel <- numeric(k_max)
+
+# Tempo di esecuzione senza parallelismo
+start_time_no_parallel <- Sys.time()
+
+# Ciclo per eseguire K-means++ senza parallelismo e calcolare gli indici CH e DB
+for (k in 2:k_max) {
+    # Esegui K-means++ con ClusterR
+    kmeans_result <- KMeans_rcpp(pca_2comp, clusters = k, num_init = 15, initializer = 'kmeans++', seed = 123, verbose = FALSE, max_iters = 100)
+    
+    # Assegna i cluster ottenuti
+    hard_clusters <- kmeans_result$clusters
+    
+    # Calcola l'indice Calinski-Harabasz
+    ch_index <- index.G1(pca_2comp, hard_clusters)
+    ch_index_values_no_parallel[k] <- ch_index
+    
+    # Calcola l'indice Davies-Bouldin
+    db_index <- index.DB(pca_2comp, hard_clusters)$DB
+    db_index_values_no_parallel[k] <- db_index
+}
+
+# Ferma il timer e calcola il tempo di esecuzione
+end_time_no_parallel <- Sys.time()
+execution_time_no_parallel <- end_time_no_parallel - start_time_no_parallel
+
+# Determina e stampa il numero ottimale di cluster secondo il Calinski-Harabasz Index
+optimal_ch_clusters_no_parallel <- which.max(ch_index_values_no_parallel)
+cat("Numero ottimale di cluster secondo il Calinski-Harabasz Index (senza parallelismo):", optimal_ch_clusters_no_parallel, "\n")
+
+# Determina e stampa il numero ottimale di cluster secondo il Davies-Bouldin Index
+optimal_db_clusters_no_parallel <- which.min(db_index_values_no_parallel)
+cat("Numero ottimale di cluster secondo il Davies-Bouldin Index (senza parallelismo):", optimal_db_clusters_no_parallel, "\n")
+
+# Tempo di esecuzione con parallelismo
+start_time_parallel <- Sys.time()
+
+# Inizializza il cluster per il parallelismo
+cl <- makeCluster(detectCores() - 1)  # Usa tutti i core tranne uno
+registerDoParallel(cl)
+
+# Inizializza le variabili per memorizzare i valori degli indici Calinski-Harabasz e Davies-Bouldin
+ch_index_values_parallel <- numeric(k_max)
+db_index_values_parallel <- numeric(k_max)
+
+# Ciclo per eseguire K-means++ sulle prime 2 componenti principali e calcolare gli indici CH e DB in parallelo
+results <- foreach(k = 2:k_max, .combine = 'rbind', .export = c("KMeans_rcpp", "index.G1", "index.DB")) %dopar% {
+    # Esegui K-means++ con ClusterR
+    kmeans_result <- KMeans_rcpp(pca_2comp, clusters = k, num_init = 15, initializer = 'kmeans++', seed = 123, verbose = FALSE, max_iters = 100)
+    
+    # Assegna i cluster ottenuti
+    hard_clusters <- kmeans_result$clusters
+    
+    # Calcola l'indice Calinski-Harabasz
+    ch_index <- index.G1(pca_2comp, hard_clusters)
+    
+    # Calcola l'indice Davies-Bouldin
+    db_index <- index.DB(pca_2comp, hard_clusters)$DB
+    
+    return(c(ch_index, db_index))  # Ritorna gli indici
+}
+
+# Estrai gli indici dai risultati
+ch_index_values_parallel[2:k_max] <- results[, 1]
+db_index_values_parallel[2:k_max] <- results[, 2]
+
+# Ferma il cluster
+stopCluster(cl)
+
+# Ferma il timer e calcola il tempo di esecuzione
+end_time_parallel <- Sys.time()
+execution_time_parallel <- end_time_parallel - start_time_parallel
+
+# Determina e stampa il numero ottimale di cluster secondo il Calinski-Harabasz Index
+optimal_ch_clusters_parallel <- which.max(ch_index_values_parallel)
+cat("Numero ottimale di cluster secondo il Calinski-Harabasz Index (con parallelismo):", optimal_ch_clusters_parallel, "\n")
+
+# Determina e stampa il numero ottimale di cluster secondo il Davies-Bouldin Index
+optimal_db_clusters_parallel <- which.min(db_index_values_parallel)
+cat("Numero ottimale di cluster secondo il Davies-Bouldin Index (con parallelismo):", optimal_db_clusters_parallel, "\n")
+
+# Stampa i tempi di esecuzione
+cat("Tempo di esecuzione (senza parallelismo):", execution_time_no_parallel, "\n")
+cat("Tempo di esecuzione (con parallelismo):", execution_time_parallel, "\n")
