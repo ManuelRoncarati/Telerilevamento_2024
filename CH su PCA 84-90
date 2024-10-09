@@ -1,15 +1,18 @@
+#DO PARALLEL E TEMPO DI ESECUZIONE
+
 # Carica le librerie necessarie
 library(terra)
 library(ClusterR)
 library(cluster)
 library(fpc)
 library(ggplot2)
+library(doParallel)
 
 # Imposta la directory di lavoro
 setwd("C:/composite")
 
 # Carica il raster multibanda (stack raster con bande e indici)
-img <- rast("L5 Composite 1984-1990_masked.tif")
+img <- rast("ritaglino.tif")
 
 # Seleziona le bande necessarie (B1, B2, B3, B4, B5, B7)
 bands <- img[[c(1, 2, 3, 4, 5, 6)]]
@@ -41,32 +44,142 @@ pca_values <- pca_result$x[, 1:2]
 k_min <- 2
 k_max <- 15
 
-# Esegui K-means++ e calcola l'indice Calinski-Harabasz per ogni numero di cluster
-set.seed(123)  # Imposta il seed per la riproducibilità
+# Imposta il numero di core da utilizzare
+num_cores <- detectCores() - 1  # Usa tutti i core disponibili meno uno
+cl <- makeCluster(num_cores)
+registerDoParallel(cl)
 
 # Inizializza un vettore per memorizzare i valori dell'indice CH
 ch_values <- numeric(k_max - k_min + 1)
 
-# Ciclo per ogni numero di cluster da k_min a k_max
-for (k in k_min:k_max) {
-    # Esegui il clustering K-means++ sui primi due componenti della PCA
-    kmeans_result <- KMeans_rcpp(pca_values, clusters = k, num_init = 5, initializer = "kmeans++", seed = 123)
-    
-    # Calcola l'indice Calinski-Harabasz
-    ch_index <- calinhara(pca_values, kmeans_result$clusters)
-    
-    # Memorizza il valore dell'indice CH
-    ch_values[k - k_min + 1] <- ch_index
+# Misura il tempo di esecuzione
+start_time <- Sys.time()
+
+# Esegui il ciclo in parallelo utilizzando foreach
+ch_values <- foreach(k = k_min:k_max, .combine = c, .packages = c("ClusterR", "fpc")) %dopar% {
+  # Esegui il clustering K-means++ sui primi due componenti della PCA
+  kmeans_result <- KMeans_rcpp(pca_values, clusters = k, num_init = 5, initializer = "kmeans++", seed = 123)
+  
+  # Calcola l'indice Calinski-Harabasz
+  ch_index <- calinhara(pca_values, kmeans_result$clusters)
+  
+  # Ritorna il valore dell'indice CH
+  return(ch_index)
 }
+
+# Calcola il tempo di esecuzione totale
+end_time <- Sys.time()
+execution_time <- end_time - start_time
+
+# Interrompi il cluster
+stopCluster(cl)
 
 # Crea un data frame per visualizzare i risultati
 ch_df <- data.frame(Clusters = k_min:k_max, CH_Index = ch_values)
 
-# Visualizza i risultati con ggplot2
+# Trova il numero ottimale di cluster basato sul massimo dell'indice CH
+optimal_clusters <- ch_df$Clusters[which.max(ch_df$CH_Index)]
+
+# Visualizza i risultati con ggplot2 e aggiungi una linea verticale al valore ottimale
 ggplot(ch_df, aes(x = Clusters, y = CH_Index)) +
-    geom_line(color = "blue", size = 1.2) +
-    geom_point(color = "red", size = 3) +
-    ggtitle("Calinski-Harabasz Index vs Number of Clusters") +
-    xlab("Number of Clusters") +
-    ylab("Calinski-Harabasz Index") +
-    theme_minimal()
+  geom_line(color = "blue", size = 1.2) +
+  geom_point(color = "red", size = 3) +
+  geom_vline(xintercept = optimal_clusters, linetype = "dashed", color = "green", size = 1.2) +
+  ggtitle(paste("Calinski-Harabasz Index vs Number of Clusters\nOptimal Number of Clusters:", optimal_clusters)) +
+  xlab("Number of Clusters") +
+  ylab("Calinski-Harasz Index") +
+  theme_minimal()
+
+# Stampa il tempo di esecuzione totale
+print(paste("Tempo di esecuzione totale:", execution_time))
+
+
+
+
+
+
+#SENZA PARALLEL + TEMPO ESECUZIONE 
+
+# Carica le librerie necessarie
+library(terra)
+library(ClusterR)
+library(cluster)
+library(fpc)
+library(ggplot2)
+
+# Imposta la directory di lavoro
+setwd("C:/composite")
+
+# Carica il raster multibanda (stack raster con bande e indici)
+img <- rast("ritaglino.tif")
+
+# Seleziona le bande necessarie (B1, B2, B3, B4, B5, B7)
+bands <- img[[c(1, 2, 3, 4, 5, 6)]]
+
+# Calcola gli indici NDVI, MNDWI e NDBI
+ndvi <- (bands[[4]] - bands[[3]]) / (bands[[4]] + bands[[3]])
+mndwi <- (bands[[2]] - bands[[5]]) / (bands[[2]] + bands[[5]])
+ndbi <- (bands[[5]] - bands[[4]]) / (bands[[5]] + bands[[4]])
+
+# Assegna i nomi specifici agli indici
+names(ndvi) <- "NDVI"
+names(mndwi) <- "MNDWI"
+names(ndbi) <- "NDBI"
+
+# Crea lo stack (stack di bande + indici)
+stack <- c(bands, ndvi, mndwi, ndbi)
+
+# Estrai i valori dal raster stack come matrice e rimuovi i valori NA
+values_stack <- as.data.frame(values(stack))
+values_stack_non_na <- values_stack[complete.cases(values_stack), ]
+
+# Esegui la PCA sui dati estratti dallo stack
+pca_result <- prcomp(values_stack_non_na, center = TRUE, scale. = TRUE)
+
+# Estrai le prime 2 componenti principali
+pca_values <- pca_result$x[, 1:2]
+
+# Definisci il numero minimo e massimo di cluster da testare
+k_min <- 2
+k_max <- 15
+
+# Inizializza un vettore per memorizzare i valori dell'indice CH
+ch_values <- numeric(k_max - k_min + 1)
+
+# Misura il tempo di esecuzione
+start_time <- Sys.time()
+
+# Ciclo for tradizionale per calcolare l'indice CH senza parallelo
+for (k in k_min:k_max) {
+  # Esegui il clustering K-means++ sui primi due componenti della PCA
+  kmeans_result <- KMeans_rcpp(pca_values, clusters = k, num_init = 5, initializer = "kmeans++", seed = 123)
+  
+  # Calcola l'indice Calinski-Harabasz
+  ch_index <- calinhara(pca_values, kmeans_result$clusters)
+  
+  # Memorizza il valore dell'indice CH
+  ch_values[k - k_min + 1] <- ch_index
+}
+
+# Calcola il tempo di esecuzione totale
+end_time <- Sys.time()
+execution_time <- end_time - start_time
+
+# Crea un data frame per visualizzare i risultati
+ch_df <- data.frame(Clusters = k_min:k_max, CH_Index = ch_values)
+
+# Trova il numero ottimale di cluster basato sul massimo dell'indice CH
+optimal_clusters <- ch_df$Clusters[which.max(ch_df$CH_Index)]
+
+# Visualizza i risultati con ggplot2 e aggiungi una linea verticale al valore ottimale
+ggplot(ch_df, aes(x = Clusters, y = CH_Index)) +
+  geom_line(color = "blue", size = 1.2) +
+  geom_point(color = "red", size = 3) +
+  geom_vline(xintercept = optimal_clusters, linetype = "dashed", color = "green", size = 1.2) +
+  ggtitle(paste("Calinski-Harabasz Index vs Number of Clusters\nOptimal Number of Clusters:", optimal_clusters)) +
+  xlab("Number of Clusters") +
+  ylab("Calinski-Harabasz Index") +
+  theme_minimal()
+
+# Stampa il tempo di esecuzione totale
+print(paste("Tempo di esecuzione totale senza parallelismo:", execution_time))
