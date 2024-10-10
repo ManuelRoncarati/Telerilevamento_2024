@@ -1,0 +1,65 @@
+# Carica le librerie necessarie
+library(terra)         # Per la gestione dei raster
+library(clusterSim)    # Per calcolare l'indice Davies-Bouldin
+library(ClusterR)      # Per K-means++
+library(cluster)       # Per il coefficiente silhouette
+
+# Step 1: Caricamento dell'immagine e creazione dello stack
+setwd("D:/composite")  # Imposta la directory di lavoro
+
+# Carica il raster multibanda
+img_84 <- rast("L5 Composite 1984-1990_masked.tif")
+
+# Seleziona le bande necessarie (B1, B2, B3, B4, B5, B7)
+l1984 <- img_84[[c(1, 2, 3, 4, 5, 6)]]
+
+# Calcola gli indici NDVI, MNDWI e NDBI
+ndvi_1984 <- (l1984[[4]] - l1984[[3]]) / (l1984[[4]] + l1984[[3]])
+mndwi_1984 <- (l1984[[2]] - l1984[[5]]) / (l1984[[2]] + l1984[[5]])
+ndbi_1984 <- (l1984[[5]] - l1984[[4]]) / (l1984[[5]] + l1984[[4]])
+
+# Assegna i nomi specifici agli indici
+names(ndvi_1984) <- "NDVI_1984"
+names(mndwi_1984) <- "MNDWI_1984"
+names(ndbi_1984) <- "NDBI_1984"
+
+# Crea lo stack per il periodo 1984-1990 (bande + indici)
+stack_1984 <- c(l1984, ndvi_1984, mndwi_1984, ndbi_1984)
+
+# Estrai i valori del raster stack come matrice e rimuovi i valori NA
+values_stack_1984 <- as.data.frame(values(stack_1984))
+values_stack_1984_non_na <- values_stack_1984[complete.cases(values_stack_1984), ]
+
+# Step 2: Esecuzione della PCA sui dati
+# Esegui la PCA su tutti i dati scalati (senza NA)
+pca_result <- prcomp(values_stack_1984_non_na, scale. = TRUE)
+
+# Seleziona le prime 2 componenti principali
+pca_2comp <- pca_result$x[, 1:2]  # Seleziona le prime 2 componenti principali
+
+# Step 3: Calcolo dell'indice Davies-Bouldin per diversi numeri di cluster
+max_clusters <- 10  # Numero massimo di cluster da testare
+db_values <- numeric(max_clusters - 1)  # Inizializza un vettore per i valori di DB
+
+# Calcola l'indice Davies-Bouldin per ciascun numero di cluster (da 2 a max_clusters)
+for (k in 2:max_clusters) {
+  set.seed(42)  # Per riproducibilità
+  
+  # Esegui K-means++ con il numero di cluster k
+  kmeans_model <- KMeans_rcpp(pca_2comp, clusters = k, verbose = TRUE)
+  
+  # Assegna le etichette ai cluster
+  clusters <- kmeans_model$clusters
+  
+  # Calcola l'indice Davies-Bouldin utilizzando clusterSim
+  db_values[k - 1] <- index.DB(pca_2comp, clusters)$DB
+}
+
+# Step 4: Visualizzazione dell'indice Davies-Bouldin
+plot(2:max_clusters, db_values, type = "b", pch = 19, col = "red",
+     main = "Indice Davies-Bouldin per Numero di Cluster",
+     xlab = "Numero di Cluster", ylab = "Valore Davies-Bouldin (minore è meglio)")
+
+# Trova il numero ottimale di cluster basato sul valore minimo di DB
+optimal_clusters_db <- which.min(db_values) + 1
+cat("Numero ottimale di cluster basato sull'indice Davies-Bouldin:", optimal_clusters_db, "\n")
