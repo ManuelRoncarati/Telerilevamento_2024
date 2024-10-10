@@ -144,3 +144,103 @@ abline(v = optimal_clusters_db, col = "blue", lty = 2, lwd = 2)
 text(optimal_clusters_db, min(db_values), labels = paste("Cluster ottimale:", optimal_clusters_db), 
      col = "blue", pos = 4, cex = 0.8)
 
+
+
+
+#con PARALLEL
+
+# Carica le librerie necessarie
+library(terra)         # Per la gestione dei raster
+library(clusterSim)    # Per calcolare l'indice Davies-Bouldin
+library(ClusterR)      # Per K-means++
+library(cluster)       # Per il coefficiente silhouette
+library(doParallel)    # Per il parallelismo
+library(foreach)       # Per il ciclo parallelo
+
+# Step 1: Caricamento dell'immagine e creazione dello stack
+setwd("C:/composite")  # Imposta la directory di lavoro
+
+# Carica il raster multibanda
+img_84 <- rast("L5 Composite 1984-1990_masked.tif")
+
+# Seleziona le bande necessarie (B1, B2, B3, B4, B5, B7)
+l1984 <- img_84[[c(1, 2, 3, 4, 5, 6)]]
+
+# Calcola gli indici NDVI, MNDWI e NDBI
+ndvi_1984 <- (l1984[[4]] - l1984[[3]]) / (l1984[[4]] + l1984[[3]])
+mndwi_1984 <- (l1984[[2]] - l1984[[5]]) / (l1984[[2]] + l1984[[5]])
+ndbi_1984 <- (l1984[[5]] - l1984[[4]]) / (l1984[[5]] + l1984[[4]])
+
+# Assegna i nomi specifici agli indici
+names(ndvi_1984) <- "NDVI_1984"
+names(mndwi_1984) <- "MNDWI_1984"
+names(ndbi_1984) <- "NDBI_1984"
+
+# Crea lo stack per il periodo 1984-1990 (bande + indici)
+stack_1984 <- c(l1984, ndvi_1984, mndwi_1984, ndbi_1984)
+
+# Estrai i valori del raster stack come matrice e rimuovi i valori NA
+values_stack_1984 <- as.data.frame(values(stack_1984))
+values_stack_1984_non_na <- values_stack_1984[complete.cases(values_stack_1984), ]
+
+# Step 2: Esecuzione della PCA sui dati
+# Esegui la PCA su tutti i dati scalati (senza NA)
+pca_result <- prcomp(values_stack_1984_non_na, scale. = TRUE)
+
+# Seleziona le prime 2 componenti principali
+pca_2comp <- pca_result$x[, 1:2]  # Seleziona le prime 2 componenti principali
+
+# Step 3: Configurazione del parallelismo
+# Trova il numero di core disponibili
+num_cores <- detectCores() - 1  # Utilizza un numero di core inferiore a quello massimo disponibile
+cat("Numero di core utilizzati per il parallelismo:", num_cores, "\n")
+
+# Crea il cluster e registra il parallel backend
+cl <- makeCluster(num_cores)
+registerDoParallel(cl)
+
+# Inizializza il vettore per memorizzare i valori di Davies-Bouldin
+max_clusters <- 20  # Numero massimo di cluster da testare
+db_values <- numeric(max_clusters )
+
+# Step 4: Calcolo dell'indice Davies-Bouldin in parallelo
+start_time <- Sys.time()  # Registra il tempo di inizio
+
+# Usa foreach per parallelizzare il ciclo
+db_values <- foreach(k = 2:max_clusters, .combine = c, .packages = c("ClusterR", "clusterSim")) %dopar% {
+    # Esegui K-means++ con il numero di cluster k
+    set.seed(42)  # Per riproducibilità
+    kmeans_model <- KMeans_rcpp(pca_2comp, clusters = k, verbose = FALSE)
+    
+    # Assegna le etichette ai cluster
+    clusters <- kmeans_model$clusters
+    
+    # Calcola l'indice Davies-Bouldin utilizzando clusterSim
+    db_value <- index.DB(pca_2comp, clusters)$DB
+    db_value
+}
+
+end_time <- Sys.time()  # Registra il tempo di fine
+execution_time <- end_time - start_time  # Calcola la durata del processo
+cat("Tempo totale di esecuzione:", execution_time, "\n")
+
+# Stoppa il cluster per il parallelismo
+stopCluster(cl)
+registerDoSEQ()  # Torna alla modalità sequenziale
+
+# Step 5: Visualizzazione dell'indice Davies-Bouldin con linea per il cluster ottimale
+# Trova il numero ottimale di cluster basato sul valore minimo di DB
+optimal_clusters_db <- which.min(db_values) + 1
+cat("Numero ottimale di cluster basato sull'indice Davies-Bouldin:", optimal_clusters_db, "\n")
+
+# Crea il grafico dell'indice Davies-Bouldin con linea verticale sul cluster ottimale
+plot(2:max_clusters, db_values, type = "b", pch = 19, col = "red",
+     main = "Indice Davies-Bouldin per Numero di Cluster",
+     xlab = "Numero di Cluster", ylab = "Valore Davies-Bouldin (minore è meglio)")
+
+# Aggiungi una linea verticale sul numero di cluster ottimale
+abline(v = optimal_clusters_db, col = "blue", lty = 2, lwd = 2)
+
+# Aggiungi testo al grafico per indicare il cluster ottimale
+text(optimal_clusters_db, min(db_values), labels = paste("Cluster ottimale:", optimal_clusters_db), 
+     col = "blue", pos = 4, cex = 0.8)
