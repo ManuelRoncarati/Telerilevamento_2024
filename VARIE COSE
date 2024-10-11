@@ -309,3 +309,85 @@ plot(1:K, TWCSS, type = "b", pch = 19, col = "blue",
      xlab = "Numero di Cluster (K)", ylab = "Total Within-Cluster Sum-of-Squares (TWCSS)",
      main = "Metodo del Gomito per Determinare il Numero Ottimale di Cluster")
 
+
+
+
+
+#GOMITO CON MATRICE DISTANZE 1 PER CENTO IMMAGINE
+
+# Imposta la working directory
+setwd("C:/composite")
+
+# Carica le librerie necessarie
+library(terra)
+library(cluster)
+library(rio)
+library(tidyverse)
+library(stats)
+
+# Carica l'immagine L5 Composite 1984-1990_masked.tif
+img_84 <- rast("L5 Composite 1984-1990_masked.tif")
+
+# Controlla i dettagli dell'immagine caricata
+print(img_84)
+
+# Seleziona le bande desiderate dall'immagine
+# Ad esempio: Bande 1, 2, 3, 4, 5, e 7 (adatta in base al tuo raster)
+selected_bands <- c(1, 2, 3, 4, 5, 7)
+img_selected <- subset(img_84, selected_bands)
+
+# Calcolo degli indici spettrali (NDVI, MNDWI, NDBI)
+ndvi <- (img_selected[[4]] - img_selected[[3]]) / (img_selected[[4]] + img_selected[[3]])
+mndwi <- (img_selected[[2]] - img_selected[[5]]) / (img_selected[[2]] + img_selected[[5]])
+ndbi <- (img_selected[[5]] - img_selected[[4]]) / (img_selected[[5]] + img_selected[[4]])
+
+# Crea lo stack con le bande selezionate e gli indici
+stack_1984 <- c(img_selected, ndvi, mndwi, ndbi)
+
+# Assegna i nomi ai layer dello stack
+names(stack_1984) <- c("B1", "B2", "B3", "B4", "B5", "B7", "NDVI", "MNDWI", "NDBI")
+
+# Appiattisci lo stack in una matrice per il campionamento
+stack_values <- values(stack_1984, na.rm = TRUE)
+
+# Calcola il numero di campioni (10% dei pixel)
+set.seed(42)  # Per garantire la riproducibilità del campionamento
+sample_size <- round(0.001 * nrow(stack_values))  # Calcola il 10% dei pixel
+sample_indices <- sample(1:nrow(stack_values), sample_size)  # Estrai gli indici campionati
+
+# Seleziona i campioni dai valori dello stack
+sampled_values <- stack_values[sample_indices, ]
+
+# Calcolo della PCA utilizzando il campionamento dei pixel
+pca_result <- prcomp(sampled_values, scale. = TRUE, center = TRUE)
+
+# Visualizza i risultati della PCA
+summary(pca_result)
+
+# Estrai le prime tre componenti principali dal campionamento
+pca_values <- pca_result$x[, 1:3]
+
+# Converti le componenti principali in un dataframe per il calcolo delle distanze
+pca_df <- as.data.frame(pca_values)
+
+# Calcolo delle distanze utilizzando le prime tre componenti principali
+
+# Distanza Euclidea
+dist_euclidean <- dist(pca_df, method = "euclidean")
+
+# Distanza Manhattan
+dist_manhattan <- dist(pca_df, method = "manhattan")
+
+# Distanza Minkowski con p=3 (la funzione dist di base non supporta p, quindi usiamo proxy)
+library(proxy)
+dist_minkowski3 <- proxy::dist(pca_df, method = "Minkowski", p = 3)
+
+# Visualizza un'anteprima delle prime righe delle distanze calcolate
+cat("Distanza Euclidea (prime 5 righe e colonne):\n")
+print(as.matrix(dist_euclidean)[1:5, 1:5])
+
+cat("Distanza Manhattan (prime 5 righe e colonne):\n")
+print(as.matrix(dist_manhattan)[1:5, 1:5])
+
+cat("Distanza Minkowski con p=3 (prime 5 righe e colonne):\n")
+print(as.matrix(dist_minkowski3)[1:5, 1:5])
