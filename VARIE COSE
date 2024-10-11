@@ -54,10 +54,135 @@ print(paste("Tempo di esecuzione per mclustICL: ", time_icl["elapsed"], "secondi
 # Visualizza i risultati di mclustICL
 print(icl_result)
 
+#PCA 2 COMP CON MCLUSTICL
+# Carica le librerie necessarie
+library(terra)     # Per la gestione dei raster
+library(mclust)    # Per Mclust e mclustICL
+
+# Step 1: Caricamento dell'immagine e creazione dello stack
+setwd("C:/composite")  # Imposta la directory di lavoro
+
+# Calcolo del tempo di esecuzione per il caricamento dell'immagine e la creazione dello stack
+time_stack_creation <- system.time({
+    # Carica il raster multibanda
+    img_84 <- rast("L5 Composite 1984-1990_masked.tif")
+    
+    # Seleziona le bande necessarie (B1, B2, B3, B4, B5, B7)
+    l1984 <- img_84[[c(1, 2, 3, 4, 5, 6)]]
+    
+    # Calcola gli indici NDVI, MNDWI e NDBI
+    ndvi_1984 <- (l1984[[4]] - l1984[[3]]) / (l1984[[4]] + l1984[[3]])
+    mndwi_1984 <- (l1984[[2]] - l1984[[5]]) / (l1984[[2]] + l1984[[5]])
+    ndbi_1984 <- (l1984[[5]] - l1984[[4]]) / (l1984[[5]] + l1984[[4]])
+    
+    # Crea lo stack con le bande selezionate e gli indici calcolati
+    stack_1984 <- c(l1984, ndvi_1984, mndwi_1984, ndbi_1984)
+    
+    # Estrai i valori del raster stack come dataframe e rimuovi i valori NA
+    values_stack_1984 <- as.data.frame(values(stack_1984))
+    values_stack_1984_non_na <- values_stack_1984[complete.cases(values_stack_1984), ]
+})
+
+# Stampa il tempo di esecuzione dello stack
+print(paste("Tempo di esecuzione per creazione stack e estrazione valori: ", time_stack_creation["elapsed"], "secondi"))
+
+# Step 2: Calcolo del tempo di esecuzione per la PCA sui dati
+time_pca <- system.time({
+    # Esegui la PCA su tutti i dati scalati (senza NA)
+    pca_result <- prcomp(values_stack_1984_non_na, scale. = TRUE)
+    
+    # Seleziona le prime 2 componenti principali
+    pca_2comp <- pca_result$x[, 1:2]
+})
+
+# Stampa il tempo di esecuzione della PCA
+print(paste("Tempo di esecuzione per PCA: ", time_pca["elapsed"], "secondi"))
+
+# Step 3: Calcolo del tempo di esecuzione per mclustICL sulle prime due componenti della PCA
+time_icl <- system.time({
+    # Calcolo di mclustICL sulle prime due componenti della PCA
+    icl_result <- mclustICL(pca_2comp)
+})
+
+# Stampa il tempo di esecuzione di mclustICL
+print(paste("Tempo di esecuzione per mclustICL: ", time_icl["elapsed"], "secondi"))
+
+# Visualizza i risultati di mclustICL
+print(icl_result)
 
 
 
 
 
+#PCA 3 COMP PARALLEL MCLUSTICL
 
-#
+# Carica le librerie necessarie
+library(terra)     # Per la gestione dei raster
+library(mclust)    # Per Mclust e mclustICL
+library(parallel)  # Per parallelizzazione
+
+# Imposta il numero di core disponibili per la parallelizzazione
+numCores <- detectCores()   # Usa n-1 core per non sovraccaricare il sistema
+cl <- makeCluster(numCores)    # Crea un cluster con il numero di core disponibili
+
+# Carica il pacchetto mclust su ogni core del cluster
+clusterEvalQ(cl, library(mclust)) # Esegue library(mclust) su ogni nodo del cluster
+
+# Step 1: Caricamento dell'immagine e creazione dello stack
+setwd("C:/composite")  # Imposta la directory di lavoro
+
+# Calcolo del tempo di esecuzione per il caricamento dell'immagine e la creazione dello stack
+time_stack_creation <- system.time({
+    # Carica il raster multibanda
+    img_84 <- rast("L5 Composite 1984-1990_masked.tif")
+    
+    # Seleziona le bande necessarie (B1, B2, B3, B4, B5, B7)
+    l1984 <- img_84[[c(1, 2, 3, 4, 5, 6)]]
+    
+    # Calcola gli indici NDVI, MNDWI e NDBI
+    ndvi_1984 <- (l1984[[4]] - l1984[[3]]) / (l1984[[4]] + l1984[[3]])
+    mndwi_1984 <- (l1984[[2]] - l1984[[5]]) / (l1984[[2]] + l1984[[5]])
+    ndbi_1984 <- (l1984[[5]] - l1984[[4]]) / (l1984[[5]] + l1984[[4]])
+    
+    # Crea lo stack con le bande selezionate e gli indici calcolati
+    stack_1984 <- c(l1984, ndvi_1984, mndwi_1984, ndbi_1984)
+    
+    # Estrai i valori del raster stack come dataframe e rimuovi i valori NA
+    values_stack_1984 <- as.data.frame(values(stack_1984))
+    values_stack_1984_non_na <- values_stack_1984[complete.cases(values_stack_1984), ]
+})
+
+# Stampa il tempo di esecuzione dello stack
+print(paste("Tempo di esecuzione per creazione stack e estrazione valori: ", time_stack_creation["elapsed"], "secondi"))
+
+# Step 2: Calcolo del tempo di esecuzione per la PCA sui dati
+time_pca <- system.time({
+    # Esegui la PCA su tutti i dati scalati (senza NA)
+    pca_result <- prcomp(values_stack_1984_non_na, scale. = TRUE)
+    
+    # Seleziona le prime 3 componenti principali
+    pca_3comp <- pca_result$x[, 1:3] 
+})
+
+# Stampa il tempo di esecuzione della PCA
+print(paste("Tempo di esecuzione per PCA: ", time_pca["elapsed"], "secondi"))
+
+# Step 3: Calcolo del tempo di esecuzione per mclustICL sulle prime tre componenti della PCA
+# Esporta le variabili e le funzioni necessarie al cluster
+clusterExport(cl, varlist = c("pca_3comp", "mclustICL"))
+
+# Calcolo di mclustICL parallelizzando con parLapply
+time_icl <- system.time({
+    # Esegui `mclustICL` su tutti i core del cluster
+    icl_result <- parLapply(cl, 1, function(i) mclustICL(pca_3comp))[[1]]
+})
+
+# Stampa il tempo di esecuzione di mclustICL
+print(paste("Tempo di esecuzione per mclustICL: ", time_icl["elapsed"], "secondi"))
+
+# Visualizza i risultati di mclustICL
+print(icl_result)
+
+# Chiudi il cluster
+stopCluster(cl)
+
