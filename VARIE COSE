@@ -391,3 +391,92 @@ print(as.matrix(dist_manhattan)[1:5, 1:5])
 
 cat("Distanza Minkowski con p=3 (prime 5 righe e colonne):\n")
 print(as.matrix(dist_minkowski3)[1:5, 1:5])
+
+
+
+
+#CH con rasterPCA
+
+
+
+# Carica le librerie necessarie
+library(terra)
+library(RStoolbox)    # Per rasterPCA
+library(ClusterR)
+library(cluster)
+library(fpc)
+library(ggplot2)
+
+# Imposta la directory di lavoro
+setwd("C:/composite")
+
+# Carica il raster multibanda (stack raster con bande e indici)
+img <- rast("L5 Composite 1984-1990_masked.tif")
+
+# Seleziona le bande necessarie (B1, B2, B3, B4, B5, B7)
+bands <- img[[c(1, 2, 3, 4, 5, 6)]]
+
+# Calcola gli indici NDVI, MNDWI e NDBI
+ndvi <- (bands[[4]] - bands[[3]]) / (bands[[4]] + bands[[3]])
+mndwi <- (bands[[2]] - bands[[5]]) / (bands[[2]] + bands[[5]])
+ndbi <- (bands[[5]] - bands[[4]]) / (bands[[5]] + bands[[4]])
+
+# Assegna i nomi specifici agli indici
+names(ndvi) <- "NDVI"
+names(mndwi) <- "MNDWI"
+names(ndbi) <- "NDBI"
+
+# Crea lo stack (stack di bande + indici)
+stack <- c(bands, ndvi, mndwi, ndbi)
+
+# Esegui la PCA utilizzando rasterPCA su tutte le bande e indici
+pca_result <- rasterPCA(stack, nComp = 10, spca = FALSE, maskCheck = TRUE)
+
+# Estrai i valori delle prime 2 componenti principali
+pca_values <- as.data.frame(values(pca_result$map[[1:2]]))
+pca_values_non_na <- pca_values[complete.cases(pca_values), ]
+
+# Definisci il numero minimo e massimo di cluster da testare
+k_min <- 2
+k_max <- 15
+
+# Inizializza un vettore per memorizzare i valori dell'indice CH
+ch_values <- numeric(k_max - k_min + 1)
+
+# Misura il tempo di esecuzione
+start_time <- Sys.time()
+
+# Ciclo for tradizionale per calcolare l'indice CH senza parallelismo
+for (k in k_min:k_max) {
+    # Esegui il clustering K-means++ sui primi due componenti della PCA
+    kmeans_result <- KMeans_rcpp(pca_values_non_na, clusters = k, num_init = 5, initializer = "kmeans++", seed = 12)
+    
+    # Calcola l'indice Calinski-Harabasz
+    ch_index <- calinhara(pca_values_non_na, kmeans_result$clusters)
+    
+    # Memorizza il valore dell'indice CH
+    ch_values[k - k_min + 1] <- ch_index
+}
+
+# Calcola il tempo di esecuzione totale
+end_time <- Sys.time()
+execution_time <- end_time - start_time
+
+# Crea un data frame per visualizzare i risultati
+ch_df <- data.frame(Clusters = k_min:k_max, CH_Index = ch_values)
+
+# Trova il numero ottimale di cluster basato sul massimo dell'indice CH
+optimal_clusters <- ch_df$Clusters[which.max(ch_df$CH_Index)]
+
+# Visualizza i risultati con ggplot2 e aggiungi una linea verticale al valore ottimale
+ggplot(ch_df, aes(x = Clusters, y = CH_Index)) +
+    geom_line(color = "blue", size = 1.2) +
+    geom_point(color = "red", size = 3) +
+    geom_vline(xintercept = optimal_clusters, linetype = "dashed", color = "green", size = 1.2) +
+    ggtitle(paste("Calinski-Harabasz Index vs Number of Clusters\nOptimal Number of Clusters:", optimal_clusters)) +
+    xlab("Number of Clusters") +
+    ylab("Calinski-Harasz Index") +
+    theme_minimal()
+
+# Stampa il tempo di esecuzione totale
+print(paste("Tempo di esecuzione totale senza parallelismo:", execution_time))
