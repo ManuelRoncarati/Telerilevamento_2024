@@ -216,3 +216,8 @@ print(icl_result)
 # Chiudi il cluster
 stopCluster(cl)
 
+#inutile il parallelo
+#Top 3 models based on the ICL criterion: 
+#   VEV,5    VVV,4    VVV,5 
+# -8832930 -8851853 -8881968 
+
