@@ -54,6 +54,23 @@ print(paste("Tempo di esecuzione per mclustICL: ", time_icl["elapsed"], "secondi
 # Visualizza i risultati di mclustICL
 print(icl_result)
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #PCA 2 COMP CON MCLUSTICL
 # Carica le librerie necessarie
 library(terra)     # Per la gestione dei raster
@@ -109,6 +126,19 @@ print(paste("Tempo di esecuzione per mclustICL: ", time_icl["elapsed"], "secondi
 
 # Visualizza i risultati di mclustICL
 print(icl_result)
+
+# Top 3 models based on the ICL criterion: 
+#  VVV,4    VEV,4    VVV,5 
+#-7867938 -7908104 -7917934 
+# "Tempo di esecuzione per mclustICL:  8047.76 secondi"
+
+
+
+
+
+
+
+
 
 
 
