@@ -221,3 +221,91 @@ stopCluster(cl)
 #   VEV,5    VVV,4    VVV,5 
 # -8832930 -8851853 -8881968 
 
+
+
+
+
+#GOMITO CON KMEANS++ FONTE LIBRONE Learning Analytics Methods and Tutorials, però usando un altro kmeasn++ rispetto a quello del libro perchè rompe il cazzo con i passi
+
+# Installa la libreria ClusterR se non è presente
+if (!require("ClusterR")) {
+  install.packages("ClusterR")
+}
+library(ClusterR)
+
+# Imposta la working directory
+setwd("C:/composite")
+
+# Carica le librerie necessarie
+library(terra)
+library(cluster)
+library(rio)
+library(tidyverse)
+library(stats)
+
+# Carica l'immagine ritaglio.tif
+img_84 <- rast("ritaglio.tif")
+
+# Controlla i dettagli dell'immagine caricata
+print(img_84)
+
+# Seleziona le bande desiderate dall'immagine
+# Ad esempio: Bande 1, 2, 3, 4, 5, e 7 (adatta in base al tuo raster)
+selected_bands <- c(1, 2, 3, 4, 5, 7)
+img_selected <- subset(img_84, selected_bands)
+
+# Calcolo degli indici spettrali (NDVI, MNDWI, NDBI)
+# NDVI: (B4 - B3) / (B4 + B3)
+ndvi <- (img_selected[[4]] - img_selected[[3]]) / (img_selected[[4]] + img_selected[[3]])
+
+# MNDWI: (B2 - B5) / (B2 + B5)
+mndwi <- (img_selected[[2]] - img_selected[[5]]) / (img_selected[[2]] + img_selected[[5]])
+
+# NDBI: (B5 - B4) / (B5 + B4)
+ndbi <- (img_selected[[5]] - img_selected[[4]]) / (img_selected[[5]] + img_selected[[4]])
+
+# Crea lo stack con le bande selezionate e gli indici
+stack_1984 <- c(img_selected, ndvi, mndwi, ndbi)
+
+# Assegna i nomi ai layer dello stack
+names(stack_1984) <- c("B1", "B2", "B3", "B4", "B5", "B7", "NDVI", "MNDWI", "NDBI")
+
+# Appiattisci lo stack in una matrice per l'analisi della PCA
+stack_values <- values(stack_1984, na.rm = TRUE)
+
+# Calcolo della PCA utilizzando tutte le bande e gli indici
+pca_result <- prcomp(stack_values, scale. = TRUE, center = TRUE)
+
+# Visualizza i risultati della PCA
+summary(pca_result)
+
+# Estrai le prime tre componenti principali
+pca_values <- pca_result$x[, 1:3]
+
+# Converte i valori PCA in una matrice per ClusterR
+pca_matrix <- as.matrix(pca_values)
+
+# Inizializzazione delle variabili per il metodo del gomito
+K <- 10  # Numero massimo di cluster da testare
+TWCSS <- numeric(K)  # Vettore per memorizzare i valori TWCSS
+KM <- vector("list", K)  # Lista per memorizzare i modelli K-means
+
+# Esegui il metodo del gomito per diversi valori di K utilizzando KMeans_rcpp con K-means++
+for (k in 1:K) {
+  set.seed(42)  # Per garantire la riproducibilità dei risultati
+  
+  # Esegui KMeans_rcpp con inizializzazione K-means++
+  km_model <- KMeans_rcpp(pca_matrix, clusters = k, num_init = 10, max_iters = 100, initializer = 'kmeans++')
+  
+  # Memorizza il modello K-means
+  KM[[k]] <- km_model
+  
+  # Estrai il valore TWCSS per il corrente valore di k
+  TWCSS[k] <- sum(km_model$WCSS_per_cluster)  # Somma delle distanze intra-cluster
+}
+
+# Plot del metodo del gomito
+plot(1:K, TWCSS, type = "b", pch = 19, col = "blue",
+     xlab = "Numero di Cluster (K)", ylab = "Total Within-Cluster Sum-of-Squares (TWCSS)",
+     main = "Metodo del Gomito per Determinare il Numero Ottimale di Cluster")
+
