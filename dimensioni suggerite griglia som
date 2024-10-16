@@ -64,11 +64,11 @@ plot(som_model, type = "changes")
 # Ottieni i codici della SOM (valori ridotti dimensionalmente)
 som_values <- som_model$codes[[1]]
 
-# Applica tclustIC sui risultati della SOM
+# Applica tclustIC sui risultati della SOM con fattore di restrizione impostato a 128
 tclustIC_result <- tclustIC(
   x = som_values, 
   kk = 2:10,                 # Numero di cluster da 2 a 10
-  cc = c(1, 2, 4, 8, 16, 32, 64, 128),  # Fattori di restrizione
+  cc = 128,                  # Fattore di restrizione fisso a 128
   alpha = 0.05,              # Proporzione di dati da considerare come outlier
   whichIC = "ALL",           # Calcola tutti i criteri di informazione (MIXMIX, MIXCLA, CLACLA)
   parallel = TRUE,           # Esegui in parallelo
@@ -85,17 +85,25 @@ plot(tclustIC_result, which = "MIXMIX")
 # Visualizza i risultati per il criterio CLA (CLACLA)
 plot(tclustIC_result, which = "CLACLA")
 
-# Trova il numero ottimale di cluster per ogni criterio
+# Trova il numero ottimale di cluster e restrizione per ciascun criterio
 
 # Trova il numero ottimale di cluster per MIXMIX
-optimal_mixmix <- which(tclustIC_result$MIXMIX == min(tclustIC_result$MIXMIX), arr.ind = TRUE)
+min_value_mixmix <- min(tclustIC_result$MIXMIX, na.rm = TRUE)
+optimal_mixmix <- which(tclustIC_result$MIXMIX == min_value_mixmix, arr.ind = TRUE)[1]
+k_opt_mixmix <- rownames(tclustIC_result$MIXMIX)[optimal_mixmix]
+
 # Trova il numero ottimale di cluster per MIXCLA
-optimal_mixcla <- which(tclustIC_result$MIXCLA == min(tclustIC_result$MIXCLA), arr.ind = TRUE)
+min_value_mixcla <- min(tclustIC_result$MIXCLA, na.rm = TRUE)
+optimal_mixcla <- which(tclustIC_result$MIXCLA == min_value_mixcla, arr.ind = TRUE)[1]
+k_opt_mixcla <- rownames(tclustIC_result$MIXCLA)[optimal_mixcla]
+
 # Trova il numero ottimale di cluster per CLACLA
-optimal_clacla <- which(tclustIC_result$CLACLA == min(tclustIC_result$CLACLA), arr.ind = TRUE)
+min_value_clacla <- min(tclustIC_result$CLACLA, na.rm = TRUE)
+optimal_clacla <- which(tclustIC_result$CLACLA == min_value_clacla, arr.ind = TRUE)[1]
+k_opt_clacla <- rownames(tclustIC_result$CLACLA)[optimal_clacla]
 
 # Stampa i risultati ottimali
-print(paste("Numero ottimale di cluster secondo MIXMIX:", optimal_mixmix[1]))
-print(paste("Numero ottimale di cluster secondo MIXCLA:", optimal_mixcla[1]))
-print(paste("Numero ottimale di cluster secondo CLACLA:", optimal_clacla[1]))
+print(paste("Numero ottimale di cluster secondo MIXMIX: k =", k_opt_mixmix))
+print(paste("Numero ottimale di cluster secondo MIXCLA: k =", k_opt_mixcla))
+print(paste("Numero ottimale di cluster secondo CLACLA: k =", k_opt_clacla))
 
