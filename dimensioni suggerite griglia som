@@ -1,1 +1,101 @@
+# Carica le librerie necessarie
+library(terra)       # Per la gestione dei raster
+library(dplyr)       # Per la manipolazione dei dati
+library(kohonen)     # Per Self-Organizing Map (SOM)
+library(tclust)      # Per il clustering robusto
+library(mapview)     # Per visualizzare il raster classificato
+library(stats)       # Per PCA
+
+# Imposta la working directory
+setwd("C:/composite")
+
+# Carica il raster multibanda
+img_84 <- rast("L5 Composite 1984-1990_masked.tif")
+
+# Seleziona le bande necessarie (B1, B2, B3, B4, B5, B7)
+l1984 <- img_84[[c(1, 2, 3, 4, 5, 6)]]
+
+# Calcola gli indici NDVI, MNDWI e NDBI
+ndvi_1984 <- (l1984[[4]] - l1984[[3]]) / (l1984[[4]] + l1984[[3]])
+mndwi_1984 <- (l1984[[2]] - l1984[[5]]) / (l1984[[2]] + l1984[[5]])
+ndbi_1984 <- (l1984[[5]] - l1984[[4]]) / (l1984[[5]] + l1984[[4]])
+
+# Crea lo stack con bande e indici
+stack_1984 <- c(l1984, ndvi_1984, mndwi_1984, ndbi_1984)
+
+# Estrai i valori dal raster stack come dataframe e rimuovi i valori NA
+values_stack_1984 <- as.data.frame(values(stack_1984))
+values_stack_1984_non_na <- values_stack_1984[complete.cases(values_stack_1984), ]
+
+# PCA: esegui la PCA sullo stack e seleziona le prime due componenti principali
+pca_result <- prcomp(values_stack_1984_non_na, center = TRUE, scale. = TRUE)
+pca_values <- pca_result$x[, 1:2]  # Seleziona solo le prime due componenti
+
+# Conta il numero di osservazioni valide
+n <- nrow(pca_values)
+print(paste("Numero di osservazioni valide:", n))
+
+# Calcola il numero totale di neuroni suggerito dalla formula
+neurons <- 5 * sqrt(n)
+print(paste("Numero suggerito di neuroni:", round(neurons)))
+
+# Suggerisci una configurazione di griglia approssimata
+x_dim <- round(sqrt(neurons))
+y_dim <- round(neurons / x_dim)
+print(paste("Dimensioni della griglia suggerite:", x_dim, "x", y_dim))
+
+# Definisci una griglia SOM con le dimensioni calcolate
+som_grid <- somgrid(xdim = x_dim, ydim = y_dim, topo = "hexagonal")
+
+# Esegui SuperSOM con parallelizzazione usando la PCA come input
+som_model <- supersom(
+  list(pca_values), 
+  grid = som_grid, 
+  rlen = 100, 
+  alpha = c(0.05, 0.01),
+  radius = quantile(dist(som_grid$pts), 2/3), 
+  mode = "pbatch", 
+  cores = -1  # Usa tutti i core disponibili
+)
+
+# Visualizza i cambiamenti durante l'addestramento della SOM
+plot(som_model, type = "changes")
+
+# Ottieni i codici della SOM (valori ridotti dimensionalmente)
+som_values <- som_model$codes[[1]]
+
+# Applica tclustIC sui risultati della SOM
+tclustIC_result <- tclustIC(
+  x = som_values, 
+  kk = 2:10,                 # Numero di cluster da 2 a 10
+  cc = c(1, 2, 4, 8, 16, 32, 64, 128),  # Fattori di restrizione
+  alpha = 0.05,              # Proporzione di dati da considerare come outlier
+  whichIC = "ALL",           # Calcola tutti i criteri di informazione (MIXMIX, MIXCLA, CLACLA)
+  parallel = TRUE,           # Esegui in parallelo
+  n.cores = parallel::detectCores(),   # Utilizza tutti i core disponibili
+  trace = TRUE               # Stampa i risultati intermedi
+)
+
+# Visualizza i risultati per il criterio ICL (MIXCLA)
+plot(tclustIC_result, which = "MIXCLA")
+
+# Visualizza i risultati per il criterio BIC (MIXMIX)
+plot(tclustIC_result, which = "MIXMIX")
+
+# Visualizza i risultati per il criterio CLA (CLACLA)
+plot(tclustIC_result, which = "CLACLA")
+
+# Trova il numero ottimale di cluster per ogni criterio
+
+# Trova il numero ottimale di cluster per MIXMIX
+optimal_mixmix <- which(tclustIC_result$MIXMIX == min(tclustIC_result$MIXMIX), arr.ind = TRUE)
+# Trova il numero ottimale di cluster per MIXCLA
+optimal_mixcla <- which(tclustIC_result$MIXCLA == min(tclustIC_result$MIXCLA), arr.ind = TRUE)
+# Trova il numero ottimale di cluster per CLACLA
+optimal_clacla <- which(tclustIC_result$CLACLA == min(tclustIC_result$CLACLA), arr.ind = TRUE)
+
+# Stampa i risultati ottimali
+print(paste("Numero ottimale di cluster secondo MIXMIX:", optimal_mixmix[1]))
+print(paste("Numero ottimale di cluster secondo MIXCLA:", optimal_mixcla[1]))
+print(paste("Numero ottimale di cluster secondo CLACLA:", optimal_clacla[1]))
 
