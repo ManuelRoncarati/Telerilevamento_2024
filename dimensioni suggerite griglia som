@@ -113,3 +113,144 @@ print(paste("Numero ottimale di cluster secondo CLACLA: k =", k_opt_clacla))
 #[1] "Numero ottimale di cluster secondo MIXCLA: k = k=4"
 #> print(paste("Numero ottimale di cluster secondo CLACLA: k =", k_opt_clacla))
 #[1] "Numero ottimale di cluster secondo CLACLA: k = k=7"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Funzione per controllare e installare automaticamente le librerie mancanti
+check_and_install <- function(packages) {
+  installed <- packages %in% rownames(installed.packages())
+  if (any(!installed)) {
+    install.packages(packages[!installed])
+  }
+  invisible(lapply(packages, library, character.only = TRUE))
+}
+
+# Lista delle librerie necessarie
+required_packages <- c("terra", "mclust", "leaflet", "dplyr", "kohonen", "tclust")
+
+# Controllo e installazione delle librerie mancanti
+check_and_install(required_packages)
+
+# Imposta la working directory
+setwd("C:/composite")
+
+# Carica il raster multibanda
+img_84 <- rast("L5 Composite 1984-1990_masked.tif")
+
+# Seleziona le bande necessarie (B1, B2, B3, B4, B5, B7)
+l1984 <- img_84[[c(1, 2, 3, 4, 5, 6)]]
+
+# Calcola gli indici NDVI, MNDWI e NDBI
+ndvi_1984 <- (l1984[[4]] - l1984[[3]]) / (l1984[[4]] + l1984[[3]])
+mndwi_1984 <- (l1984[[2]] - l1984[[5]]) / (l1984[[2]] + l1984[[5]])
+ndbi_1984 <- (l1984[[5]] - l1984[[4]]) / (l1984[[5]] + l1984[[4]])
+
+# Crea lo stack con bande e indici
+stack_1984 <- c(l1984, ndvi_1984, mndwi_1984, ndbi_1984)
+
+# Estrai i valori dal raster stack come dataframe e rimuovi i valori NA
+values_stack_1984 <- as.data.frame(values(stack_1984))
+values_stack_1984_non_na <- values_stack_1984[complete.cases(values_stack_1984), ]
+
+# PCA: esegui la PCA sullo stack e seleziona le prime due componenti principali
+pca_result <- prcomp(values_stack_1984_non_na, center = TRUE, scale. = TRUE)
+pca_values <- pca_result$x[, 1:2]  # Seleziona solo le prime due componenti
+
+# Definisci la griglia per SOM
+som_grid <- somgrid(xdim = 10, ydim = 10, topo = "hexagonal")
+
+# Esegui SOM con i dati PCA
+som_model <- som(pca_values, grid = som_grid, rlen = 100)
+
+# Ottieni i codici della SOM
+som_values <- som_model$codes[[1]]
+
+# Applica tclustIC sui risultati della SOM
+tclustIC_result <- tclustIC(
+  x = som_values, 
+  kk = 2:10,                 # Numero di cluster da 2 a 10
+  cc = 128,                  # Fattore di restrizione fisso a 128
+  alpha = 0.05,              # Proporzione di dati da considerare come outlier
+  whichIC = "ALL",           # Calcola tutti i criteri di informazione (MIXMIX, MIXCLA, CLACLA)
+  parallel = TRUE,           # Esegui in parallelo
+  n.cores = parallel::detectCores(),   # Utilizza tutti i core disponibili
+  trace = TRUE               # Stampa i risultati intermedi
+)
+
+# Funzione per eseguire Mclust e creare i layer per leaflet
+classify_and_create_layer <- function(values_stack, G) {
+  
+  # Applica Mclust con il valore di cluster specificato
+  mclust_model <- Mclust(values_stack, G = G)
+  
+  # Estrai le classi previste
+  classified_values <- mclust_model$classification
+  
+  # Crea un raster classificato (singolo livello per le classi)
+  classified_raster <- rast(stack_1984[[1]])  # Usa solo la prima banda per creare un raster di base
+  values(classified_raster) <- NA
+  values(classified_raster)[complete.cases(values_stack_1984)] <- classified_values
+  
+  return(list(raster = classified_raster, classes = classified_values))
+}
+
+# Genera i tre raster classificati con i valori ottenuti da tclustIC
+G_mixmix <- 5  # Cambia questo valore con quello ottimale trovato
+G_mixcla <- 4  # Cambia questo valore con quello ottimale trovato
+G_clacla <- 7  # Cambia questo valore con quello ottimale trovato
+
+classified_mixmix <- classify_and_create_layer(values_stack_1984_non_na, G_mixmix)
+classified_mixcla <- classify_and_create_layer(values_stack_1984_non_na, G_mixcla)
+classified_clacla <- classify_and_create_layer(values_stack_1984_non_na, G_clacla)
+
+# Funzione per generare una palette di colori predefinita
+generate_default_palette <- function(classes) {
+  colorNumeric(palette = terrain.colors(length(unique(classes))), domain = classes)
+}
+
+# Creazione della mappa con i tre layer
+map <- leaflet() %>%
+  # Aggiungi le opzioni di mappa di base
+  addTiles(group = "Mappa standard") %>%
+  addProviderTiles(providers$CartoDB.Positron, group = "Mappa chiara") %>%
+  addProviderTiles(providers$Esri.WorldImagery, group = "Mappa satellitare") %>%
+  
+  # Aggiungi il layer per MIXMIX
+  addRasterImage(classified_mixmix$raster, 
+                 colors = generate_default_palette(classified_mixmix$classes), 
+                 opacity = 0.8, group = "Classificazione con MIXMIX") %>%
+  
+  # Aggiungi il layer per MIXCLA
+  addRasterImage(classified_mixcla$raster, 
+                 colors = generate_default_palette(classified_mixcla$classes), 
+                 opacity = 0.8, group = "Classificazione con MIXCLA") %>%
+  
+  # Aggiungi il layer per CLACLA
+  addRasterImage(classified_clacla$raster, 
+                 colors = generate_default_palette(classified_clacla$classes), 
+                 opacity = 0.8, group = "Classificazione con CLACLA") %>%
+  
+  # Aggiungi il controllo per scegliere il layer
+  addLayersControl(
+    baseGroups = c("Mappa standard", "Mappa chiara", "Mappa satellitare"),
+    overlayGroups = c("Classificazione con MIXMIX", "Classificazione con MIXCLA", "Classificazione con CLACLA"),
+    options = layersControlOptions(collapsed = FALSE)
+  )
+
+# Visualizza la mappa
+map
+
