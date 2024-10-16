@@ -291,3 +291,6 @@ run_clusterboot <- function(k_value, som_values, label) {
 clusterboot_mixmix <- run_clusterboot(G_mixmix, som_values, "MIXMIX")
 clusterboot_mixcla <- run_clusterboot(G_mixcla, som_values, "MIXCLA")
 clusterboot_clacla <- run_clusterboot(G_clacla, som_values, "CLACLA")
+
+
+#AGGIUNGERE ANCHE VISUALIZZAZIONE GRAFICI TCLUSTIC
