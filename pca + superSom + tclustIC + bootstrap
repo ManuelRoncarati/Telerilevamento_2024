@@ -143,7 +143,13 @@ clusterboot_clacla <- run_clusterboot(G_clacla, som_values, "CLACLA")
 
 
 
-#NO AGGIORNAMENTI
+
+
+
+
+
+#NO AGGIORNAMENTO
+
 
 # Carica le librerie necessarie
 check_and_install <- function(packages) {
@@ -203,7 +209,7 @@ som_model <- supersom(
   list(pca_values), 
   grid = som_grid, 
   rlen = 100, 
-  alpha = 0,
+  alpha = c(0.05, 0.01),
   radius = quantile(dist(som_grid$pts), 2/3), 
   mode = "pbatch", 
   cores = -1  # Usa tutti i core disponibili
@@ -223,8 +229,8 @@ tclustIC_result <- tclustIC(
   alpha = 0,                 # Nessun outlier, impostato a 0
   whichIC = "ALL",           # Calcola tutti i criteri di informazione (MIXMIX, MIXCLA, CLACLA)
   parallel = TRUE,           # Esegui in parallelo
-  n.cores = parallel::detectCores()   # Utilizza tutti i core disponibili
-  
+  n.cores = parallel::detectCores(),   # Utilizza tutti i core disponibili
+  trace = FALSE               # Stampa i risultati intermedi
 )
 
 # Trova il numero ottimale di cluster per MIXMIX
@@ -260,7 +266,7 @@ run_clusterboot <- function(k_value, som_values, label) {
     bootmethod = "boot",          # Usa bootstrap non parametrico
     dissolution = 0.5,            # Valore di dissoluzione per i cluster instabili
     recover = 0.75,               # Valore di recupero per i cluster stabili
-                    
+    count = FALSE,                 # Mostra il progresso durante il bootstrap
     k = k_value,                  # Numero di cluster da tclust
     trim = 0                      # Nessun outlier
   )
@@ -285,5 +291,3 @@ run_clusterboot <- function(k_value, som_values, label) {
 clusterboot_mixmix <- run_clusterboot(G_mixmix, som_values, "MIXMIX")
 clusterboot_mixcla <- run_clusterboot(G_mixcla, som_values, "MIXCLA")
 clusterboot_clacla <- run_clusterboot(G_clacla, som_values, "CLACLA")
-
-
