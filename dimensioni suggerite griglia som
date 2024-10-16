@@ -107,3 +107,9 @@ print(paste("Numero ottimale di cluster secondo MIXMIX: k =", k_opt_mixmix))
 print(paste("Numero ottimale di cluster secondo MIXCLA: k =", k_opt_mixcla))
 print(paste("Numero ottimale di cluster secondo CLACLA: k =", k_opt_clacla))
 
+# print(paste("Numero ottimale di cluster secondo MIXMIX: k =", k_opt_mixmix))
+#[1] "Numero ottimale di cluster secondo MIXMIX: k = k=5"
+#> print(paste("Numero ottimale di cluster secondo MIXCLA: k =", k_opt_mixcla))
+#[1] "Numero ottimale di cluster secondo MIXCLA: k = k=4"
+#> print(paste("Numero ottimale di cluster secondo CLACLA: k =", k_opt_clacla))
+#[1] "Numero ottimale di cluster secondo CLACLA: k = k=7"
