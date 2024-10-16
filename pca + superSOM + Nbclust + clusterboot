@@ -1,0 +1,116 @@
+# Carica le librerie necessarie
+check_and_install <- function(packages) {
+    installed <- packages %in% rownames(installed.packages())
+    if (any(!installed)) {
+        install.packages(packages[!installed])
+    }
+    invisible(lapply(packages, library, character.only = TRUE))
+}
+
+required_packages <- c("fpc", "NbClust", "terra", "dplyr", "kohonen", "parallel")
+check_and_install(required_packages)
+
+# Imposta la working directory
+setwd("D:/composite")
+
+# Carica il raster multibanda
+img_84 <- rast("L5 Composite 1984-1990_masked.tif")
+
+# Seleziona le bande necessarie (B1, B2, B3, B4, B5, B7)
+l1984 <- img_84[[c(1, 2, 3, 4, 5, 6)]]
+
+# Calcola gli indici NDVI, MNDWI e NDBI
+ndvi_1984 <- (l1984[[4]] - l1984[[3]]) / (l1984[[4]] + l1984[[3]])
+mndwi_1984 <- (l1984[[2]] - l1984[[5]]) / (l1984[[2]] + l1984[[5]])
+ndbi_1984 <- (l1984[[5]] - l1984[[4]]) / (l1984[[5]] + l1984[[4]])
+
+# Crea lo stack con bande e indici
+stack_1984 <- c(l1984, ndvi_1984, mndwi_1984, ndbi_1984)
+
+# Estrai i valori dal raster stack come dataframe e rimuovi i valori NA
+values_stack_1984 <- as.data.frame(values(stack_1984))
+values_stack_1984_non_na <- values_stack_1984[complete.cases(values_stack_1984), ]
+
+# PCA: esegui la PCA sullo stack e seleziona le prime due componenti principali
+pca_result <- prcomp(values_stack_1984_non_na, center = TRUE, scale. = TRUE)
+pca_values <- pca_result$x[, 1:2]  # Seleziona solo le prime due componenti
+
+# Conta il numero di osservazioni valide
+n <- nrow(pca_values)
+print(paste("Numero di osservazioni valide:", n))
+
+# Calcola il numero totale di neuroni suggerito dalla formula
+neurons <- 5 * sqrt(n)
+print(paste("Numero suggerito di neuroni:", round(neurons)))
+
+# Suggerisci una configurazione di griglia approssimata
+x_dim <- round(sqrt(neurons))
+y_dim <- round(neurons / x_dim)
+print(paste("Dimensioni della griglia suggerite:", x_dim, "x", y_dim))
+
+# Definisci una griglia SOM con le dimensioni calcolate
+som_grid <- somgrid(xdim = x_dim, ydim = y_dim, topo = "hexagonal")
+
+# Esegui SuperSOM con parallelizzazione usando la PCA come input e alpha = 0
+som_model <- supersom(
+    list(pca_values), 
+    grid = som_grid, 
+    rlen = 100, 
+    alpha = 0,                  # Imposta alpha a 0 per non avere apprendimento progressivo
+    radius = quantile(dist(som_grid$pts), 2/3), 
+    mode = "pbatch", 
+    cores = -1  # Usa tutti i core disponibili
+)
+
+# Visualizza i cambiamenti durante l'addestramento della SOM
+plot(som_model, type = "changes")
+
+# Ottieni i codici della SOM (valori ridotti dimensionalmente)
+som_values <- som_model$codes[[1]]
+
+# Determina il numero ottimale di cluster con NbClust
+library(NbClust)
+
+set.seed(123)  # Per riproducibilità
+nbclust_result <- NbClust(
+    data = som_values, 
+    diss = NULL, 
+    distance = "euclidean",  # Distanza euclidea
+    min.nc = 2,              # Numero minimo di cluster
+    max.nc = 10,             # Numero massimo di cluster
+    method = "kmeans",       # Metodo di clustering K-means
+    index = "all"            # Usa tutti i criteri di validazione
+)
+
+# Trova il numero ottimale di cluster dalla moda dei risultati
+optimal_clusters <- as.numeric(names(which.max(table(nbclust_result$Best.nc[1, ]))))
+
+# Stampa il numero ottimale di cluster
+cat("Il numero ottimale di cluster secondo NbClust è:", optimal_clusters, "\n")
+
+# Usa il numero ottimale di cluster con clusterboot e kmeansCBI
+library(fpc)
+
+clusterboot_result <- clusterboot(
+  data = som_values,            # Usa i valori SOM
+  B = 100,                      # Numero di campioni bootstrap
+  clustermethod = kmeansCBI,    # Metodo K-means tramite interfaccia kmeansCBI
+  bootmethod = "boot",          # Usa bootstrap non parametrico
+  dissolution = 0.5,            # Valore di dissoluzione per i cluster instabili
+  recover = 0.75,               # Valore di recupero per i cluster stabili
+  count = TRUE,                 # Mostra il progresso durante il bootstrap
+  k = optimal_clusters          # Usa il numero ottimale di cluster trovato con NbClust
+)
+
+# Stampa i risultati della stabilità dei cluster
+cat("Risultati della stabilità dei cluster con clusterboot:\n")
+print(clusterboot_result$bootmean)    # Media della stabilità per ogni cluster
+print(clusterboot_result$bootrecover) # Numero di volte che ogni cluster è stato recuperato
+print(clusterboot_result$bootbrd)     # Numero di volte che ogni cluster è stato dissolto
+
+# Visualizzazione della stabilità
+barplot(clusterboot_result$bootmean, 
+        main = "Stabilità dei Cluster con K-means e Bootstrap", 
+        ylab = "Media della Similarità di Jaccard", 
+        xlab = "Cluster", 
+        col = "lightblue")
