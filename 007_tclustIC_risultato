@@ -7,7 +7,7 @@ check_and_install <- function(packages) {
     invisible(lapply(packages, library, character.only = TRUE))
 }
 
-required_packages <- c("fpc", "NbClust", "terra", "dplyr", "kohonen", "parallel", "leaflet", "ggplot2", "viridis")
+required_packages <- c("fpc", "NbClust", "terra", "dplyr", "kohonen", "parallel", "leaflet", "ggplot2", "viridis", "mclust")
 check_and_install(required_packages)
 
 # Imposta la working directory
@@ -164,3 +164,86 @@ clusterboot_clacla <- run_clusterboot(G_clacla, som_values, "CLACLA")
 # [1] 0.9288579 0.9102063 0.8218671 0.7509995 0.8409135 0.4845012
 # [1] 150 150 120  86 111  38
 # [1]  0  0  4 19  0 80
+
+
+
+
+
+#clusterizzazione con mclust cono cluster ottimali
+
+# Esegui la clusterizzazione con Mclust utilizzando G_mixmix
+mclust_mixmix <- Mclust(som_values, G = G_mixmix)
+# Esegui la clusterizzazione con Mclust utilizzando G_mixcla
+mclust_mixcla <- Mclust(som_values, G = G_mixcla)
+# Esegui la clusterizzazione con Mclust utilizzando G_clacla
+mclust_clacla <- Mclust(som_values, G = G_clacla)
+
+# Crea una maschera per identificare i pixel validi
+mask <- !is.na(values(img_84[[1]]))
+
+# Ottieni le unità SOM classificate per ogni punto del dataset
+unit_classifications <- som_model$unit.classif
+
+# Crea un raster classificato per ogni risultato
+
+# Raster per MIXMIX
+classified_raster_mixmix <- rast(img_84)
+values(classified_raster_mixmix) <- NA
+values(classified_raster_mixmix)[mask] <- mclust_mixmix$classification[unit_classifications]
+
+# Raster per MIXCLA
+classified_raster_mixcla <- rast(img_84)
+values(classified_raster_mixcla) <- NA
+values(classified_raster_mixcla)[mask] <- mclust_mixcla$classification[unit_classifications]
+
+# Raster per CLACLA
+classified_raster_clacla <- rast(img_84)
+values(classified_raster_clacla) <- NA
+values(classified_raster_clacla)[mask] <- mclust_clacla$classification[unit_classifications]
+
+# Seleziona solo la prima banda per evitare messaggi di avvertimento
+classified_raster_mixmix_single <- classified_raster_mixmix[[1]]
+classified_raster_mixcla_single <- classified_raster_mixcla[[1]]
+classified_raster_clacla_single <- classified_raster_clacla[[1]]
+
+# Visualizzazione con leaflet
+palette_turbo <- viridisLite::turbo
+
+leaflet() %>%
+  # Aggiungi le tiles di base
+  addTiles(group = "OpenStreetMap") %>%
+  addProviderTiles("Esri.WorldImagery", group = "Immagine Satellitare") %>%
+  addProviderTiles("CartoDB.Positron", group = "Mappa Chiara") %>%
+  
+  # Aggiungi il raster classificato da MIXMIX
+  addRasterImage(classified_raster_mixmix_single, 
+                 colors = palette_turbo(G_mixmix), 
+                 opacity = 0.6, 
+                 group = "Classificato con MIXMIX") %>%
+  
+  # Aggiungi il raster classificato da MIXCLA
+  addRasterImage(classified_raster_mixcla_single, 
+                 colors = palette_turbo(G_mixcla), 
+                 opacity = 0.6, 
+                 group = "Classificato con MIXCLA") %>%
+  
+  # Aggiungi il raster classificato da CLACLA
+  addRasterImage(classified_raster_clacla_single, 
+                 colors = palette_turbo(G_clacla), 
+                 opacity = 0.6, 
+                 group = "Classificato con CLACLA") %>%
+  
+  # Aggiungi i controlli per cambiare i layer di base e i gruppi di layer
+  addLayersControl(
+    baseGroups = c("OpenStreetMap", "Immagine Satellitare", "Mappa Chiara"),  # Layer di base
+    overlayGroups = c("Classificato con MIXMIX", "Classificato con MIXCLA", "Classificato con CLACLA"),  # Layer classificati
+    options = layersControlOptions(collapsed = FALSE)  # Espandi il menu dei layer di default
+  ) %>%
+  
+  # Aggiungi una barra di scala
+  addScaleBar(position = "bottomright", options = scaleBarOptions(imperial = FALSE)) %>%
+  
+  # Centra la mappa sul raster (modifica i valori per il tuo AOI)
+  setView(lng = 16.5, lat = 39.0, zoom = 10)
+
+cat("Visualizzazione completata con successo.\n")
