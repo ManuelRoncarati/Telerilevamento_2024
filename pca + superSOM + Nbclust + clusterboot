@@ -114,3 +114,7 @@ barplot(clusterboot_result$bootmean,
         ylab = "Media della Similarità di Jaccard", 
         xlab = "Cluster", 
         col = "lightblue")
+
+
+
+#ESEGUITO SU IMMAGINE TOTALE, CLUSTER 2 O 5, MA CHIARAMENTE SI SCEGLIE 5
