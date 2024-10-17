@@ -7,7 +7,7 @@ check_and_install <- function(packages) {
     invisible(lapply(packages, library, character.only = TRUE))
 }
 
-required_packages <- c("fpc", "NbClust", "terra", "dplyr", "kohonen", "parallel", "leaflet", "ggplot2", "viridis", "mclust")
+required_packages <- c("fpc", "NbClust", "terra", "dplyr", "kohonen", "parallel", "leaflet", "ggplot2", "viridis", "mclust", "tclust")
 check_and_install(required_packages)
 
 # Imposta la working directory
