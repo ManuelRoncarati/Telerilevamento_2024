@@ -255,22 +255,3 @@ cat("Visualizzazione completata con successo.\n")
 
 
 
-# Visualizza i risultati dell'analisi tclustIC
-
-# Converti i risultati tclustIC in una matrice per una visualizzazione più facile
-results_matrix <- matrix(
-  c(tclustIC_result$MIXMIX, tclustIC_result$MIXCLA, tclustIC_result$CLACLA),
-  nrow = length(tclustIC_result$MIXMIX),
-  ncol = 3,
-  byrow = FALSE
-)
-colnames(results_matrix) <- c("MIXMIX", "MIXCLA", "CLACLA")
-rownames(results_matrix) <- gsub("k=", "", rownames(tclustIC_result$MIXMIX))
-
-# Visualizza la matrice di risultati
-matplot(as.numeric(rownames(results_matrix)), results_matrix, type = "b", pch = 19, lwd = 2,
-        col = c("blue", "green", "red"), main = "Indici vs Numero di Cluster",
-        xlab = "Number of Clusters (k)", ylab = "Index Value")
-
-# Aggiungi una legenda
-legend("topright", legend = colnames(results_matrix), col = c("blue", "green", "red"), pch = 19, lwd = 2)
