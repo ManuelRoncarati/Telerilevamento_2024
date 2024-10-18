@@ -680,3 +680,186 @@ leaflet() %>%
   
   # Centra la mappa sul raster (modifica i valori per il tuo AOI)
   setView(lng = 16.5, lat = 39.0, zoom = 10)
+
+
+
+
+
+
+
+
+
+
+# Carica le librerie necessarie
+check_and_install <- function(packages) {
+  installed <- packages %in% rownames(installed.packages())
+  if (any(!installed)) {
+    install.packages(packages[!installed])
+  }
+  invisible(lapply(packages, library, character.only = TRUE))
+}
+
+required_packages <- c("fpc", "NbClust", "terra", "dplyr","factoextra","cluster", "kohonen", "parallel", "leaflet", "ggplot2", "viridis")
+check_and_install(required_packages)
+
+# Imposta la working directory
+setwd("D:/composite")
+
+# Carica il raster multibanda
+img_84 <- rast("ritaglio.tif")
+
+# Seleziona le bande necessarie (B1, B2, B3, B4, B5, B7)
+l1984 <- img_84[[c(1, 2, 3, 4, 5, 6)]]
+
+# Calcola gli indici NDVI, MNDWI e NDBI
+ndvi_1984 <- (l1984[[4]] - l1984[[3]]) / (l1984[[4]] + l1984[[3]])
+mndwi_1984 <- (l1984[[2]] - l1984[[5]]) / (l1984[[2]] + l1984[[5]])
+ndbi_1984 <- (l1984[[5]] - l1984[[4]]) / (l1984[[5]] + l1984[[4]])
+
+# Crea lo stack con bande e indici
+stack_1984 <- c(l1984, ndvi_1984, mndwi_1984, ndbi_1984)
+
+# Estrai i valori dal raster stack come dataframe e rimuovi i valori NA
+values_stack_1984 <- as.data.frame(values(stack_1984))
+values_stack_1984_non_na <- values_stack_1984[complete.cases(values_stack_1984), ]
+
+# PCA: esegui la PCA sullo stack e seleziona le prime due componenti principali
+pca_result <- prcomp(values_stack_1984_non_na, center = TRUE, scale. = TRUE)
+pca_values <- pca_result$x[, 1:3]  # Seleziona solo le prime due componenti
+
+# Conta il numero di osservazioni valide
+n <- nrow(pca_values)
+print(paste("Numero di osservazioni valide:", n))
+# [1] "Numero di osservazioni valide: 1069509"
+
+# Calcola il numero totale di neuroni suggerito dalla formula
+neurons <- 5 * sqrt(n)
+print(paste("Numero suggerito di neuroni:", round(neurons)))
+# [1] "Numero suggerito di neuroni: 5171"
+
+# Suggerisci una configurazione di griglia approssimata
+x_dim <- round(sqrt(neurons))
+y_dim <- round(neurons / x_dim)
+print(paste("Dimensioni della griglia suggerite:", x_dim, "x", y_dim))
+# [1] "Dimensioni della griglia suggerite: 72 x 72"
+
+# Definisci una griglia SOM con le dimensioni calcolate
+som_grid <- somgrid(xdim = x_dim, ydim = y_dim, topo = "hexagonal")
+
+# Esegui SuperSOM con parallelizzazione usando la PCA come input e alpha = 0
+som_model <- supersom(
+  list(pca_values), 
+  grid = som_grid, 
+  rlen = 500, 
+  alpha = 0,                  # Imposta alpha a 0 per non avere apprendimento progressivo
+  radius = quantile(dist(som_grid$pts), 2/3), 
+  mode = "pbatch", 
+  cores = -1  # Usa tutti i core disponibili
+)
+
+# Visualizza i cambiamenti durante l'addestramento della SOM
+plot(som_model, type = "changes")
+
+# Ottieni i codici della SOM (valori ridotti dimensionalmente)
+som_values <- som_model$codes[[1]]
+
+
+# Elbow method for kmeans
+fviz_nbclust(som_values, kmeans, method = "wss") +
+  geom_vline(xintercept = 3, linetype = 2)
+
+# Average silhouette for kmeans
+fviz_nbclust(som_values, kmeans, method = "silhouette")
+
+# Compute gap statistic for kmeans
+# we used B = 10 for demo. Recommended value is ~500
+gap_stat <- clusGap(som_values, FUN = kmeans, nstart = 25,
+                    K.max = 10, B = 500)
+print(gap_stat, method = "firstmax")
+fviz_gap_stat(gap_stat)
+
+# Gap statistic for hierarchical clustering
+gap_stat <- clusGap(som_values, FUN = hcut, K.max = 10, B = 500)
+fviz_gap_stat(gap_stat)
+
+
+
+
+
+
+
+
+
+
+
+# Imposta la working directory
+setwd("D:/composite")
+
+# Carica il raster multibanda
+img_84 <- rast("L5 Composite 1984-1990_masked.tif")
+
+# Seleziona le bande necessarie (B1, B2, B3, B4, B5, B7)
+l1984 <- img_84[[c(1, 2, 3, 4, 5, 6)]]
+
+# Calcola gli indici NDVI, MNDWI e NDBI
+ndvi_1984 <- (l1984[[4]] - l1984[[3]]) / (l1984[[4]] + l1984[[3]])
+mndwi_1984 <- (l1984[[2]] - l1984[[5]]) / (l1984[[2]] + l1984[[5]])
+ndbi_1984 <- (l1984[[5]] - l1984[[4]]) / (l1984[[5]] + l1984[[4]])
+
+# Crea lo stack con bande e indici
+stack_1984 <- c(l1984, ndvi_1984, mndwi_1984, ndbi_1984)
+
+# Estrai i valori dal raster stack come dataframe e rimuovi i valori NA
+values_stack_1984 <- as.data.frame(values(stack_1984))
+values_stack_1984_non_na <- values_stack_1984[complete.cases(values_stack_1984), ]
+
+# PCA: esegui la PCA sullo stack e seleziona le prime due componenti principali
+pca_result <- prcomp(values_stack_1984_non_na, center = TRUE, scale. = TRUE)
+pca_values <- pca_result$x[, 1:2]  # Seleziona solo le prime tre componenti
+
+# Conta il numero di osservazioni valide
+n <- nrow(pca_values)
+print(paste("Numero di osservazioni valide:", n))
+
+# Calcola il numero totale di neuroni suggerito dalla formula
+neurons <- 5 * sqrt(n)
+print(paste("Numero suggerito di neuroni:", round(neurons)))
+
+# Suggerisci una configurazione di griglia approssimata
+x_dim <- round(sqrt(neurons))
+y_dim <- round(neurons / x_dim)
+print(paste("Dimensioni della griglia suggerite:", x_dim, "x", y_dim))
+
+# Definisci una griglia SOM con le dimensioni calcolate
+som_grid <- somgrid(xdim = x_dim, ydim = y_dim, topo = "hexagonal")
+
+# Esegui SuperSOM con parallelizzazione usando la PCA come input
+som_model <- supersom(
+  list(pca_values), 
+  grid = som_grid, 
+  rlen = 1000, 
+  
+  radius = quantile(dist(som_grid$pts), 2/3), 
+  mode = "pbatch", 
+  cores = -1  # Usa tutti i core disponibili
+)
+
+# Visualizza i cambiamenti durante l'addestramento della SOM
+plot(som_model, type = "changes")
+
+# Ottieni i codici della SOM (valori ridotti dimensionalmente)
+som_values <- som_model$codes[[1]]
+
+df<-as.data.frame(som_values)
+
+mc<-Mclust(df,G=1:20)
+
+
+fviz_mclust(mc, "BIC", palette = "jco")
+
+icl<-mclustICL(df,G=1:20)
+
+# Salva l'oggetto som_values come file RDS
+saveRDS(som_values, "som_values_immagine_composita_84_90_sila_masked_rlen_1000_72X72_PCA_2_comp.rds")
+
+# comunque 10 cluster con BIC e modello VVV
