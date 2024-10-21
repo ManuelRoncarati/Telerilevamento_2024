@@ -1,0 +1,137 @@
+# Carica le librerie necessarie
+check_and_install <- function(packages) {
+    installed <- packages %in% rownames(installed.packages())
+    if (any(!installed)) {
+        install.packages(packages[!installed])
+    }
+    invisible(lapply(packages, library, character.only = TRUE))
+}
+
+required_packages <- c("fpc", "NbClust", "terra", "dplyr", "kohonen", "parallel", "leaflet", "ggplot2", "viridis", "mclust", "tclust", "GA", "cluster")
+check_and_install(required_packages)
+
+# Imposta la working directory
+setwd("D:/composite")
+
+# Carica il raster multibanda
+img_84 <- rast("ritaglio.tif")
+
+# Seleziona le bande necessarie (B1, B2, B3, B4, B5, B7)
+l1984 <- img_84[[c(1, 2, 3, 4, 5, 6)]]
+
+# Calcola gli indici NDVI, MNDWI e NDBI
+ndvi_1984 <- (l1984[[4]] - l1984[[3]]) / (l1984[[4]] + l1984[[3]])
+mndwi_1984 <- (l1984[[2]] - l1984[[5]]) / (l1984[[2]] + l1984[[5]])
+ndbi_1984 <- (l1984[[5]] - l1984[[4]]) / (l1984[[5]] + l1984[[4]])
+
+# Crea lo stack con bande e indici
+stack_1984 <- c(l1984, ndvi_1984, mndwi_1984, ndbi_1984)
+
+# Estrai i valori dal raster stack come dataframe e rimuovi i valori NA
+values_stack_1984 <- as.data.frame(values(stack_1984))
+values_stack_1984_non_na <- values_stack_1984[complete.cases(values_stack_1984), ]
+
+# PCA: esegui la PCA sullo stack e seleziona solo le prime due componenti principali
+pca_result <- prcomp(values_stack_1984_non_na, center = TRUE, scale. = TRUE)
+pca_values <- pca_result$x[, 1:2]  # Seleziona solo le prime due componenti
+
+# Conta il numero di osservazioni valide
+n <- nrow(pca_values)
+print(paste("Numero di osservazioni valide:", n))
+# [1] "Numero di osservazioni valide: 1069509"
+
+# Calcola il numero totale di neuroni suggerito dalla formula
+neurons <- 5 * sqrt(n)
+print(paste("Numero suggerito di neuroni:", round(neurons)))
+# [1] "Numero suggerito di neuroni: 5171"
+
+# Suggerisci una configurazione di griglia approssimata
+x_dim <- round(sqrt(neurons))
+y_dim <- round(neurons / x_dim)
+print(paste("Dimensioni della griglia suggerite:", x_dim, "x", y_dim))
+# [1] "Dimensioni della griglia suggerite: 72 x 72"
+
+# Definisci una griglia SOM con le dimensioni calcolate
+som_grid <- somgrid(xdim = x_dim, ydim = y_dim, topo = "hexagonal")
+
+# 1. SOM con i parametri predefiniti (alpha e raggio di default)
+som_model_default <- supersom(
+    list(pca_values), 
+    grid = som_grid, 
+    rlen = 50,  # Iterazioni fissate a 50
+    alpha = c(0.05, 0.01),  # Parametri di default per alpha
+    radius = quantile(dist(som_grid$pts), 2/3),  # Raggio di default
+    mode = "pbatch", 
+    cores = -1  # Usa tutti i core disponibili
+)
+
+# Plot dei cambiamenti per la SOM con parametri predefiniti
+plot(som_model_default, type = "changes")
+
+# 2. Funzione di fitness per ottimizzare alpha_start, alpha_end e radius con K-means e indice CH
+fitness_function_som_ch <- function(params) {
+    alpha_start <- params[1]  # Tasso di apprendimento iniziale
+    alpha_end <- params[2]    # Tasso di apprendimento finale
+    radius <- params[3]       # Raggio ottimizzato
+
+    # Esegui il modello SOM
+    som_model <- supersom(
+        list(pca_values), 
+        grid = som_grid, 
+        rlen = 50,  # Iterazioni fissate a 50
+        alpha = c(alpha_start, alpha_end), 
+        radius = radius,  # Raggio ottimizzato
+        mode = "pbatch", 
+        cores = -1  # Usa tutti i core disponibili
+    )
+
+    # Ottieni i codici SOM
+    som_values <- som_model$codes[[1]]
+
+    # Applica K-means ai codici SOM per creare cluster (ad esempio 5 cluster)
+    kmeans_result <- kmeans(som_values, centers = 5, nstart = 10)
+
+    # Calcola l'indice di Calinski-Harabasz (CH)
+    ch_index <- cluster.stats(dist(som_values), kmeans_result$cluster)$ch
+
+    return(ch_index)  # Massimizza l'indice di Calinski-Harabasz
+}
+
+# Definizione dei limiti per alpha_start, alpha_end e radius da ottimizzare
+lower_bounds <- c(0.01, 0.001, 0.5)  # Limiti inferiori per alpha_start, alpha_end e radius
+upper_bounds <- c(0.1, 0.05, 3.0)    # Limiti superiori per alpha_start, alpha_end e radius
+
+# Esegui l'algoritmo genetico
+ga_optimization_som_ch <- ga(
+  type = "real-valued", 
+  fitness = fitness_function_som_ch, 
+  lower = lower_bounds, 
+  upper = upper_bounds, 
+  popSize = 20,     # Dimensione della popolazione
+  maxiter = 50,     # Numero massimo di generazioni
+  monitor = TRUE,   # Mostra il progresso dell'algoritmo
+  run = 10          # Interrompi se non ci sono miglioramenti dopo 10 generazioni
+)
+
+# Visualizza i risultati dell'ottimizzazione
+summary(ga_optimization_som_ch)
+
+# Estrai i parametri ottimali
+best_params_ch <- ga_optimization_som_ch@solution
+cat("Tasso di apprendimento iniziale:", best_params_ch[1], "\n")
+cat("Tasso di apprendimento finale:", best_params_ch[2], "\n")
+cat("Raggio ottimale:", best_params_ch[3], "\n")
+
+# 3. SOM con i parametri ottimizzati (alpha e radius ottimizzati)
+som_model_optimized_ch <- supersom(
+    list(pca_values), 
+    grid = som_grid, 
+    rlen = 50,  # Iterazioni fissate a 50
+    alpha = c(best_params_ch[1], best_params_ch[2]), 
+    radius = best_params_ch[3],  # Raggio ottimizzato
+    mode = "pbatch", 
+    cores = -1  # Usa tutti i core disponibili
+)
+
+# Plot dei cambiamenti per la SOM ottimizzata
+plot(som_model_optimized_ch, type = "changes")
