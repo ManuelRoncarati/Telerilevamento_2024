@@ -51,3 +51,58 @@ print(result_som_tclust$kopt)
 # Stampa la matrice di instabilità per ciascun run e numero di cluster
 print("Matrice di instabilità per ciascun run e numero di cluster:")
 print(result_som_tclust$stabk)
+
+
+
+
+
+
+
+
+# Carica i pacchetti necessari
+library(fpc)
+library(kohonen)  # Se necessario per som_values
+library(tclust)   # Per TCLUST
+
+# Prepara som_values
+som_matrix <- as.matrix(som_values)
+
+# Esegui prediction.strength con K-means
+set.seed(123)
+ps_kmeans <- prediction.strength(
+  xdata = som_matrix,
+  Gmin = 2,                 # Numero minimo di cluster da testare
+  Gmax = 10,                # Numero massimo di cluster da testare
+  M = 50,                   # Numero di ripetizioni
+  clustermethod = kmeansCBI,
+  classification = "centroid",
+  cutoff = 0.8,             # Soglia per la prediction strength
+  distances = FALSE,
+  count = FALSE
+)
+
+# Visualizza i risultati per K-means
+print("Prediction Strength per K-means:")
+print(ps_kmeans$mean.pred)
+cat("Numero ottimale di cluster secondo prediction.strength (K-means):", ps_kmeans$optimalk, "\n")
+
+# Esegui prediction.strength con TCLUST
+set.seed(123)
+ps_tclust <- prediction.strength(
+  xdata = som_matrix,
+  Gmin = 2,
+  Gmax = 10,
+  M = 50,
+  clustermethod = tclustCBI,
+  classification = "centroid",
+  cutoff = 0.8,
+  distances = FALSE,
+  count = FALSE,
+  trim = 0.1  # Livello di trimming per TCLUST
+)
+
+# Visualizza i risultati per TCLUST
+print("Prediction Strength per TCLUST:")
+print(ps_tclust$mean.pred)
+cat("Numero ottimale di cluster secondo prediction.strength (TCLUST):", ps_tclust$optimalk, "\n")
+
