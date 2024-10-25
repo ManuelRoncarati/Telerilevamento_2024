@@ -1,0 +1,53 @@
+# Carica il pacchetto fpc
+library(fpc)
+
+# Supponiamo che `som_values` sia la matrice ottenuta dalla SOM
+# Se non è già una matrice, converti som_values in matrice
+som_matrix <- as.matrix(som_values)
+
+# Esegui il bootstrap per la selezione del numero di cluster su som_values con kmeans
+result_som_kmeans <- nselectboot(
+    data = som_matrix,                  # Matrice dei valori SOM
+    B = 50,                             # Numero di campioni bootstrap
+    clustermethod = kmeansCBI,          # Metodo di clustering K-means
+    classification = "centroid",        # Metodo di classificazione
+    krange = 2:10,                      # Numero di cluster da testare (da 2 a 10)
+    count = FALSE                        # Stampa i numeri di cluster e le esecuzioni bootstrap
+)
+
+# Stampa il numero ottimale di cluster trovato
+print("Numero ottimale di cluster trovato per som_values:")
+print(result_som_kmeans$kopt)
+
+# Stampa la matrice di instabilità per ciascun run e numero di cluster
+print("Matrice di instabilità per ciascun run e numero di cluster:")
+print(result_som_kmeans$stabk)
+
+
+
+
+# Carica il pacchetto fpc
+library(fpc)
+
+# Supponiamo che `som_values` sia la matrice ottenuta dalla SOM
+# Se non è già una matrice, converti som_values in matrice
+som_matrix <- as.matrix(som_values)
+
+# Esegui il bootstrap per la selezione del numero di cluster su som_values con tclust
+result_som_tclust <- nselectboot(
+    data = som_matrix,                  # Matrice dei valori SOM
+    B = 50,                             # Numero di campioni bootstrap
+    clustermethod = tclustCBI,          # Metodo di clustering TCLUST
+    classification = "centroid",        # Metodo di classificazione (tclust utilizza centroidi)
+    krange = 2:10,                      # Numero di cluster da testare (da 2 a 10)
+    count = FALSE,                      # Non stampa i numeri di cluster e le esecuzioni bootstrap
+    trim = 0.1                          # Imposta un livello di trimming del 10% per TCLUST
+)
+
+# Stampa il numero ottimale di cluster trovato
+print("Numero ottimale di cluster trovato per som_values con TCLUST:")
+print(result_som_tclust$kopt)
+
+# Stampa la matrice di instabilità per ciascun run e numero di cluster
+print("Matrice di instabilità per ciascun run e numero di cluster:")
+print(result_som_tclust$stabk)
