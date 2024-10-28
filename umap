@@ -297,3 +297,236 @@ leaflet() %>%
 
 cat("Visualizzazione completata con successo.\n")
 
+
+
+
+#alternativa a ga per stimare parametri umap
+
+# Carica le librerie necessarie
+check_and_install <- function(packages) {
+    installed <- packages %in% rownames(installed.packages())
+    if (any(!installed)) {
+        install.packages(packages[!installed])
+    }
+    invisible(lapply(packages, library, character.only = TRUE))
+}
+
+required_packages <- c("fpc", "NbClust", "terra", "dplyr", "leaflet", "ggplot2", 
+                       "viridis", "uwot", "cluster", "kohonen", "data.table", 
+                       "progress", "cluster", "factoextra")
+check_and_install(required_packages)
+
+# Imposta la working directory
+setwd("C:/composite")
+
+# Carica il raster multibanda
+img_84 <- rast("ritaglino.tif")
+
+# Seleziona le bande necessarie (B1, B2, B3, B4, B5, B7)
+l1984 <- img_84[[c(1, 2, 3, 4, 5, 6)]]
+
+# Calcola gli indici NDVI, MNDWI e NDBI
+ndvi_1984 <- (l1984[[4]] - l1984[[3]]) / (l1984[[4]] + l1984[[3]])
+mndwi_1984 <- (l1984[[2]] - l1984[[5]]) / (l1984[[2]] + l1984[[5]])
+ndbi_1984 <- (l1984[[5]] - l1984[[4]]) / (l1984[[5]] + l1984[[4]])
+
+# Crea lo stack con bande e indici
+stack_1984 <- c(l1984, ndvi_1984, mndwi_1984, ndbi_1984)
+
+# Estrai i valori dal raster stack come data.table e rimuovi i valori NA
+values_stack_1984 <- as.data.table(values(stack_1984))
+values_stack_1984_non_na <- values_stack_1984[complete.cases(values_stack_1984)]
+
+# Aggiorna i nomi delle colonne per chiarezza (opzionale)
+setnames(values_stack_1984_non_na, c("B1", "B2", "B3", "B4", "B5", "B7", "NDVI", "MNDWI", "NDBI"))
+
+# Campiona una sottoparte dei dati per l'ottimizzazione
+set.seed(123)
+sample_size <- 1000  # Regola questa dimensione in base alle tue risorse
+if (nrow(values_stack_1984_non_na) > sample_size) {
+    sampled_data <- values_stack_1984_non_na[sample(nrow(values_stack_1984_non_na), sample_size), ]
+} else {
+    sampled_data <- values_stack_1984_non_na
+}
+
+# Definisci il numero di iterazioni per la Random Search
+num_iterations <- 50  # Puoi aumentare o diminuire questo numero
+
+# Inizializza un data.frame per memorizzare i risultati
+results <- data.frame()
+pb <- progress_bar$new(total = num_iterations)
+
+for (i in 1:num_iterations) {
+    # Estrai casualmente i parametri
+    n_neighbors <- sample(5:50, 1)
+    n_components <- sample(2:9, 1)  # Esplora n_components da 2 a 9
+
+    # Esegui UMAP
+    set.seed(123)
+    umap_result <- tryCatch({
+        uwot::umap(
+            sampled_data,
+            n_neighbors = n_neighbors,
+            n_components = n_components,
+            metric = "euclidean",
+            n_threads = 16,
+            fast_sgd = TRUE,
+            n_sgd_threads = 16
+        )
+    }, error = function(e) {
+        return(NULL)
+    })
+
+    # Se UMAP fallisce, passa alla prossima iterazione
+    if (is.null(umap_result)) {
+        pb$tick()
+        next
+    }
+
+    # Esegui K-means sull'embedding UMAP
+    set.seed(123)
+    kmeans_result <- kmeans(umap_result, centers = 5, nstart = 10)
+
+    # Calcola il Silhouette Score
+    silhouette_values <- silhouette(kmeans_result$cluster, dist(umap_result))
+    mean_silhouette <- mean(silhouette_values[, 3])
+
+    # Salva i risultati
+    results <- rbind(results, data.frame(n_neighbors, n_components, mean_silhouette))
+
+    pb$tick()
+}
+
+# Seleziona i parametri ottimali
+best_params <- results[which.max(results$mean_silhouette), ]
+n_neighbors_opt <- best_params$n_neighbors
+n_components_opt <- best_params$n_components
+
+cat("Numero ottimale di vicini:", n_neighbors_opt, "\n")
+cat("Numero ottimale di componenti:", n_components_opt, "\n")
+
+# Esegui UMAP con i parametri ottimali sull'intero dataset
+set.seed(123)
+umap_optimized <- uwot::umap(
+    values_stack_1984_non_na,
+    n_neighbors = n_neighbors_opt,
+    n_components = n_components_opt,
+    metric = "euclidean",
+    n_threads = 16,
+    fast_sgd = TRUE,
+    n_sgd_threads = 16
+)
+
+# Conta il numero di osservazioni valide
+n <- nrow(umap_optimized)
+cat("Numero di osservazioni valide:", n, "\n")
+
+# Suggerisci una configurazione di griglia approssimata per SOM
+neurons <- 5 * sqrt(n)
+x_dim <- round(sqrt(neurons))
+y_dim <- round(neurons / x_dim)
+cat("Dimensioni della griglia suggerite:", x_dim, "x", y_dim, "\n")
+
+# Definisci una griglia SOM con le dimensioni calcolate
+som_grid <- somgrid(xdim = x_dim, ydim = y_dim, topo = "hexagonal")
+
+# Esegui SuperSOM con alpha ottimizzato
+som_model <- supersom(
+    list(umap_optimized),
+    grid = som_grid,
+    rlen = 100,
+    alpha = c(0.05, 0.01),
+    radius = quantile(dist(som_grid$pts), 2/3),
+    mode = "pbatch",
+    cores = 1  # Non si utilizza la parallelizzazione
+)
+
+# Visualizza i cambiamenti durante l'addestramento della SOM
+plot(som_model, type = "changes")
+
+# Ottieni i codici della SOM (valori ridotti dimensionalmente)
+som_values <- som_model$codes[[1]]
+
+# Usa NbClust per determinare il numero ottimale di cluster
+set.seed(123)  # Per riproducibilità
+nbclust_result <- NbClust(
+    data = som_values,
+    diss = NULL,
+    distance = "euclidean",
+    min.nc = 2,
+    max.nc = 10,
+    method = "kmeans",
+    index = "all"
+)
+
+# Trova il numero ottimale di cluster dalla moda dei risultati
+optimal_clusters <- as.numeric(names(which.max(table(nbclust_result$Best.nc[1, ]))))
+
+# Stampa il numero ottimale di cluster
+cat("Il numero ottimale di cluster secondo NbClust è:", optimal_clusters, "\n")
+
+# Usa clusterboot per valutare la stabilità dei cluster
+library(fpc)
+
+set.seed(123)
+clusterboot_result <- clusterboot(
+    data = som_values,
+    B = 100,  # Numero di campioni bootstrap
+    distances = FALSE,
+    bootmethod = "boot",
+    clustermethod = kmeansCBI,
+    k = optimal_clusters,
+    seed = 123,
+    count = FALSE
+)
+
+# Stampa i risultati della stabilità dei cluster
+cat("Risultati della stabilità dei cluster con clusterboot:\n")
+print(clusterboot_result$bootmean)    # Media della stabilità per ogni cluster
+print(clusterboot_result$bootbrd)     # Numero di volte che ogni cluster è stato dissolto
+
+# Visualizzazione della stabilità
+barplot(clusterboot_result$bootmean, 
+        main = "Stabilità dei Cluster con K-means e Bootstrap", 
+        ylab = "Media della Similarità di Jaccard", 
+        xlab = "Cluster", 
+        col = "lightblue")
+
+# Esegui K-means con il numero ottimale di cluster e i cluster stabili
+set.seed(42)
+kmeans_nbclust <- kmeans(som_values, centers = optimal_clusters, nstart = 100, iter.max = 1000)
+
+# Crea un raster classificato usando i cluster di K-means
+classified_raster_nbclust <- rast(img_84)
+values(classified_raster_nbclust) <- NA
+mask <- !is.na(values(img_84[[1]]))
+values(classified_raster_nbclust)[mask] <- kmeans_nbclust$cluster[som_model$unit.classif]
+
+# Seleziona solo la prima banda del raster
+classified_raster_nbclust_single <- classified_raster_nbclust[[1]]
+
+# Carica la palette turbo
+palette_turbo <- viridisLite::turbo
+
+# Visualizza il raster classificato con leaflet
+leaflet() %>%
+    addTiles(group = "OpenStreetMap") %>%
+    addProviderTiles("Esri.WorldImagery", group = "Immagine Satellitare") %>%
+    addProviderTiles("CartoDB.Positron", group = "Mappa Chiara") %>%
+
+    addRasterImage(classified_raster_nbclust_single,
+                   colors = palette_turbo(optimal_clusters),
+                   opacity = 0.6,
+                   group = "Classificato con K-means") %>%
+
+    addLayersControl(
+        baseGroups = c("OpenStreetMap", "Immagine Satellitare", "Mappa Chiara"),
+        overlayGroups = c("Classificato con K-means"),
+        options = layersControlOptions(collapsed = FALSE)
+    ) %>%
+
+    addScaleBar(position = "bottomright", options = scaleBarOptions(imperial = FALSE)) %>%
+
+    setView(lng = 16.5, lat = 39.0, zoom = 10)
+
+cat("Visualizzazione completata con successo.\n")
