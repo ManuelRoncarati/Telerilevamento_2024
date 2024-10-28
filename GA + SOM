@@ -404,3 +404,352 @@ leaflet() %>%
 
 cat("Visualizzazione completata con successo.\n")
 
+
+
+
+# ottimizzazione som senza GA
+
+
+# Carica le librerie necessarie
+check_and_install <- function(packages) {
+    installed <- packages %in% rownames(installed.packages())
+    if (any(!installed)) {
+        install.packages(packages[!installed])
+    }
+    invisible(lapply(packages, library, character.only = TRUE))
+}
+
+required_packages <- c("fpc", "NbClust", "terra", "dplyr", "kohonen", "parallel", 
+                       "leaflet", "ggplot2", "viridis", "mclust", "tclust", 
+                       "cluster", "data.table", "progress")
+check_and_install(required_packages)
+
+# Imposta la working directory
+setwd("D:/composite")
+
+# Carica il raster multibanda
+img_84 <- rast("L5 Composite 1984-1990_masked.tif")
+
+# Seleziona le bande necessarie (B1, B2, B3, B4, B5, B7)
+l1984 <- img_84[[c(1, 2, 3, 4, 5, 6)]]
+
+# Calcola gli indici NDVI, MNDWI e NDBI
+ndvi_1984 <- (l1984[[4]] - l1984[[3]]) / (l1984[[4]] + l1984[[3]])
+mndwi_1984 <- (l1984[[2]] - l1984[[5]]) / (l1984[[2]] + l1984[[5]])
+ndbi_1984 <- (l1984[[5]] - l1984[[4]]) / (l1984[[5]] + l1984[[4]])
+
+# Crea lo stack con bande e indici
+stack_1984 <- c(l1984, ndvi_1984, mndwi_1984, ndbi_1984)
+
+# Estrai i valori dal raster stack come data.table e rimuovi i valori NA
+values_stack_1984 <- as.data.table(values(stack_1984))
+values_stack_1984_non_na <- values_stack_1984[complete.cases(values_stack_1984)]
+
+# PCA: esegui la PCA sullo stack e seleziona le prime tre componenti principali
+pca_result <- prcomp(values_stack_1984_non_na, center = TRUE, scale. = TRUE)
+pca_values <- pca_result$x[, 1:3]  # Seleziona solo le prime tre componenti
+
+# Campiona una sottoparte dei dati per l'ottimizzazione
+set.seed(123)
+sample_size <- 10000  # Regola questa dimensione in base alle tue risorse
+if (nrow(pca_values) > sample_size) {
+    sampled_indices <- sample(1:nrow(pca_values), sample_size)
+    sampled_pca_values <- pca_values[sampled_indices, ]
+} else {
+    sampled_pca_values <- pca_values
+}
+
+# Conta il numero di osservazioni valide nel campione
+n <- nrow(sampled_pca_values)
+print(paste("Numero di osservazioni nel campione:", n))
+
+# Calcola il numero totale di neuroni suggerito dalla formula
+neurons <- 5 * sqrt(n)
+print(paste("Numero suggerito di neuroni:", round(neurons)))
+
+# Suggerisci una configurazione di griglia approssimata
+x_dim <- round(sqrt(neurons))
+y_dim <- round(neurons / x_dim)
+print(paste("Dimensioni della griglia suggerite:", x_dim, "x", y_dim))
+
+# Definisci una griglia SOM con le dimensioni calcolate
+som_grid <- somgrid(xdim = x_dim, ydim = y_dim, topo = "hexagonal")
+
+# Definisci i range dei parametri da ottimizzare
+alpha_start_values <- seq(0.01, 0.1, length.out = 5)   # Valori per alpha_start
+alpha_end_values <- seq(0.001, 0.05, length.out = 5)   # Valori per alpha_end
+radius_values <- seq(0.5, 3.0, length.out = 5)         # Valori per radius
+
+# Crea una griglia di combinazioni di parametri
+param_grid <- expand.grid(alpha_start = alpha_start_values,
+                          alpha_end = alpha_end_values,
+                          radius = radius_values)
+
+# Inizializza un data.frame per memorizzare i risultati
+results <- data.frame()
+library(progress)
+pb <- progress_bar$new(total = nrow(param_grid))
+
+# Itera su tutte le combinazioni di parametri
+for (i in 1:nrow(param_grid)) {
+    alpha_start <- param_grid$alpha_start[i]
+    alpha_end <- param_grid$alpha_end[i]
+    radius <- param_grid$radius[i]
+    
+    # Esegui il modello SOM con i parametri attuali
+    som_model <- tryCatch({
+        supersom(
+            list(sampled_pca_values), 
+            grid = som_grid, 
+            rlen = 300,  # Iterazioni fissate a 300
+            alpha = c(alpha_start, alpha_end), 
+            radius = radius,  # Raggio corrente
+            mode = "pbatch", 
+            cores = -1  # Usa tutti i core disponibili
+        )
+    }, error = function(e) {
+        NULL
+    })
+    
+    # Se la SOM fallisce, passa alla prossima iterazione
+    if (is.null(som_model)) {
+        pb$tick()
+        next
+    }
+    
+    # Ottieni i codici SOM
+    som_values <- som_model$codes[[1]]
+    
+    # Applica K-means ai codici SOM per creare cluster (ad esempio 5 cluster)
+    kmeans_result <- kmeans(som_values, centers = 5, nstart = 10)
+    
+    # Calcola l'indice di Calinski-Harabasz (CH)
+    ch_index <- cluster.stats(dist(som_values), kmeans_result$cluster)$ch
+    
+    # Salva i risultati
+    results <- rbind(results, data.frame(
+        alpha_start = alpha_start,
+        alpha_end = alpha_end,
+        radius = radius,
+        ch_index = ch_index
+    ))
+    
+    pb$tick()
+}
+
+# Trova la combinazione di parametri che massimizza l'indice CH
+best_params <- results[which.max(results$ch_index), ]
+
+cat("Parametri ottimali trovati:\n")
+cat("Tasso di apprendimento iniziale:", best_params$alpha_start, "\n")
+cat("Tasso di apprendimento finale:", best_params$alpha_end, "\n")
+cat("Raggio ottimale:", best_params$radius, "\n")
+
+# SOM senza parametri ottimizzati (utilizzando valori di default)
+som_model_default <- supersom(
+    list(pca_values), 
+    grid = som_grid, 
+    rlen = 300,  # Iterazioni fissate a 300
+    alpha = c(0.05, 0.01),  # Valori di default
+    radius = quantile(dist(som_grid$pts), 2/3),  # Raggio di default
+    mode = "pbatch", 
+    cores = -1  # Usa tutti i core disponibili
+)
+
+# SOM con i parametri ottimizzati
+som_model_optimized <- supersom(
+    list(pca_values), 
+    grid = som_grid, 
+    rlen = 300,  # Iterazioni fissate a 300
+    alpha = c(best_params$alpha_start, best_params$alpha_end), 
+    radius = best_params$radius,  # Raggio ottimizzato
+    mode = "pbatch", 
+    cores = -1  # Usa tutti i core disponibili
+)
+
+# Plot dei cambiamenti per la SOM ottimizzata
+plot(som_model_optimized, type = "changes", main = "SOM Ottimizzata - Changes")
+
+# Plot dei cambiamenti per la SOM senza ottimizzazione
+plot(som_model_default, type = "changes", main = "SOM Default - Changes")
+
+# Ottieni i codici della SOM ottimizzata
+som_values_optimized <- som_model_optimized$codes[[1]]
+
+# Ottieni i codici della SOM senza ottimizzazione
+som_values_default <- som_model_default$codes[[1]]
+
+# Esegui tclustIC per trovare il numero ottimale di cluster sulla SOM ottimizzata
+tclustIC_result <- tclustIC(
+    x = som_values_optimized, 
+    kk = 2:10,                 # Numero di cluster da 2 a 10
+    cc = 128,                  # Fattore di restrizione fisso a 128
+    alpha = 0,                 # Nessun outlier, impostato a 0
+    whichIC = "ALL",           # Calcola tutti i criteri di informazione (MIXMIX, MIXCLA, CLACLA)
+    parallel = TRUE,           # Esegui in parallelo
+    n.cores = parallel::detectCores(),   # Utilizza tutti i core disponibili
+    trace = FALSE              # Non stampare i risultati intermedi
+)
+
+# Visualizza i risultati per i criteri
+plot(tclustIC_result, which = "MIXMIX")
+plot(tclustIC_result, which = "MIXCLA")
+plot(tclustIC_result, which = "CLACLA")
+
+# Trova il numero ottimale di cluster per MIXMIX
+min_value_mixmix <- min(tclustIC_result$MIXMIX, na.rm = TRUE)
+optimal_index_mixmix <- which.min(tclustIC_result$MIXMIX)
+G_mixmix <- tclustIC_result$kk[optimal_index_mixmix]
+
+# Trova il numero ottimale di cluster per MIXCLA
+min_value_mixcla <- min(tclustIC_result$MIXCLA, na.rm = TRUE)
+optimal_index_mixcla <- which.min(tclustIC_result$MIXCLA)
+G_mixcla <- tclustIC_result$kk[optimal_index_mixcla]
+
+# Trova il numero ottimale di cluster per CLACLA
+min_value_clacla <- min(tclustIC_result$CLACLA, na.rm = TRUE)
+optimal_index_clacla <- which.min(tclustIC_result$CLACLA)
+G_clacla <- tclustIC_result$kk[optimal_index_clacla]
+
+# Stampa i risultati ottimali
+print(paste("Numero ottimale di cluster secondo MIXMIX:", G_mixmix))
+print(paste("Numero ottimale di cluster secondo MIXCLA:", G_mixcla))
+print(paste("Numero ottimale di cluster secondo CLACLA:", G_clacla))
+
+# Funzione per eseguire clusterboot e stampare i risultati per ciascun criterio
+run_clusterboot <- function(k_value, som_values, label) {
+    cat("\nEsecuzione di clusterboot per:", label, "con k =", k_value, "\n")
+    result <- clusterboot(
+        data = som_values,            # Usa i valori SOM
+        B = 150,                      # Numero di campioni bootstrap
+        clustermethod = tclustCBI,    # Metodo tclust tramite interfaccia tclustCBI
+        bootmethod = "boot",          # Usa bootstrap non parametrico
+        dissolution = 0.5,            # Valore di dissoluzione per i cluster instabili
+        recover = 0.75,               # Valore di recupero per i cluster stabili
+        count = FALSE,                # Non mostrare il progresso durante il bootstrap
+        k = k_value,                  # Numero di cluster da tclust
+        trim = 0                      # Nessun outlier
+    )
+    
+    # Stampa i risultati della stabilità dei cluster
+    cat("\nRisultati della stabilità dei cluster per:", label, "\n")
+    print(result$bootmean)    # Media della stabilità per ogni cluster
+    print(result$bootrecover) # Numero di volte che ogni cluster è stato recuperato
+    print(result$bootbrd)     # Numero di volte che ogni cluster è stato dissolto
+    
+    # Visualizzazione della stabilità
+    barplot(result$bootmean, 
+            main = paste("Stabilità dei Cluster -", label), 
+            ylab = "Media della Similarità di Jaccard", 
+            xlab = "Cluster", 
+            col = "lightblue")
+    
+    return(result)
+}
+
+# Esegui il bootstrap per ciascun valore di cluster sulla SOM ottimizzata
+clusterboot_mixmix <- run_clusterboot(G_mixmix, som_values_optimized, "MIXMIX")
+clusterboot_mixcla <- run_clusterboot(G_mixcla, som_values_optimized, "MIXCLA")
+clusterboot_clacla <- run_clusterboot(G_clacla, som_values_optimized, "CLACLA")
+
+# Esegui la clusterizzazione con Mclust utilizzando G_mixmix sulla SOM ottimizzata
+mclust_mixmix <- Mclust(som_values_optimized, G = G_mixmix)
+# Esegui la clusterizzazione con Mclust utilizzando G_mixcla sulla SOM ottimizzata
+mclust_mixcla <- Mclust(som_values_optimized, G = G_mixcla)
+# Esegui la clusterizzazione con Mclust utilizzando G_clacla sulla SOM ottimizzata
+mclust_clacla <- Mclust(som_values_optimized, G = G_clacla)
+
+# Crea una maschera per identificare i pixel validi
+mask <- !is.na(values(img_84[[1]]))
+
+# Ottieni le unità SOM classificate per ogni punto del dataset
+unit_classifications_optimized <- som_model_optimized$unit.classif
+unit_classifications_default <- som_model_default$unit.classif
+
+# Crea un raster classificato per ogni risultato sulla SOM ottimizzata
+
+# Raster per MIXMIX
+classified_raster_mixmix <- rast(img_84)
+values(classified_raster_mixmix) <- NA
+values(classified_raster_mixmix)[mask] <- mclust_mixmix$classification[unit_classifications_optimized]
+
+# Raster per MIXCLA
+classified_raster_mixcla <- rast(img_84)
+values(classified_raster_mixcla) <- NA
+values(classified_raster_mixcla)[mask] <- mclust_mixcla$classification[unit_classifications_optimized]
+
+# Raster per CLACLA
+classified_raster_clacla <- rast(img_84)
+values(classified_raster_clacla) <- NA
+values(classified_raster_clacla)[mask] <- mclust_clacla$classification[unit_classifications_optimized]
+
+# Seleziona solo la prima banda per evitare messaggi di avvertimento
+classified_raster_mixmix_single <- classified_raster_mixmix[[1]]
+classified_raster_mixcla_single <- classified_raster_mixcla[[1]]
+classified_raster_clacla_single <- classified_raster_clacla[[1]]
+
+# Visualizzazione con leaflet
+palette_turbo <- viridisLite::turbo
+
+leaflet() %>% 
+  addTiles(group = "OpenStreetMap") %>% 
+  addProviderTiles("Esri.WorldImagery", group = "Immagine Satellitare") %>% 
+  addProviderTiles("CartoDB.Positron", group = "Mappa Chiara") %>% 
+  addRasterImage(classified_raster_mixmix_single, colors = palette_turbo(G_mixmix), opacity = 0.6, group = "Classificato con MIXMIX - SOM Ottimizzata") %>% 
+  addRasterImage(classified_raster_mixcla_single, colors = palette_turbo(G_mixcla), opacity = 0.6, group = "Classificato con MIXCLA - SOM Ottimizzata") %>% 
+  addRasterImage(classified_raster_clacla_single, colors = palette_turbo(G_clacla), opacity = 0.6, group = "Classificato con CLACLA - SOM Ottimizzata") %>% 
+  addLayersControl(
+    baseGroups = c("OpenStreetMap", "Immagine Satellitare", "Mappa Chiara"),
+    overlayGroups = c("Classificato con MIXMIX - SOM Ottimizzata", "Classificato con MIXCLA - SOM Ottimizzata", "Classificato con CLACLA - SOM Ottimizzata"),
+    options = layersControlOptions(collapsed = FALSE)
+  ) %>% 
+  addScaleBar(position = "bottomright", options = scaleBarOptions(imperial = FALSE)) %>% 
+  setView(lng = 16.5, lat = 39.0, zoom = 10)
+
+cat("Visualizzazione completata con successo.\n")
+
+# Se desideri anche visualizzare i risultati della SOM senza parametri ottimizzati, puoi ripetere i passi con 'som_values_default'
+
+# Esempio per la SOM senza parametri ottimizzati:
+
+# Esegui tclustIC per la SOM senza ottimizzazione
+tclustIC_result_default <- tclustIC(
+    x = som_values_default, 
+    kk = 2:10,                 # Numero di cluster da 2 a 10
+    cc = 128,                  # Fattore di restrizione fisso a 128
+    alpha = 0,                 # Nessun outlier, impostato a 0
+    whichIC = "ALL",           # Calcola tutti i criteri di informazione
+    parallel = TRUE,           
+    n.cores = parallel::detectCores(),   
+    trace = FALSE              
+)
+
+# Visualizza i risultati per i criteri
+plot(tclustIC_result_default, which = "MIXMIX")
+plot(tclustIC_result_default, which = "MIXCLA")
+plot(tclustIC_result_default, which = "CLACLA")
+
+# Trova il numero ottimale di cluster per MIXMIX
+min_value_mixmix_def <- min(tclustIC_result_default$MIXMIX, na.rm = TRUE)
+optimal_index_mixmix_def <- which.min(tclustIC_result_default$MIXMIX)
+G_mixmix_def <- tclustIC_result_default$kk[optimal_index_mixmix_def]
+
+# Trova il numero ottimale di cluster per MIXCLA
+min_value_mixcla_def <- min(tclustIC_result_default$MIXCLA, na.rm = TRUE)
+optimal_index_mixcla_def <- which.min(tclustIC_result_default$MIXCLA)
+G_mixcla_def <- tclustIC_result_default$kk[optimal_index_mixcla_def]
+
+# Trova il numero ottimale di cluster per CLACLA
+min_value_clacla_def <- min(tclustIC_result_default$CLACLA, na.rm = TRUE)
+optimal_index_clacla_def <- which.min(tclustIC_result_default$CLACLA)
+G_clacla_def <- tclustIC_result_default$kk[optimal_index_clacla_def]
+
+# Stampa i risultati ottimali per la SOM senza ottimizzazione
+print(paste("SOM Senza Ottimizzazione - Numero ottimale di cluster secondo MIXMIX:", G_mixmix_def))
+print(paste("SOM Senza Ottimizzazione - Numero ottimale di cluster secondo MIXCLA:", G_mixcla_def))
+print(paste("SOM Senza Ottimizzazione - Numero ottimale di cluster secondo CLACLA:", G_clacla_def))
+
+# Se desideri, puoi eseguire clusterboot e Mclust anche sulla SOM senza ottimizzazione utilizzando 'som_values_default' e i rispettivi numeri di cluster.
+
+cat("Analisi completata con successo.\n")
+
