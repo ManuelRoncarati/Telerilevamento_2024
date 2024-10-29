@@ -530,3 +530,80 @@ leaflet() %>%
     setView(lng = 16.5, lat = 39.0, zoom = 10)
 
 cat("Visualizzazione completata con successo.\n")
+
+
+
+
+
+
+
+#umap nselectboot
+# Carica le librerie necessarie
+check_and_install <- function(packages) {
+    installed <- packages %in% rownames(installed.packages())
+    if (any(!installed)) {
+        install.packages(packages[!installed])
+    }
+    invisible(lapply(packages, library, character.only = TRUE))
+}
+
+# Lista dei pacchetti necessari
+required_packages <- c("fpc", "NbClust", "terra", "dplyr", "parallel", "leaflet", "ggplot2", "viridis", "uwot")
+check_and_install(required_packages)
+
+# Imposta la working directory
+setwd("D:/composite")
+
+# Carica il raster multibanda
+img_84 <- rast("ritaglio.tif")
+
+# Seleziona le bande necessarie (B1, B2, B3, B4, B5, B7)
+l1984 <- img_84[[c(1, 2, 3, 4, 5, 6)]]
+
+# Calcola gli indici NDVI, MNDWI e NDBI
+ndvi_1984 <- (l1984[[4]] - l1984[[3]]) / (l1984[[4]] + l1984[[3]])
+mndwi_1984 <- (l1984[[2]] - l1984[[5]]) / (l1984[[2]] + l1984[[5]])
+ndbi_1984 <- (l1984[[5]] - l1984[[4]]) / (l1984[[5]] + l1984[[4]])
+
+# Crea lo stack con bande e indici
+stack_1984 <- c(l1984, ndvi_1984, mndwi_1984, ndbi_1984)
+
+# Estrai i valori dal raster stack come dataframe e rimuovi i valori NA
+values_stack_1984 <- as.data.frame(values(stack_1984))
+values_stack_1984_non_na <- values_stack_1984[complete.cases(values_stack_1984), ]
+
+# Applica UMAP con il numero ottimale di vicini trovato (5)
+umap_result <- umap(
+    values_stack_1984_non_na, 
+    n_neighbors = 5,            # Numero ottimale di vicini
+    n_components = 2,           # Dimensioni dell'embedment
+    min_dist = 0.1,             # Distanza minima tra punti
+    spread = 1,                 # Scala di dispersione
+    init = "pca",               # Inizializzazione PCA
+    learning_rate = 1,          # Tasso di apprendimento
+    fast_sgd = TRUE,            # Ottimizzazione rapida
+    n_threads = detectCores()   # Parallelizzazione
+)
+
+# Converte il risultato UMAP in matrice
+umap_matrix <- as.matrix(umap_result)
+
+# Esegui il bootstrap per la selezione del numero di cluster su umap_matrix con K-means
+library(fpc)
+result_umap_kmeans <- nselectboot(
+    data = umap_matrix,               # Matrice dei valori UMAP
+    B = 50,                           # Numero di campioni bootstrap
+    clustermethod = kmeansCBI,        # Metodo di clustering K-means
+    classification = "centroid",      # Metodo di classificazione
+    krange = 2:10,                    # Numero di cluster da testare (da 2 a 10)
+    count = TRUE                     # Non stampare conteggi dettagliati
+)
+
+# Stampa il numero ottimale di cluster trovato
+print("Numero ottimale di cluster trovato per umap_result:")
+print(result_umap_kmeans$kopt)
+
+# Stampa la matrice di instabilità per ciascun run e numero di cluster
+print("Matrice di instabilità per ciascun run e numero di cluster:")
+print(result_umap_kmeans$stabk)
+
