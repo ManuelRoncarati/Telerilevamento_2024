@@ -1346,3 +1346,215 @@ leaflet() %>%
 
 cat("Visualizzazione completata con successo.\n")
 
+
+
+
+
+
+
+
+
+
+
+
+#alternativa a ch
+# Carica le librerie necessarie
+check_and_install <- function(packages) {
+    installed <- packages %in% rownames(installed.packages())
+    if (any(!installed)) {
+        install.packages(packages[!installed])
+    }
+    invisible(lapply(packages, library, character.only = TRUE))
+}
+
+required_packages <- c("fpc", "NbClust", "terra", "dplyr", "kohonen", "parallel", "leaflet", "ggplot2", "viridis", "mclust", "tclust", "GA", "cluster")
+check_and_install(required_packages)
+
+# Imposta la working directory
+setwd("C:/composite")
+
+# Carica il raster multibanda
+img_84 <- rast("ritaglino.tif")
+
+# Seleziona le bande necessarie (B1, B2, B3, B4, B5, B7)
+l1984 <- img_84[[c(1, 2, 3, 4, 5, 6)]]
+
+# Calcola gli indici NDVI, MNDWI e NDBI
+ndvi_1984 <- (l1984[[4]] - l1984[[3]]) / (l1984[[4]] + l1984[[3]])
+mndwi_1984 <- (l1984[[2]] - l1984[[5]]) / (l1984[[2]] + l1984[[5]])
+ndbi_1984 <- (l1984[[5]] - l1984[[4]]) / (l1984[[5]] + l1984[[4]])
+
+# Crea lo stack con bande e indici
+stack_1984 <- c(l1984, ndvi_1984, mndwi_1984, ndbi_1984)
+
+# Estrai i valori dal raster stack come dataframe e rimuovi i valori NA
+values_stack_1984 <- as.data.frame(values(stack_1984))
+values_stack_1984_non_na <- values_stack_1984[complete.cases(values_stack_1984), ]
+
+# PCA: esegui la PCA sullo stack e seleziona le prime tre componenti principali
+pca_result <- prcomp(values_stack_1984_non_na, center = TRUE, scale. = TRUE)
+pca_values <- pca_result$x[, 1:3]  # Seleziona solo le prime tre componenti
+
+# Configurazione della griglia SOM
+neurons <- 5 * sqrt(nrow(pca_values))
+x_dim <- round(sqrt(neurons))
+y_dim <- round(neurons / x_dim)
+som_grid <- somgrid(xdim = x_dim, ydim = y_dim, topo = "hexagonal")
+
+# SOM con parametri di default per confronto
+som_model_default <- supersom(
+    list(pca_values), 
+    grid = som_grid, 
+    rlen = 150,                  
+    alpha = c(0.05, 0.01),      
+                    
+    mode = "pbatch", 
+    cores = -1                  
+)
+
+# Plot dei cambiamenti per la SOM di default
+plot(som_model_default, type = "changes", main = "SOM con parametri di default")
+
+# Funzione di fitness per minimizzare l'ultimo valore di changes
+fitness_function_som_changes <- function(params) {
+    alpha_start <- params[1]
+    alpha_end <- params[2]
+    radius <- params[3]
+    
+    # Crea la SOM
+    som_model <- supersom(
+        list(pca_values), 
+        grid = som_grid, 
+        rlen = 150,  
+        alpha = c(alpha_start, alpha_end), 
+        radius = radius,  
+        mode = "pbatch", 
+        cores = -1  
+    )
+    
+    # Utilizza l'ultimo valore di changes come QE
+    qe <- tail(som_model$changes, n = 1)
+    return(-qe)  # Minimizza il Quantization Error
+}
+
+# Limiti per alpha_start, alpha_end e radius
+lower_bounds <- c(0.01, 0.001, 1)
+upper_bounds <- c(0.1, 0.05, sqrt(x_dim^2 + y_dim^2) / 2)
+
+# Esegui l'algoritmo genetico per minimizzare changes
+ga_optimization_som_changes <- ga(
+    type = "real-valued", 
+    fitness = fitness_function_som_changes, 
+    lower = lower_bounds, 
+    upper = upper_bounds, 
+    popSize = 20,     
+    maxiter = 50,     
+    monitor = TRUE,   
+    run = 10          
+)
+
+summary(ga_optimization_som_changes)
+
+# Parametri ottimali
+best_params_changes <- ga_optimization_som_changes@solution
+cat("Tasso di apprendimento iniziale:", best_params_changes[1], "\n")
+cat("Tasso di apprendimento finale:", best_params_changes[2], "\n")
+cat("Raggio ottimale:", best_params_changes[3], "\n")
+
+# SOM con parametri ottimizzati
+som_model_optimized_changes <- supersom(
+    list(pca_values), 
+    grid = som_grid, 
+    rlen = 150,  
+    alpha = c(best_params_changes[1], best_params_changes[2]), 
+    radius = best_params_changes[3],  
+    mode = "pbatch", 
+    cores = -1  
+)
+
+# Plot della SOM ottimizzata
+plot(som_model_optimized_changes, type = "changes", main = "SOM con parametri ottimizzati (Quantization Error)")
+
+# Codici SOM ottimizzati
+som_values <- som_model_optimized_changes$codes[[1]]
+
+# Numero ottimale di cluster usando tclustIC
+tclustIC_result <- tclustIC(
+    x = som_values, 
+    kk = 2:10,                 
+    cc = 128,                  
+    alpha = 0,                 
+    whichIC = "ALL",           
+    parallel = TRUE,           
+    n.cores = parallel::detectCores(),   
+    trace = FALSE              
+)
+
+# Visualizza criteri ICL, BIC, CLA
+plot(tclustIC_result, which = "MIXCLA")
+plot(tclustIC_result, which = "MIXMIX")
+plot(tclustIC_result, which = "CLACLA")
+
+# Numero di cluster ottimale
+min_value_mixmix <- min(tclustIC_result$MIXMIX, na.rm = TRUE)
+optimal_mixmix <- which(tclustIC_result$MIXMIX == min_value_mixmix, arr.ind = TRUE)[1]
+G_mixmix <- as.numeric(gsub("k=", "", rownames(tclustIC_result$MIXMIX)[optimal_mixmix]))
+
+min_value_mixcla <- min(tclustIC_result$MIXCLA, na.rm = TRUE)
+optimal_mixcla <- which(tclustIC_result$MIXCLA == min_value_mixcla, arr.ind = TRUE)[1]
+G_mixcla <- as.numeric(gsub("k=", "", rownames(tclustIC_result$MIXCLA)[optimal_mixcla]))
+
+min_value_clacla <- min(tclustIC_result$CLACLA, na.rm = TRUE)
+optimal_clacla <- which(tclustIC_result$CLACLA == min_value_clacla, arr.ind = TRUE)[1]
+G_clacla <- as.numeric(gsub("k=", "", rownames(tclustIC_result$CLACLA)[optimal_clacla]))
+
+print(paste("Numero ottimale di cluster secondo MIXMIX:", G_mixmix))
+print(paste("Numero ottimale di cluster secondo MIXCLA:", G_mixcla))
+print(paste("Numero ottimale di cluster secondo CLACLA:", G_clacla))
+
+# Clusterizzazione e visualizzazione
+mclust_mixmix <- Mclust(som_values, G = G_mixmix)
+mclust_mixcla <- Mclust(som_values, G = G_mixcla)
+mclust_clacla <- Mclust(som_values, G = G_clacla)
+
+mask <- !is.na(values(img_84[[1]]))
+unit_classifications <- som_model_optimized_changes$unit.classif
+
+# Raster per MIXMIX
+classified_raster_mixmix <- rast(img_84)
+values(classified_raster_mixmix) <- NA
+values(classified_raster_mixmix)[mask] <- mclust_mixmix$classification[unit_classifications]
+
+# Raster per MIXCLA
+classified_raster_mixcla <- rast(img_84)
+values(classified_raster_mixcla) <- NA
+values(classified_raster_mixcla)[mask] <- mclust_mixcla$classification[unit_classifications]
+
+# Raster per CLACLA
+classified_raster_clacla <- rast(img_84)
+values(classified_raster_clacla) <- NA
+values(classified_raster_clacla)[mask] <- mclust_clacla$classification[unit_classifications]
+
+classified_raster_mixmix_single <- classified_raster_mixmix[[1]]
+classified_raster_mixcla_single <- classified_raster_mixcla[[1]]
+classified_raster_clacla_single <- classified_raster_clacla[[1]]
+
+# Visualizzazione con leaflet
+palette_turbo <- viridisLite::turbo
+
+leaflet() %>% 
+    addTiles(group = "OpenStreetMap") %>% 
+    addProviderTiles("Esri.WorldImagery", group = "Immagine Satellitare") %>% 
+    addProviderTiles("CartoDB.Positron", group = "Mappa Chiara") %>% 
+    addRasterImage(classified_raster_mixmix_single, colors = palette_turbo(G_mixmix), opacity = 0.6, group = "Classificato con MIXMIX") %>% 
+    addRasterImage(classified_raster_mixcla_single, colors = palette_turbo(G_mixcla), opacity = 0.6, group = "Classificato con MIXCLA") %>% 
+    addRasterImage(classified_raster_clacla_single, colors = palette_turbo(G_clacla), opacity = 0.6, group = "Classificato con CLACLA") %>% 
+    addLayersControl(
+        baseGroups = c("OpenStreetMap", "Immagine Satellitare", "Mappa Chiara"),
+        overlayGroups = c("Classificato con MIXMIX", "Classificato con MIXCLA", "Classificato con CLACLA"),
+        options = layersControlOptions(collapsed = FALSE)
+    ) %>% 
+    addScaleBar(position = "bottomright", options = scaleBarOptions(imperial = FALSE)) %>% 
+    setView(lng = 16.5, lat = 39.0, zoom = 10)
+
+cat("Visualizzazione completata con successo.\n")
