@@ -1,0 +1,541 @@
+R version 4.4.1 (2024-06-14 ucrt) -- "Race for Your Life"
+Copyright (C) 2024 The R Foundation for Statistical Computing
+Platform: x86_64-w64-mingw32/x64
+
+R è un software libero ed è rilasciato SENZA ALCUNA GARANZIA.
+Siamo ben lieti se potrai redistribuirlo, ma sotto certe condizioni.
+Scrivi 'license()' o 'licence()' per maggiori dettagli.
+
+R è un progetto collaborativo con molti contributi esterni.
+Scrivi 'contributors()' per maggiori informazioni e 'citation()'
+per sapere come citare R o i pacchetti nelle pubblicazioni.
+
+Scrivi 'demo()' per una dimostrazione, 'help()' per la guida
+oppure 'help.start()' per la guida nel browser HTML.
+Scrivi 'q()' per uscire da R.
+
+[Workspace loaded from ~/.RData]
+
+
+R version 4.4.1 (2024-06-14 ucrt) -- "Race for Your Life"
+Copyright (C) 2024 The R Foundation for Statistical Computing
+Platform: x86_64-w64-mingw32/x64
+
+R è un software libero ed è rilasciato SENZA ALCUNA GARANZIA.
+Siamo ben lieti se potrai redistribuirlo, ma sotto certe condizioni.
+Scrivi 'license()' o 'licence()' per maggiori dettagli.
+
+R è un progetto collaborativo con molti contributi esterni.
+Scrivi 'contributors()' per maggiori informazioni e 'citation()'
+per sapere come citare R o i pacchetti nelle pubblicazioni.
+
+Scrivi 'demo()' per una dimostrazione, 'help()' per la guida
+oppure 'help.start()' per la guida nel browser HTML.
+Scrivi 'q()' per uscire da R.
+
+[Workspace loaded from ~/.RData]
+
+> # Carica le librerie necessarie
+> check_and_install <- function(packages) {
++     installed <- packages %in% rownames(installed.packages())
++     if (any(!installed)) {
++         install.packages(packages[!installed])
++     }
++     invisible(lapply(packages, library, character.only = TRUE))
++ }
+> 
+> required_packages <- c("fpc", "NbClust", "terra", "dplyr", "kohonen", "parallel", "leaflet", "ggplot2", "viridis", "mclust", "tclust", "GA", "cluster")
+> check_and_install(required_packages)
+terra 1.7.78
+
+Caricamento pacchetto: ‘dplyr’
+
+I seguenti oggetti sono mascherati da ‘package:terra’:
+
+    intersect, union
+
+I seguenti oggetti sono mascherati da ‘package:stats’:
+
+    filter, lag
+
+I seguenti oggetti sono mascherati da ‘package:base’:
+
+    intersect, setdiff, setequal, union
+
+Caricamento del pacchetto richiesto: viridisLite
+                   __           __ 
+   ____ ___  _____/ /_  _______/ /_
+  / __ `__ \/ ___/ / / / / ___/ __/
+ / / / / / / /__/ / /_/ (__  ) /_  
+/_/ /_/ /_/\___/_/\__,_/____/\__/   version 6.1.1
+Type 'citation("mclust")' for citing this R package in publications.
+
+Caricamento pacchetto: ‘mclust’
+
+Il seguente oggetto è mascherato da ‘package:kohonen’:
+
+    map
+
+Robust Trimmed Clustering (version 2.0-5)
+
+Caricamento del pacchetto richiesto: foreach
+Caricamento del pacchetto richiesto: iterators
+  ____    _    
+ / ___|  / \     Genetic 
+| |  _  / _ \    Algorithms
+| |_| |/ ___ \   
+ \____/_/   \_\  version 3.2.4
+Type 'citation("GA")' for citing this R package in publications.
+
+Caricamento pacchetto: ‘GA’
+
+Il seguente oggetto è mascherato da ‘package:utils’:
+
+    de
+
+> 
+> # Imposta la working directory
+> setwd("D:/composite")
+> 
+> # Carica il raster multibanda
+> img_84 <- rast("ritaglio.tif")
+> 
+> # Seleziona le bande necessarie (B1, B2, B3, B4, B5, B7)
+> l1984 <- img_84[[c(1, 2, 3, 4, 5, 6)]]
+> 
+> # Calcola gli indici NDVI, MNDWI e NDBI
+> ndvi_1984 <- (l1984[[4]] - l1984[[3]]) / (l1984[[4]] + l1984[[3]])
+> mndwi_1984 <- (l1984[[2]] - l1984[[5]]) / (l1984[[2]] + l1984[[5]])
+> ndbi_1984 <- (l1984[[5]] - l1984[[4]]) / (l1984[[5]] + l1984[[4]])
+> 
+> # Crea lo stack con bande e indici
+> stack_1984 <- c(l1984, ndvi_1984, mndwi_1984, ndbi_1984)
+> 
+> # Estrai i valori dal raster stack come dataframe e rimuovi i valori NA
+> values_stack_1984 <- as.data.frame(values(stack_1984))
+> values_stack_1984_non_na <- values_stack_1984[complete.cases(values_stack_1984), ]
+> 
+> # PCA: esegui la PCA sullo stack e seleziona le prime tre componenti principali
+> pca_result <- prcomp(values_stack_1984_non_na, center = TRUE, scale. = TRUE)
+> pca_values <- pca_result$x[, 1:3]  # Seleziona solo le prime tre componenti
+> 
+> # Configurazione della griglia SOM
+> neurons <- 5 * sqrt(nrow(pca_values))
+> x_dim <- round(sqrt(neurons))
+> y_dim <- round(neurons / x_dim)
+> som_grid <- somgrid(xdim = x_dim, ydim = y_dim, topo = "hexagonal")
+> 
+> # SOM con parametri di default per confronto
+> som_model_default <- supersom(
++     list(pca_values), 
++     grid = som_grid, 
++     rlen = 150,                  
++     alpha = c(0.05, 0.01),      
++     
++     mode = "pbatch", 
++     cores = -1                  
++ )
+> 
+> # Plot dei cambiamenti per la SOM di default
+> plot(som_model_default, type = "changes", main = "SOM con parametri di default")
+> 
+> # Funzione di fitness per minimizzare l'ultimo valore di changes
+> fitness_function_som_changes <- function(params) {
++     alpha_start <- params[1]
++     alpha_end <- params[2]
++     radius <- params[3]
++     
++     # Crea la SOM
++     som_model <- supersom(
++         list(pca_values), 
++         grid = som_grid, 
++         rlen = 150,  
++         alpha = c(alpha_start, alpha_end), 
++         radius = radius,  
++         mode = "pbatch", 
++         cores = -1  
++     )
++     
++     # Utilizza l'ultimo valore di changes come QE
++     qe <- tail(som_model$changes, n = 1)
++     return(-qe)  # Minimizza il Quantization Error
++ }
+> 
+> # Limiti per alpha_start, alpha_end e radius
+> lower_bounds <- c(0.01, 0.001, 1)
+> upper_bounds <- c(0.1, 0.05, sqrt(x_dim^2 + y_dim^2) / 2)
+> 
+> # Esegui l'algoritmo genetico per minimizzare changes
+> ga_optimization_som_changes <- ga(
++     type = "real-valued", 
++     fitness = fitness_function_som_changes, 
++     lower = lower_bounds, 
++     upper = upper_bounds, 
++     popSize = 30,     
++     maxiter = 100,     
++     monitor = TRUE,   
++     run = 10          
++ )
+GA | iter = 1 | Mean = -0.0002552409 | Best = -0.0002418219
+GA | iter = 2 | Mean = -0.0002533922 | Best = -0.0002418219
+GA | iter = 3 | Mean = -0.0002518012 | Best = -0.0002410892
+GA | iter = 4 | Mean = -0.0002502582 | Best = -0.0002383567
+GA | iter = 5 | Mean = -0.0002500558 | Best = -0.0002383567
+GA | iter = 6 | Mean = -0.0002490177 | Best = -0.0002383567
+GA | iter = 7 | Mean = -0.0002490314 | Best = -0.0002383567
+GA | iter = 8 | Mean = -0.0002492389 | Best = -0.0002383567
+GA | iter = 9 | Mean = -0.0002500232 | Best = -0.0002383567
+GA | iter = 10 | Mean = -0.0002478062 | Best = -0.0002383567
+GA | iter = 11 | Mean = -0.0002467545 | Best = -0.0002383567
+GA | iter = 12 | Mean = -0.0002490591 | Best = -0.0002383567
+GA | iter = 13 | Mean = -0.0002485490 | Best = -0.0002383567
+> 
+> summary(ga_optimization_som_changes)
+── Genetic Algorithm ─────────────────── 
+
+GA settings: 
+Type                  =  real-valued 
+Population size       =  30 
+Number of generations =  100 
+Elitism               =  2 
+Crossover probability =  0.8 
+Mutation probability  =  0.1 
+Search domain = 
+        x1    x2       x3
+lower 0.01 0.001  1.00000
+upper 0.10 0.050 28.99138
+
+GA results: 
+Iterations             = 13 
+Fitness function value = -0.0002383567 
+Solution = 
+             x1          x2       x3
+[1,] 0.03713095 0.008664742 4.797673
+> 
+> # Parametri ottimali
+> best_params_changes <- ga_optimization_som_changes@solution
+> cat("Tasso di apprendimento iniziale:", best_params_changes[1], "\n")
+Tasso di apprendimento iniziale: 0.03713095 
+> cat("Tasso di apprendimento finale:", best_params_changes[2], "\n")
+Tasso di apprendimento finale: 0.008664742 
+> cat("Raggio ottimale:", best_params_changes[3], "\n")
+Raggio ottimale: 4.797673 
+> 
+> # SOM con parametri ottimizzati
+> som_model_optimized_changes <- supersom(
++     list(pca_values), 
++     grid = som_grid, 
++     rlen = 150,  
++     alpha = c(best_params_changes[1], best_params_changes[2]), 
++     radius = best_params_changes[3],  
++     mode = "pbatch", 
++     cores = -1  
++ )
+> 
+> # Plot della SOM ottimizzata
+> plot(som_model_optimized_changes, type = "changes", main = "SOM con parametri ottimizzati (Quantization Error)")
+> 
+> # Codici SOM ottimizzati
+> som_values <- som_model_optimized_changes$codes[[1]]
+> 
+> # Numero ottimale di cluster usando tclustIC
+> tclustIC_result <- tclustIC(
++     x = som_values, 
++     kk = 2:10,                 
++     cc = 128,                  
++     alpha = 0,                 
++     whichIC = "ALL",           
++     parallel = TRUE,           
++     n.cores = parallel::detectCores(),   
++     trace = FALSE              
++ )
+> 
+> # Visualizza criteri ICL, BIC, CLA
+> plot(tclustIC_result, which = "MIXCLA")
+> plot(tclustIC_result, which = "MIXMIX")
+> plot(tclustIC_result, which = "CLACLA")
+> 
+> # Numero di cluster ottimale
+> min_value_mixmix <- min(tclustIC_result$MIXMIX, na.rm = TRUE)
+> optimal_mixmix <- which(tclustIC_result$MIXMIX == min_value_mixmix, arr.ind = TRUE)[1]
+> G_mixmix <- as.numeric(gsub("k=", "", rownames(tclustIC_result$MIXMIX)[optimal_mixmix]))
+> 
+> min_value_mixcla <- min(tclustIC_result$MIXCLA, na.rm = TRUE)
+> optimal_mixcla <- which(tclustIC_result$MIXCLA == min_value_mixcla, arr.ind = TRUE)[1]
+> G_mixcla <- as.numeric(gsub("k=", "", rownames(tclustIC_result$MIXCLA)[optimal_mixcla]))
+> 
+> min_value_clacla <- min(tclustIC_result$CLACLA, na.rm = TRUE)
+> optimal_clacla <- which(tclustIC_result$CLACLA == min_value_clacla, arr.ind = TRUE)[1]
+> G_clacla <- as.numeric(gsub("k=", "", rownames(tclustIC_result$CLACLA)[optimal_clacla]))
+> 
+> print(paste("Numero ottimale di cluster secondo MIXMIX:", G_mixmix))
+[1] "Numero ottimale di cluster secondo MIXMIX: 5"
+> print(paste("Numero ottimale di cluster secondo MIXCLA:", G_mixcla))
+[1] "Numero ottimale di cluster secondo MIXCLA: 5"
+> print(paste("Numero ottimale di cluster secondo CLACLA:", G_clacla))
+[1] "Numero ottimale di cluster secondo CLACLA: 5"
+> 
+> # Clusterizzazione e visualizzazione
+> mclust_mixmix <- Mclust(som_values, G = G_mixmix)
+fitting ...
+  |=============================================================================================| 100%
+> mclust_mixcla <- Mclust(som_values, G = G_mixcla)
+fitting ...
+  |=============================================================================================| 100%
+> mclust_clacla <- Mclust(som_values, G = G_clacla)
+fitting ...
+  |=============================================================================================| 100%
+> 
+> mask <- !is.na(values(img_84[[1]]))
+> unit_classifications <- som_model_optimized_changes$unit.classif
+> 
+> # Raster per MIXMIX
+> classified_raster_mixmix <- rast(img_84)
+> values(classified_raster_mixmix) <- NA
+> values(classified_raster_mixmix)[mask] <- mclust_mixmix$classification[unit_classifications]
+> 
+> # Raster per MIXCLA
+> classified_raster_mixcla <- rast(img_84)
+> values(classified_raster_mixcla) <- NA
+> values(classified_raster_mixcla)[mask] <- mclust_mixcla$classification[unit_classifications]
+> 
+> # Raster per CLACLA
+> classified_raster_clacla <- rast(img_84)
+> values(classified_raster_clacla) <- NA
+> values(classified_raster_clacla)[mask] <- mclust_clacla$classification[unit_classifications]
+> 
+> classified_raster_mixmix_single <- classified_raster_mixmix[[1]]
+> classified_raster_mixcla_single <- classified_raster_mixcla[[1]]
+> classified_raster_clacla_single <- classified_raster_clacla[[1]]
+> 
+> # Visualizzazione con leaflet
+> palette_turbo <- viridisLite::turbo
+> 
+> leaflet() %>% 
++     addTiles(group = "OpenStreetMap") %>% 
++     addProviderTiles("Esri.WorldImagery", group = "Immagine Satellitare") %>% 
++     addProviderTiles("CartoDB.Positron", group = "Mappa Chiara") %>% 
++     addRasterImage(classified_raster_mixmix_single, colors = palette_turbo(G_mixmix), opacity = 0.6, group = "Classificato con MIXMIX") %>% 
++     addRasterImage(classified_raster_mixcla_single, colors = palette_turbo(G_mixcla), opacity = 0.6, group = "Classificato con MIXCLA") %>% 
++     addRasterImage(classified_raster_clacla_single, colors = palette_turbo(G_clacla), opacity = 0.6, group = "Classificato con CLACLA") %>% 
++     addLayersControl(
++         baseGroups = c("OpenStreetMap", "Immagine Satellitare", "Mappa Chiara"),
++         overlayGroups = c("Classificato con MIXMIX", "Classificato con MIXCLA", "Classificato con CLACLA"),
++         options = layersControlOptions(collapsed = FALSE)
++     ) %>% 
++     addScaleBar(position = "bottomright", options = scaleBarOptions(imperial = FALSE)) %>% 
++     setView(lng = 16.5, lat = 39.0, zoom = 10)
+> 
+> cat("Visualizzazione completata con successo.\n")
+Visualizzazione completata con successo.
+> # Carica le librerie necessarie
+> check_and_install <- function(packages) {
++   installed <- packages %in% rownames(installed.packages())
++   if (any(!installed)) {
++     install.packages(packages[!installed])
++   }
++   invisible(lapply(packages, library, character.only = TRUE))
++ }
+> 
+> required_packages <- c("fpc", "NbClust", "terra", "dplyr", "kohonen", "parallel", "leaflet", "ggplot2", "viridis")
+> check_and_install(required_packages)
+> 
+> # Imposta la working directory
+> setwd("D:/composite")
+> 
+> # Carica il raster multibanda
+> img_84 <- rast("L5 Composite 1984-1990_masked.tif")
+> 
+> # Seleziona le bande necessarie (B1, B2, B3, B4, B5, B7)
+> l1984 <- img_84[[c(1, 2, 3, 4, 5, 6)]]
+> 
+> # Calcola gli indici NDVI, MNDWI e NDBI
+> ndvi_1984 <- (l1984[[4]] - l1984[[3]]) / (l1984[[4]] + l1984[[3]])
+> mndwi_1984 <- (l1984[[2]] - l1984[[5]]) / (l1984[[2]] + l1984[[5]])
+> ndbi_1984 <- (l1984[[5]] - l1984[[4]]) / (l1984[[5]] + l1984[[4]])
+> 
+> # Crea lo stack con bande e indici
+> stack_1984 <- c(l1984, ndvi_1984, mndwi_1984, ndbi_1984)
+> 
+> # Estrai i valori dal raster stack come dataframe e rimuovi i valori NA
+> values_stack_1984 <- as.data.frame(values(stack_1984))
+> values_stack_1984_non_na <- values_stack_1984[complete.cases(values_stack_1984), ]
+> 
+> # PCA: esegui la PCA sullo stack e seleziona le prime due componenti principali
+> pca_result <- prcomp(values_stack_1984_non_na, center = TRUE, scale. = TRUE)
+> pca_values <- pca_result$x[, 1:3]  # Seleziona solo le prime due componenti
+> 
+> # Conta il numero di osservazioni valide
+> n <- nrow(pca_values)
+> print(paste("Numero di osservazioni valide:", n))
+[1] "Numero di osservazioni valide: 1069509"
+> # [1] "Numero di osservazioni valide: 1069509"
+> 
+> # Calcola il numero totale di neuroni suggerito dalla formula
+> neurons <- 5 * sqrt(n)
+> print(paste("Numero suggerito di neuroni:", round(neurons)))
+[1] "Numero suggerito di neuroni: 5171"
+> # [1] "Numero suggerito di neuroni: 5171"
+> 
+> # Suggerisci una configurazione di griglia approssimata
+> x_dim <- round(sqrt(neurons))
+> y_dim <- round(neurons / x_dim)
+> print(paste("Dimensioni della griglia suggerite:", x_dim, "x", y_dim))
+[1] "Dimensioni della griglia suggerite: 72 x 72"
+> # [1] "Dimensioni della griglia suggerite: 72 x 72"
+> 
+> # Definisci una griglia SOM con le dimensioni calcolate
+> som_grid <- somgrid(xdim = x_dim, ydim = y_dim, topo = "hexagonal")
+> 
+> # Esegui SuperSOM con parallelizzazione usando la PCA come input e alpha = 0
+> som_model <- supersom(
++   list(pca_values), 
++   grid = som_grid, 
++   rlen = 150, 
++   alpha = c(0.03713095,0.008664742),                  # Imposta alpha a 0 per non avere apprendimento progressivo
++   radius =4.797673  , 
++   mode = "pbatch", 
++   cores = -1  # Usa tutti i core disponibili
++ )
+> 
+> # Visualizza i cambiamenti durante l'addestramento della SOM
+> plot(som_model, type = "changes")
+> 
+> # Ottieni i codici della SOM (valori ridotti dimensionalmente)
+> som_values <- som_model$codes[[1]]
+> 
+> # Determina il numero ottimale di cluster con NbClust
+> library(NbClust)
+> 
+> set.seed(123)  # Per riproducibilità
+> nbclust_result <- NbClust(
++   data = som_values, 
++   diss = NULL, 
++   distance = "euclidean",  # Distanza euclidea
++   min.nc = 2,              # Numero minimo di cluster
++   max.nc = 10,             # Numero massimo di cluster
++   method = "kmeans",       # Metodo di clustering K-means
++   index = "all"            # Usa tutti i criteri di validazione
++ )
+*** : The Hubert index is a graphical method of determining the number of clusters.
+                In the plot of Hubert index, we seek a significant knee that corresponds to a 
+                significant increase of the value of the measure i.e the significant peak in Hubert
+                index second differences plot. 
+ 
+*** : The D index is a graphical method of determining the number of clusters. 
+                In the plot of D index, we seek a significant knee (the significant peak in Dindex
+                second differences plot) that corresponds to a significant increase of the value of
+                the measure. 
+ 
+******************************************************************* 
+* Among all indices:                                                
+* 3 proposed 2 as the best number of clusters 
+* 9 proposed 3 as the best number of clusters 
+* 2 proposed 4 as the best number of clusters 
+* 4 proposed 5 as the best number of clusters 
+* 2 proposed 8 as the best number of clusters 
+* 3 proposed 10 as the best number of clusters 
+
+                   ***** Conclusion *****                            
+ 
+* According to the majority rule, the best number of clusters is  3 
+ 
+ 
+******************************************************************* 
+> 
+> # **Risultati di NbClust**:
+> # La maggior parte dei criteri (11 su 23) ha indicato che il numero ottimale di cluster è 5.
+> 
+> # Trova il numero ottimale di cluster dalla moda dei risultati
+> optimal_clusters <- as.numeric(names(which.max(table(nbclust_result$Best.nc[1, ]))))
+> 
+> # Stampa il numero ottimale di cluster
+> cat("Il numero ottimale di cluster secondo NbClust è:", optimal_clusters, "\n")
+Il numero ottimale di cluster secondo NbClust è: 3 
+> # Il numero ottimale di cluster secondo NbClust è: 5
+> 
+> # Usa il numero ottimale di cluster con clusterboot e kmeansCBI
+> library(fpc)
+> 
+> clusterboot_result <- clusterboot(
++   data = som_values,            # Usa i valori SOM
++   B = 500,                      # Numero di campioni bootstrap
++   clustermethod = kmeansCBI,    # Metodo K-means tramite interfaccia kmeansCBI
++   bootmethod = "boot",          # Usa bootstrap non parametrico
++   dissolution = 0.5,            # Valore di dissoluzione per i cluster instabili
++   recover = 0.75,               # Valore di recupero per i cluster stabili
++   count = FALSE,                # Mostra il progresso durante il bootstrap
++   k = optimal_clusters          # Usa il numero ottimale di cluster trovato con NbClust
++ )
+> 
+> # Stampa i risultati della stabilità dei cluster
+> cat("Risultati della stabilità dei cluster con clusterboot:\n")
+Risultati della stabilità dei cluster con clusterboot:
+> # Risultati della stabilità dei cluster con clusterboot:
+> 
+> print(clusterboot_result$bootmean)    # Media della stabilità per ogni cluster
+[1] 0.7791453 0.8709914 0.9105757
+> # [1] 0.9606279 0.8999107 0.8846796 0.9088574 0.9564157
+> 
+> print(clusterboot_result$bootrecover) # Numero di volte che ogni cluster è stato recuperato
+[1] 357 357 418
+> # [1] 498 438 438 445 463
+> 
+> print(clusterboot_result$bootbrd)     # Numero di volte che ogni cluster è stato dissolto
+[1] 143   2   0
+> # [1]  0 35 60 22  0
+> 
+> # Visualizzazione della stabilità
+> barplot(clusterboot_result$bootmean, 
++         main = "Stabilità dei Cluster con K-means e Bootstrap", 
++         ylab = "Media della Similarità di Jaccard", 
++         xlab = "Cluster", 
++         col = "lightblue")
+> 
+> 
+> #ora visualizziamo la clusterizzazione con kemeans e il numero di cluster ritenuto ottimale
+> 
+> # Esegui K-means con 5 cluster e gestisci le iterazioni
+> set.seed(42)  # Imposta il seme per garantire la riproducibilità
+> kmeans_nbclust <- kmeans(som_values, centers = 5, nstart = 100, iter.max = 1000)
+> 
+> # Crea un raster classificato usando i cluster di K-means con 5 cluster
+> classified_raster_nbclust <- rast(img_84)
+> values(classified_raster_nbclust) <- NA
+> mask <- !is.na(values(img_84[[1]]))  # Crea una maschera dai valori non NA del raster originale
+> values(classified_raster_nbclust)[mask] <- kmeans_nbclust$cluster[som_model$unit.classif]
+> 
+> # Seleziona solo la prima banda del raster per evitare messaggi di avvertimento
+> classified_raster_nbclust_single <- classified_raster_nbclust[[1]]
+> 
+> # Carica la palette turbo
+> palette_turbo <- viridisLite::turbo
+> 
+> # Visualizza il raster classificato con leaflet
+> leaflet() %>%
++   # Aggiungi le tiles di base
++   addTiles(group = "OpenStreetMap") %>%
++   addProviderTiles("Esri.WorldImagery", group = "Immagine Satellitare") %>%
++   addProviderTiles("CartoDB.Positron", group = "Mappa Chiara") %>%
++   
++   # Aggiungi il raster classificato con 5 cluster
++   addRasterImage(classified_raster_nbclust_single, 
++                  colors = palette_turbo(5), 
++                  opacity = 0.6, 
++                  group = "Classificato con K-means (5 Cluster)") %>%
++   
++   # Aggiungi i controlli per cambiare i layer di base e i gruppi di layer
++   addLayersControl(
++     baseGroups = c("OpenStreetMap", "Immagine Satellitare", "Mappa Chiara"),  # Layer di base
++     overlayGroups = c("Classificato con K-means (5 Cluster)"),  # Layer classificati
++     options = layersControlOptions(collapsed = FALSE)  # Espandi il menu dei layer di default
++   ) %>%
++   
++   # Aggiungi una barra di scala
++   addScaleBar(position = "bottomright", options = scaleBarOptions(imperial = FALSE)) %>%
++   
++   # Centra la mappa sul raster (modifica i valori per il tuo AOI)
++   setView(lng = 16.5, lat = 39.0, zoom = 10)
+> 
+> cat("Visualizzazione completata con successo.\n")
+Visualizzazione completata con successo.
