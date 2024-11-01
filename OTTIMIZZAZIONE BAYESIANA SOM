@@ -292,7 +292,7 @@ som_values <- som_model_optimized$codes[[1]]
 
 # Usa NbClust per determinare il numero ottimale di cluster
 nbclust_result <- NbClust(data = som_values, distance = "euclidean", min.nc = 2, max.nc = 10, method = "kmeans", index = "all")
-optimal_clusters <- nbclust_result$Best.nc[1]
+optimal_clusters <- as.numeric(names(which.max(table(nbclust_result$Best.nc[1, ]))))
 
 cat("Numero ottimale di cluster determinato da NbClust:", optimal_clusters, "\n")
 
