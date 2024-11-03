@@ -59,8 +59,6 @@ som_model <- supersom(
     list(pca_values), 
     grid = som_grid, 
     rlen = 500, 
-    alpha = c(0.05, 0.01),
-    radius = quantile(dist(som_grid$pts), 2/3), 
     mode = "pbatch", 
     cores = -1  # Usa tutti i core disponibili
 )
