@@ -1,0 +1,105 @@
+# Carica le librerie necessarie
+check_and_install <- function(packages) {
+    installed <- packages %in% rownames(installed.packages())
+    if (any(!installed)) {
+        install.packages(packages[!installed])
+    }
+    invisible(lapply(packages, library, character.only = TRUE))
+}
+
+required_packages <- c("fpc", "NbClust", "terra", "dplyr", "kohonen", "parallel", "leaflet", "ggplot2", "viridis", "mclust", "tclust")
+check_and_install(required_packages)
+
+# Imposta la working directory
+setwd("C:/composite")
+
+# Carica il raster multibanda
+img_84 <- rast("ritaglio.tif")
+
+# Seleziona le bande necessarie (B1, B2, B3, B4, B5, B7)
+l1984 <- img_84[[c(1, 2, 3, 4, 5, 6)]]
+
+# Calcola gli indici NDVI, MNDWI e NDBI
+ndvi_1984 <- (l1984[[4]] - l1984[[3]]) / (l1984[[4]] + l1984[[3]])
+mndwi_1984 <- (l1984[[2]] - l1984[[5]]) / (l1984[[2]] + l1984[[5]])
+ndbi_1984 <- (l1984[[5]] - l1984[[4]]) / (l1984[[5]] + l1984[[4]])
+
+# Crea lo stack con bande e indici
+stack_1984 <- c(l1984, ndvi_1984, mndwi_1984, ndbi_1984)
+
+# Estrai i valori dal raster stack come dataframe e rimuovi i valori NA
+values_stack_1984 <- as.data.frame(values(stack_1984))
+values_stack_1984_non_na <- values_stack_1984[complete.cases(values_stack_1984), ]
+
+# Converti in matrice numerica
+values_stack_1984_non_na <- as.matrix(values_stack_1984_non_na)
+
+# Configura la griglia SOM
+n <- nrow(values_stack_1984_non_na)
+neurons <- 5 * sqrt(n)
+x_dim <- round(sqrt(neurons))
+y_dim <- round(neurons / x_dim)
+cat("Dimensioni della griglia suggerite:", x_dim, "x", y_dim, "\n")
+
+som_grid <- somgrid(xdim = x_dim, ydim = y_dim, topo = "hexagonal")
+
+# Esegui la SOM usando i dati delle bande e degli indici come input
+som_model <- supersom(
+    list(values_stack_1984_non_na), 
+    grid = som_grid, 
+    rlen = 100, 
+    mode = "pbatch", 
+    cores = -1  # Usa tutti i core disponibili
+)
+
+# Ottieni le classificazioni delle unità SOM per ogni punto del dataset
+unit_classifications <- som_model$unit.classif
+
+# Clustering sui codici SOM (ridotti dimensionalmente) con `hardcl`
+library(flexclust)
+clustering_result <- cclust(
+    x = som_model$codes[[1]],       # Usa i codici della SOM come input
+    k = 5,                          # Numero di cluster
+    dist = "euclidean",             # Distanza euclidea
+    method = "hardcl",              # Metodo di clustering "hardcl"
+    save.data = TRUE                # Salva i dati nell'oggetto di output
+)
+
+# Crea un nuovo raster per visualizzare la classificazione
+classified_raster <- rast(img_84)
+values(classified_raster) <- NA  # Imposta tutti i valori a NA
+
+# Assegna i risultati del clustering ai pixel utilizzando le classificazioni SOM
+mask <- !is.na(values(stack_1984[[1]]))
+values(classified_raster)[mask] <- clustering_result@cluster[unit_classifications]
+
+# Seleziona solo la prima banda per evitare avvisi di compatibilità
+classified_raster_single <- classified_raster[[1]]
+
+# Visualizzazione con leaflet
+palette_turbo <- viridisLite::turbo
+
+leaflet() %>%
+    addTiles(group = "OpenStreetMap") %>%
+    addProviderTiles("Esri.WorldImagery", group = "Immagine Satellitare") %>%
+    addProviderTiles("CartoDB.Positron", group = "Mappa Chiara") %>%
+    
+    # Aggiungi il raster classificato
+    addRasterImage(classified_raster_single, 
+                   colors = palette_turbo(5),  # Numero di colori uguale al numero di cluster
+                   opacity = 0.6, 
+                   group = "Raster Classificato") %>%
+    
+    addLayersControl(
+        baseGroups = c("OpenStreetMap", "Immagine Satellitare", "Mappa Chiara"),
+        overlayGroups = c("Raster Classificato"),
+        options = layersControlOptions(collapsed = FALSE)
+    ) %>%
+    
+    addScaleBar(position = "bottomright", options = scaleBarOptions(imperial = FALSE)) %>%
+    setView(lng = 16.5, lat = 39.0, zoom = 10)
+
+cat("Visualizzazione del raster classificato completata con successo.\n")
+
+bcl <- bootFlexclust(x= som_model$codes[[1]], k=2:7, nboot=50, verbose=TRUE,FUN=cclust, multicore = TRUE,method='hardcl')
+summary(bcl)
