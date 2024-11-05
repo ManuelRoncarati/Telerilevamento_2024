@@ -2099,3 +2099,12 @@ leaflet() %>%
 
 cat("Visualizzazione completata con successo.\n")
 
+
+
+# Salva il modello SOM in un file
+saveRDS(som_model, file = "som_model_best_map_best_grid_ritaglio.rds")
+cat("Modello SOM salvato correttamente.\n")
+
+# Carica il modello SOM dal file
+som_model <- readRDS("som_model_best_map_best_grid_ritaglio.rds")
+cat("Modello SOM caricato correttamente.\n")
