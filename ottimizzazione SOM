@@ -1693,3 +1693,177 @@ print(paste("SOM Senza Ottimizzazione - Numero ottimale di cluster secondo MIXCL
 print(paste("SOM Senza Ottimizzazione - Numero ottimale di cluster secondo CLACLA:", G_clacla_def))
 
 cat("Analisi completata con successo.\n")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Carica le librerie necessarie
+check_and_install <- function(packages) {
+    installed <- packages %in% rownames(installed.packages())
+    if (any(!installed)) {
+        install.packages(packages[!installed])
+    }
+    invisible(lapply(packages, library, character.only = TRUE))
+}
+
+required_packages <- c("fpc", "NbClust", "terra", "dplyr", "kohonen", "parallel", "leaflet", "ggplot2","aweSOM", "viridisLite", "mclust", "tclust")
+check_and_install(required_packages)
+
+# Imposta la working directory
+setwd("C:/composite")
+
+# Carica il raster multibanda
+img_84 <- rast("L5 Composite 1984-1990_masked.tif")
+
+# Seleziona le bande necessarie (B1, B2, B3, B4, B5, B7)
+l1984 <- img_84[[c(1, 2, 3, 4, 5, 6)]]
+names(l1984) <- c("B1", "B2", "B3", "B4", "B5", "B7")
+
+# Calcola gli indici selezionati
+ndvi_1984 <- (l1984[["B4"]] - l1984[["B3"]]) / (l1984[["B4"]] + l1984[["B3"]])
+mndwi_1984 <- (l1984[["B2"]] - l1984[["B5"]]) / (l1984[["B2"]] + l1984[["B5"]])
+ndbi_1984 <- (l1984[["B5"]] - l1984[["B4"]]) / (l1984[["B5"]] + l1984[["B4"]])
+bsi_1984 <- ((l1984[["B5"]] + l1984[["B3"]]) - (l1984[["B4"]] + l1984[["B1"]])) /
+    ((l1984[["B5"]] + l1984[["B3"]]) + (l1984[["B4"]] + l1984[["B1"]]))
+L <- 0.5
+savi_1984 <- ((l1984[["B4"]] - l1984[["B3"]]) / (l1984[["B4"]] + l1984[["B3"]] + L)) * (1 + L)
+
+# Crea lo stack con le bande e gli indici selezionati
+stack_1984 <- c(l1984, ndvi_1984, mndwi_1984, ndbi_1984, bsi_1984, savi_1984)
+names(stack_1984) <- c("B1", "B2", "B3", "B4", "B5", "B7", "NDVI", "MNDWI", "NDBI", "BSI", "SAVI")
+
+# Estrai i valori dal raster stack come dataframe e rimuovi i valori NA
+values_stack_1984 <- as.data.frame(values(stack_1984))
+values_stack_1984_non_na <- values_stack_1984[complete.cases(values_stack_1984), ]
+
+# PCA: esegui la PCA sullo stack e seleziona le prime tre componenti principali
+pca_result <- prcomp(values_stack_1984_non_na, center = TRUE, scale. = TRUE)
+pca_values <- pca_result$x[, 1:3]  # Seleziona solo le prime tre componenti
+
+# Conta il numero di campioni
+m <- nrow(pca_values)
+
+# Calcola il numero totale di nodi usando la formula della mappa compressa (small map)
+nodes <- (5 * sqrt(m)) 
+print(paste("Numero di nodi suggerito per la mappa compressa (small map):", round(nodes)))
+
+# Suggerisci una configurazione di griglia approssimata
+x_dim <- round(sqrt(nodes))
+y_dim <- round(nodes / x_dim)
+print(paste("Dimensioni della griglia suggerite:", x_dim, "x", y_dim))
+
+# Definisci una griglia SOM con le dimensioni calcolate
+som_grid <- somgrid(xdim = x_dim, ydim = y_dim, topo = "hexagonal")
+
+# Esegui SuperSOM con parallelizzazione usando la PCA come input e alpha = 0
+som_model <- supersom(
+    list(pca_values), 
+    grid = som_grid, 
+    rlen = 500,
+    mode = "pbatch", 
+    cores = -1  # Usa tutti i core disponibili
+)
+
+# Visualizza i cambiamenti durante l'addestramento della SOM
+plot(som_model, type = "changes")
+
+# Ottieni i codici della SOM (valori ridotti dimensionalmente)
+som_values <- som_model$codes[[1]]
+
+# Calcola le metriche di qualità del SOM
+quality <- somQuality(som_model, as.matrix(pca_values))
+
+# Stampa le metriche di qualità per valutare le performance del SOM
+cat("Qualità della mappa SOM:\n")
+cat("Quantization Error:", quality$err.quant, "\n")
+cat("Percentage of Explained Variance:", quality$err.varratio, "\n")
+cat("Topographic Error:", quality$err.topo, "\n")
+cat("Kaski-Lagus Error:", quality$err.kaski, "\n")
+
+# Determina il numero ottimale di cluster con NbClust
+set.seed(123)
+nbclust_result <- NbClust(
+    data = som_values, 
+    diss = NULL, 
+    distance = "euclidean", 
+    min.nc = 2, 
+    max.nc = 10, 
+    method = "kmeans", 
+    index = "all"
+)
+
+# Trova il numero ottimale di cluster dalla moda dei risultati
+optimal_clusters <- as.numeric(names(which.max(table(nbclust_result$Best.nc[1, ]))))
+cat("Il numero ottimale di cluster secondo NbClust è:", optimal_clusters, "\n")
+
+# Usa il numero ottimale di cluster con clusterboot e kmeansCBI
+clusterboot_result <- clusterboot(
+    data = som_values, 
+    B = 500, 
+    clustermethod = kmeansCBI, 
+    bootmethod = "boot", 
+    dissolution = 0.5, 
+    recover = 0.75, 
+    count = FALSE, 
+    k = optimal_clusters
+)
+
+# Stampa i risultati della stabilità dei cluster
+cat("Risultati della stabilità dei cluster con clusterboot:\n")
+print(clusterboot_result$bootmean)    # Media della stabilità per ogni cluster
+print(clusterboot_result$bootrecover) # Numero di volte che ogni cluster è stato recuperato
+print(clusterboot_result$bootbrd)     # Numero di volte che ogni cluster è stato dissolto
+
+# Visualizzazione della stabilità dei cluster
+barplot(clusterboot_result$bootmean, 
+        main = "Stabilità dei Cluster con K-means e Bootstrap", 
+        ylab = "Media della Similarità di Jaccard", 
+        xlab = "Cluster", 
+        col = "lightblue")
+
+# Esegui K-means con il numero ottimale di cluster e gestisci le iterazioni
+set.seed(42)
+kmeans_nbclust <- kmeans(som_values, centers = optimal_clusters, nstart = 100, iter.max = 1000)
+
+# Crea un raster classificato usando i cluster di K-means con il numero ottimale di cluster
+classified_raster_nbclust <- rast(img_84)
+values(classified_raster_nbclust) <- NA
+mask <- !is.na(values(img_84[[1]]))
+values(classified_raster_nbclust)[mask] <- kmeans_nbclust$cluster[som_model$unit.classif]
+
+# Seleziona solo la prima banda del raster per evitare messaggi di avvertimento
+classified_raster_nbclust_single <- classified_raster_nbclust[[1]]
+
+# Carica la palette turbo
+palette_turbo <- viridisLite::turbo
+
+# Visualizza il raster classificato con leaflet
+leaflet() %>%
+    addTiles(group = "OpenStreetMap") %>%
+    addProviderTiles("Esri.WorldImagery", group = "Immagine Satellitare") %>%
+    addProviderTiles("CartoDB.Positron", group = "Mappa Chiara") %>%
+    addRasterImage(classified_raster_nbclust_single, 
+                   colors = palette_turbo(optimal_clusters), 
+                   opacity = 0.6, 
+                   group = "Classificato con K-means (Optimal Clusters)") %>%
+    addLayersControl(
+        baseGroups = c("OpenStreetMap", "Immagine Satellitare", "Mappa Chiara"),
+        overlayGroups = c("Classificato con K-means (Optimal Clusters)"),
+        options = layersControlOptions(collapsed = FALSE)
+    ) %>%
+    addScaleBar(position = "bottomright", options = scaleBarOptions(imperial = FALSE)) %>%
+    setView(lng = 16.5, lat = 39.0, zoom = 10)
+
+cat("Visualizzazione completata con successo.\n")
