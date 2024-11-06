@@ -2117,6 +2117,17 @@ cat("Modello SOM caricato correttamente.\n")
 
 #solo griglia grande
 
+> clusterboot_mixmix <- run_clusterboot(G_mixmix, som_values, "MIXMIX")
+
+Esecuzione di clusterboot per: MIXMIX con k = 5 
+
+Risultati della stabilità dei cluster per: MIXMIX 
+[1] 0.9719332 0.9443720 0.9526770 0.9161747 0.9923826
+[1] 499 500 499 490 499
+[1] 0 0 1 0 0
+
+sfortutanatamente il 5 non esce quasi mai come valore ahaha
+
 
 
 # Carica le librerie necessarie
