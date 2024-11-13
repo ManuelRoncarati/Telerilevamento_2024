@@ -13,15 +13,52 @@ mclustHook <- function(this_dist, k) {
 # Esegui ConsensusClusterPlus utilizzando la funzione personalizzata mclustHook
 results <- ConsensusClusterPlus(
   som_values,
-  maxK = 9,                     # Imposta maxK a 9 per esplorare fino a 9 cluster
-  reps = 10,                    # Numero di repliche
+  maxK = 8,                     # Imposta maxK a 9 per esplorare fino a 9 cluster
+  reps = 100,                    # Numero di repliche
   pItem = 0.8,
   pFeature = 1,
   clusterAlg = "mclustHook",    # Usa la funzione personalizzata mclustHook
   distance = "euclidean",       # La distanza può essere ignorata da mclust
   title = "C:/composite_prove/prova_22",  # Percorso e nome base per i file di output
-  plot = "pdf",                 # Salva i grafici in formato PDF
+  plot = "png",                 # Salva i grafici in formato PDF
   verbose = TRUE
+)
+
+# Calcola e visualizza la stabilità dei cluster
+icl <- calcICL(results)
+print(icl$clusterConsensus)  # Mostra la stabilità di ciascun cluster per ogni valore di k
+
+
+
+# Carica la libreria necessaria
+library(ConsensusClusterPlus)
+
+# Assicurati che som_values sia una matrice
+som_values <- as.matrix(som_values)
+
+# Step 1: Trasponi la matrice per avere righe come caratteristiche e colonne come campioni
+som_values <- t(som_values)
+
+# Step 2: Normalizza le caratteristiche centrando ciascuna rispetto alla mediana
+som_values <- sweep(som_values, 1, apply(som_values, 1, median, na.rm = TRUE))
+
+# Step 3: Verifica che non ci siano valori mancanti
+if (any(is.na(som_values))) {
+    som_values <- na.omit(som_values)  # Rimuovi le righe con valori mancanti
+}
+
+# Step 4: Esegui il clustering utilizzando ConsensusClusterPlus con k-means
+results <- ConsensusClusterPlus(
+    som_values,
+    maxK = 6,                     # Imposta maxK a 9 per esplorare fino a 9 cluster
+    reps = 100,                    # Numero di repliche
+    pItem = 1,
+    pFeature = 1,
+    clusterAlg = "km",            # Usa k-means come algoritmo di clustering
+    distance = "euclidean",       # La distanza euclidea è standard per k-means
+    title = "C:/composite_prove",  # Percorso e nome base per i file di output
+    plot = "png",                 # Salva i grafici in formato PDF
+    verbose = TRUE
 )
 
 # Calcola e visualizza la stabilità dei cluster
