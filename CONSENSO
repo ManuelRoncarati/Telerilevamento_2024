@@ -19,7 +19,7 @@ results <- ConsensusClusterPlus(
   pFeature = 1,
   clusterAlg = "mclustHook",    # Usa la funzione personalizzata mclustHook
   distance = "euclidean",       # La distanza può essere ignorata da mclust
-  title = "C:/composite_prove/prova_22",  # Percorso e nome base per i file di output
+  title = "C:/composite_prove",  # Percorso e nome base per i file di output
   plot = "png",                 # Salva i grafici in formato PDF
   verbose = TRUE
 )
