@@ -1,0 +1,29 @@
+# Carica le librerie necessarie
+library(ConsensusClusterPlus)
+library(mclust)
+
+# Funzione personalizzata di clustering basata su mclust
+mclustHook <- function(this_dist, k) {
+  data_matrix <- as.matrix(as.dist(this_dist))  # Converti in matrice per mclust
+  mclust_result <- Mclust(data_matrix, G = k)   # Esegui il clustering con il numero di cluster specificato
+  assignment <- mclust_result$classification    # Estrai le assegnazioni di cluster
+  return(assignment)
+}
+
+# Esegui ConsensusClusterPlus utilizzando la funzione personalizzata mclustHook
+results <- ConsensusClusterPlus(
+  som_values,
+  maxK = 9,                     # Imposta maxK a 9 per esplorare fino a 9 cluster
+  reps = 10,                    # Numero di repliche
+  pItem = 0.8,
+  pFeature = 1,
+  clusterAlg = "mclustHook",    # Usa la funzione personalizzata mclustHook
+  distance = "euclidean",       # La distanza può essere ignorata da mclust
+  title = "C:/composite_prove/prova_22",  # Percorso e nome base per i file di output
+  plot = "pdf",                 # Salva i grafici in formato PDF
+  verbose = TRUE
+)
+
+# Calcola e visualizza la stabilità dei cluster
+icl <- calcICL(results)
+print(icl$clusterConsensus)  # Mostra la stabilità di ciascun cluster per ogni valore di k
