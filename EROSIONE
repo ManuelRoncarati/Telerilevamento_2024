@@ -889,3 +889,171 @@ for (i in 1:3) {
 # Visualizza l'immagine segmentata dopo la dilatazione
 plot(as.raster(superpixel_colored), main = "Segmentazione con Dilatazione (Colored by Mean RGB)")
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Carica le librerie necessarie
+check_and_install <- function(packages) {
+    installed <- packages %in% rownames(installed.packages())
+    if (any(!installed)) {
+        install.packages(packages[!installed])
+    }
+    invisible(lapply(packages, library, character.only = TRUE))
+}
+
+required_packages <- c("terra", "mmand", "OpenImageR", "EBImage", "leaflet", "mapview")
+check_and_install(required_packages)
+
+# Imposta la working directory
+setwd("C:/composite")
+
+# Carica il raster multibanda
+img_84 <- rast("ritaglio.tif")
+
+# Seleziona le bande necessarie (B1, B2, B3, B4, B5, B7)
+l1984 <- img_84[[c(1, 2, 3, 4, 5, 6)]]
+
+# Calcola gli indici NDVI, MNDWI e NDBI
+ndvi_1984 <- (l1984[[4]] - l1984[[3]]) / (l1984[[4]] + l1984[[3]])
+mndwi_1984 <- (l1984[[2]] - l1984[[5]]) / (l1984[[2]] + l1984[[5]])
+ndbi_1984 <- (l1984[[5]] - l1984[[4]]) / (l1984[[5]] + l1984[[4]])
+
+# Crea lo stack con bande e indici
+stack_1984 <- c(l1984, ndvi_1984, mndwi_1984, ndbi_1984)
+
+# Estrai i valori dal raster stack come dataframe e rimuovi i valori NA
+values_stack_1984 <- as.data.frame(values(stack_1984))
+values_stack_1984_non_na <- values_stack_1984[complete.cases(values_stack_1984), ]
+
+# PCA: esegui la PCA sullo stack e seleziona le prime tre componenti principali
+cat("Numero di pixel dopo la PCA: ", length(full_pca1), "
+")
+pca_result <- prcomp(values_stack_1984_non_na, center = TRUE, scale. = TRUE)
+pca_values <- pca_result$x[, 1:3]  # Seleziona le prime tre componenti
+
+# Reintegra i pixel NA nella matrice della PCA per mantenere la dimensione dell'immagine per ogni componente
+full_pca1 <- rep(NA, ncell(stack_1984[[1]]))
+full_pca2 <- rep(NA, ncell(stack_1984[[1]]))
+full_pca3 <- rep(NA, ncell(stack_1984[[1]]))
+
+full_pca1[!is.na(values(stack_1984[[1]]))] <- pca_values[, 1]
+full_pca2[!is.na(values(stack_1984[[1]]))] <- pca_values[, 2]
+full_pca3[!is.na(values(stack_1984[[1]]))] <- pca_values[, 3]
+
+# Normalizza i valori PCA per portarli tra 0 e 255
+normalize_to_255 <- function(x) {
+    x_min <- min(x, na.rm = TRUE)
+    x_max <- max(x, na.rm = TRUE)
+    ((x - x_min) / (x_max - x_min)) * 255
+}
+
+full_pca1 <- normalize_to_255(full_pca1)
+full_pca2 <- normalize_to_255(full_pca2)
+full_pca3 <- normalize_to_255(full_pca3)
+
+# Converti ciascuna componente in SpatRaster senza erosione
+pca_rast1 <- rast(matrix(full_pca1, nrow = nrow(stack_1984[[1]]), ncol = ncol(stack_1984[[1]]), byrow = TRUE))
+pca_rast2 <- rast(matrix(full_pca2, nrow = nrow(stack_1984[[1]]), ncol = ncol(stack_1984[[1]]), byrow = TRUE))
+pca_rast3 <- rast(matrix(full_pca3, nrow = nrow(stack_1984[[1]]), ncol = ncol(stack_1984[[1]]), byrow = TRUE))
+
+# Imposta l'estensione per mantenere la risoluzione originale
+ext(pca_rast1) <- ext(stack_1984)
+ext(pca_rast2) <- ext(stack_1984)
+ext(pca_rast3) <- ext(stack_1984)
+
+# Crea l'immagine RGB senza erosione
+rgb_image <- c(pca_rast1, pca_rast2, pca_rast3)
+
+# Converti l'immagine RGB in un RasterBrick per la visualizzazione con mapview
+library(raster)
+rgb_image_raster <- brick(
+  raster(pca_rast1),
+  raster(pca_rast2),
+  raster(pca_rast3)
+)
+crs(rgb_image_raster) <- crs(stack_1984)
+# Visualizza l'immagine RGB senza erosione
+viewRGB(rgb_image_raster, r = 1, g = 2, b = 3, maxpixels = 142266) %>%
+  addProviderTiles(providers$Esri.WorldImagery) %>%
+  addLayersControl(baseGroups = c("Esri.WorldImagery"), options = layersControlOptions(collapsed = FALSE))
+
+# Applica l'algoritmo di superpixel utilizzando OpenImageR con un maggiore focus sulla compattezza
+library(OpenImageR)
+pca_rgb_array <- as.array(rgb_image)
+  # Assicurati che le dimensioni siano correttamente orientate
+superpixel_result <- superpixels(input_image = pca_rgb_array, method = "slic", superpixel = 16, compactness = 0, return_labels = TRUE)
+
+# Stampa il numero di pixel dopo SNIC
+cat("Numero di pixel dopo SNIC: ", length(superpixel_result$labels), "
+")
+
+# Calcola la media dei valori RGB per ciascun superpixel
+superpixel_labels <- superpixel_result$labels
+unique_labels <- unique(as.vector(superpixel_labels))
+mean_rgb_values <- sapply(unique_labels, function(label) {
+  mask <- (superpixel_labels == label)
+  r_mean <- mean(pca_rgb_array[,,1][mask], na.rm = TRUE)
+  g_mean <- mean(pca_rgb_array[,,2][mask], na.rm = TRUE)
+  b_mean <- mean(pca_rgb_array[,,3][mask], na.rm = TRUE)
+  return(c(r_mean, g_mean, b_mean))
+})
+
+# Rimuovi eventuali valori NA dalle medie
+mean_rgb_values[is.na(mean_rgb_values)] <- 0
+
+# Crea un'immagine con i superpixel colorati in base alla media RGB
+superpixel_colored <- array(0, dim = dim(pca_rgb_array))
+for (i in seq_along(unique_labels)) {
+  label <- unique_labels[i]
+  mask <- (superpixel_labels == label)
+  superpixel_colored[,,1][mask] <- mean_rgb_values[1, i]
+  superpixel_colored[,,2][mask] <- mean_rgb_values[2, i]
+  superpixel_colored[,,3][mask] <- mean_rgb_values[3, i]
+}
+
+# Normalizza l'immagine per garantire che i valori siano tra 0 e 1
+superpixel_colored <- pmax(pmin(superpixel_colored, 255), 0) / 255
+
+# Assicurati che l'orientamento dell'immagine sia corretto
+
+
+
+
+
+
+# Crea un RasterBrick per la visualizzazione dell'immagine segmentata con superpixel
+superpixel_rast_rgb <- brick(
+  raster(as.matrix(superpixel_colored[,,1])),
+  raster(as.matrix(superpixel_colored[,,2])),
+  raster(as.matrix(superpixel_colored[,,3]))
+)
+crs(superpixel_rast_rgb) <- crs(stack_1984)
+extent(superpixel_rast_rgb) <- extent(rgb_image_raster)
+crs(superpixel_rast_rgb) <- crs(stack_1984)
+
+
+mapview_options <- mapviewOptions()
+viewRGB(superpixel_rast_rgb, r = 1, g = 2, b = 3, maxpixels = 142266) %>%
+  addProviderTiles(providers$Esri.WorldImagery) %>%
+  addLayersControl(baseGroups = c("Esri.WorldImagery"), options = layersControlOptions(collapsed = FALSE))
+
