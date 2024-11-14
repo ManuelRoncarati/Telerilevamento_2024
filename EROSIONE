@@ -1,0 +1,83 @@
+# Carica le librerie necessarie
+check_and_install <- function(packages) {
+    installed <- packages %in% rownames(installed.packages())
+    if (any(!installed)) {
+        install.packages(packages[!installed])
+    }
+    invisible(lapply(packages, library, character.only = TRUE))
+}
+
+required_packages <- c("terra", "mmand")
+check_and_install(required_packages)
+
+# Imposta la working directory
+setwd("D:/composite")
+
+# Carica il raster multibanda
+img_84 <- rast("L5 Composite 1984-1990_masked.tif")
+
+# Seleziona le bande necessarie (B1, B2, B3, B4, B5, B7)
+l1984 <- img_84[[c(1, 2, 3, 4, 5, 6)]]
+
+# Calcola gli indici NDVI, MNDWI e NDBI
+ndvi_1984 <- (l1984[[4]] - l1984[[3]]) / (l1984[[4]] + l1984[[3]])
+mndwi_1984 <- (l1984[[2]] - l1984[[5]]) / (l1984[[2]] + l1984[[5]])
+ndbi_1984 <- (l1984[[5]] - l1984[[4]]) / (l1984[[5]] + l1984[[4]])
+
+# Crea lo stack con bande e indici
+stack_1984 <- c(l1984, ndvi_1984, mndwi_1984, ndbi_1984)
+
+# Estrai i valori dal raster stack come dataframe e rimuovi i valori NA
+values_stack_1984 <- as.data.frame(values(stack_1984))
+values_stack_1984_non_na <- values_stack_1984[complete.cases(values_stack_1984), ]
+
+# PCA: esegui la PCA sullo stack e seleziona le prime tre componenti principali
+pca_result <- prcomp(values_stack_1984_non_na, center = TRUE, scale. = TRUE)
+pca_values <- pca_result$x[, 1:3]  # Seleziona le prime tre componenti
+
+# Reintegra i pixel NA nella matrice della PCA per mantenere la dimensione dell'immagine per ogni componente
+full_pca1 <- rep(NA, ncell(stack_1984[[1]]))
+full_pca2 <- rep(NA, ncell(stack_1984[[1]]))
+full_pca3 <- rep(NA, ncell(stack_1984[[1]]))
+
+full_pca1[!is.na(values(stack_1984[[1]]))] <- pca_values[, 1]
+full_pca2[!is.na(values(stack_1984[[1]]))] <- pca_values[, 2]
+full_pca3[!is.na(values(stack_1984[[1]]))] <- pca_values[, 3]
+
+# Converti ciascuna componente in SpatRaster senza erosione
+pca_rast1 <- rast(matrix(full_pca1, nrow = nrow(stack_1984[[1]]), ncol = ncol(stack_1984[[1]]), byrow = TRUE))
+pca_rast2 <- rast(matrix(full_pca2, nrow = nrow(stack_1984[[1]]), ncol = ncol(stack_1984[[1]]), byrow = TRUE))
+pca_rast3 <- rast(matrix(full_pca3, nrow = nrow(stack_1984[[1]]), ncol = ncol(stack_1984[[1]]), byrow = TRUE))
+
+# Imposta l'estensione per mantenere la risoluzione originale
+ext(pca_rast1) <- ext(stack_1984)
+ext(pca_rast2) <- ext(stack_1984)
+ext(pca_rast3) <- ext(stack_1984)
+
+# Crea l'immagine RGB senza erosione
+rgb_image <- c(pca_rast1, pca_rast2, pca_rast3)
+
+# Visualizza l'immagine RGB senza erosione
+plotRGB(rgb_image, stretch = "hist", main = "PCA RGB Image (First 3 Components, No Erosion)")
+
+# Applica l'erosione a ciascuna componente utilizzando un kernel di tipo disco
+kernel <- shapeKernel(c(3, 3), type = "disc")
+eroded_matrix1 <- erode(matrix(full_pca1, nrow = nrow(stack_1984[[1]]), ncol = ncol(stack_1984[[1]]), byrow = TRUE), kernel)
+eroded_matrix2 <- erode(matrix(full_pca2, nrow = nrow(stack_1984[[1]]), ncol = ncol(stack_1984[[1]]), byrow = TRUE), kernel)
+eroded_matrix3 <- erode(matrix(full_pca3, nrow = nrow(stack_1984[[1]]), ncol = ncol(stack_1984[[1]]), byrow = TRUE), kernel)
+
+# Converti le componenti erose in SpatRaster
+eroded_rast1 <- rast(eroded_matrix1)
+eroded_rast2 <- rast(eroded_matrix2)
+eroded_rast3 <- rast(eroded_matrix3)
+
+# Imposta l'estensione e la risoluzione delle immagini erose
+ext(eroded_rast1) <- ext(stack_1984)
+ext(eroded_rast2) <- ext(stack_1984)
+ext(eroded_rast3) <- ext(stack_1984)
+
+# Crea l'immagine RGB delle componenti erose
+eroded_rgb_image <- c(eroded_rast1, eroded_rast2, eroded_rast3)
+
+# Visualizza l'immagine RGB erosa
+plotRGB(eroded_rgb_image, stretch = "hist", main = "Eroded PCA RGB Image (First 3 Components)")
