@@ -946,8 +946,6 @@ values_stack_1984 <- as.data.frame(values(stack_1984))
 values_stack_1984_non_na <- values_stack_1984[complete.cases(values_stack_1984), ]
 
 # PCA: esegui la PCA sullo stack e seleziona le prime tre componenti principali
-cat("Numero di pixel dopo la PCA: ", length(full_pca1), "
-")
 pca_result <- prcomp(values_stack_1984_non_na, center = TRUE, scale. = TRUE)
 pca_values <- pca_result$x[, 1:3]  # Seleziona le prime tre componenti
 
@@ -955,6 +953,10 @@ pca_values <- pca_result$x[, 1:3]  # Seleziona le prime tre componenti
 full_pca1 <- rep(NA, ncell(stack_1984[[1]]))
 full_pca2 <- rep(NA, ncell(stack_1984[[1]]))
 full_pca3 <- rep(NA, ncell(stack_1984[[1]]))
+
+# Stampa il numero di pixel dopo la PCA
+cat("Numero di pixel dopo la PCA: ", length(full_pca1), "
+")
 
 full_pca1[!is.na(values(stack_1984[[1]]))] <- pca_values[, 1]
 full_pca2[!is.na(values(stack_1984[[1]]))] <- pca_values[, 2]
@@ -987,20 +989,29 @@ rgb_image <- c(pca_rast1, pca_rast2, pca_rast3)
 # Converti l'immagine RGB in un RasterBrick per la visualizzazione con mapview
 library(raster)
 rgb_image_raster <- brick(
-  raster(pca_rast1),
-  raster(pca_rast2),
-  raster(pca_rast3)
+    raster(pca_rast1),
+    raster(pca_rast2),
+    raster(pca_rast3)
 )
 crs(rgb_image_raster) <- crs(stack_1984)
 # Visualizza l'immagine RGB senza erosione
-viewRGB(rgb_image_raster, r = 1, g = 2, b = 3, maxpixels = 142266) %>%
-  addProviderTiles(providers$Esri.WorldImagery) %>%
-  addLayersControl(baseGroups = c("Esri.WorldImagery"), options = layersControlOptions(collapsed = FALSE))
+rgb_map <- viewRGB(rgb_image_raster, r = 1, g = 2, b = 3, maxpixels = 142266)
+
+leaflet_map <- rgb_map@map %>%
+    addProviderTiles(providers$Esri.WorldImagery) %>%
+    addProviderTiles(providers$CartoDB.Positron) %>%
+    addProviderTiles(providers$OpenStreetMap) %>%
+    addLayersControl(
+        baseGroups = c("Esri.WorldImagery", "CartoDB.Positron", "OpenStreetMap"),
+        options = layersControlOptions(collapsed = FALSE)
+    )
+
+leaflet_map
 
 # Applica l'algoritmo di superpixel utilizzando OpenImageR con un maggiore focus sulla compattezza
 library(OpenImageR)
 pca_rgb_array <- as.array(rgb_image)
-  # Assicurati che le dimensioni siano correttamente orientate
+# Assicurati che le dimensioni siano correttamente orientate
 superpixel_result <- superpixels(input_image = pca_rgb_array, method = "slic", superpixel = 16, compactness = 0, return_labels = TRUE)
 
 # Stampa il numero di pixel dopo SNIC
@@ -1011,11 +1022,11 @@ cat("Numero di pixel dopo SNIC: ", length(superpixel_result$labels), "
 superpixel_labels <- superpixel_result$labels
 unique_labels <- unique(as.vector(superpixel_labels))
 mean_rgb_values <- sapply(unique_labels, function(label) {
-  mask <- (superpixel_labels == label)
-  r_mean <- mean(pca_rgb_array[,,1][mask], na.rm = TRUE)
-  g_mean <- mean(pca_rgb_array[,,2][mask], na.rm = TRUE)
-  b_mean <- mean(pca_rgb_array[,,3][mask], na.rm = TRUE)
-  return(c(r_mean, g_mean, b_mean))
+    mask <- (superpixel_labels == label)
+    r_mean <- mean(pca_rgb_array[,,1][mask], na.rm = TRUE)
+    g_mean <- mean(pca_rgb_array[,,2][mask], na.rm = TRUE)
+    b_mean <- mean(pca_rgb_array[,,3][mask], na.rm = TRUE)
+    return(c(r_mean, g_mean, b_mean))
 })
 
 # Rimuovi eventuali valori NA dalle medie
@@ -1024,11 +1035,11 @@ mean_rgb_values[is.na(mean_rgb_values)] <- 0
 # Crea un'immagine con i superpixel colorati in base alla media RGB
 superpixel_colored <- array(0, dim = dim(pca_rgb_array))
 for (i in seq_along(unique_labels)) {
-  label <- unique_labels[i]
-  mask <- (superpixel_labels == label)
-  superpixel_colored[,,1][mask] <- mean_rgb_values[1, i]
-  superpixel_colored[,,2][mask] <- mean_rgb_values[2, i]
-  superpixel_colored[,,3][mask] <- mean_rgb_values[3, i]
+    label <- unique_labels[i]
+    mask <- (superpixel_labels == label)
+    superpixel_colored[,,1][mask] <- mean_rgb_values[1, i]
+    superpixel_colored[,,2][mask] <- mean_rgb_values[2, i]
+    superpixel_colored[,,3][mask] <- mean_rgb_values[3, i]
 }
 
 # Normalizza l'immagine per garantire che i valori siano tra 0 e 1
@@ -1043,9 +1054,9 @@ superpixel_colored <- pmax(pmin(superpixel_colored, 255), 0) / 255
 
 # Crea un RasterBrick per la visualizzazione dell'immagine segmentata con superpixel
 superpixel_rast_rgb <- brick(
-  raster(as.matrix(superpixel_colored[,,1])),
-  raster(as.matrix(superpixel_colored[,,2])),
-  raster(as.matrix(superpixel_colored[,,3]))
+    raster(as.matrix(superpixel_colored[,,1])),
+    raster(as.matrix(superpixel_colored[,,2])),
+    raster(as.matrix(superpixel_colored[,,3]))
 )
 crs(superpixel_rast_rgb) <- crs(stack_1984)
 extent(superpixel_rast_rgb) <- extent(rgb_image_raster)
@@ -1053,7 +1064,16 @@ crs(superpixel_rast_rgb) <- crs(stack_1984)
 
 
 mapview_options <- mapviewOptions()
-viewRGB(superpixel_rast_rgb, r = 1, g = 2, b = 3, maxpixels = 142266) %>%
-  addProviderTiles(providers$Esri.WorldImagery) %>%
-  addLayersControl(baseGroups = c("Esri.WorldImagery"), options = layersControlOptions(collapsed = FALSE))
+superpixel_map <- viewRGB(superpixel_rast_rgb, r = 1, g = 2, b = 3, maxpixels = 142266)
+
+leaflet_superpixel_map <- superpixel_map@map %>%
+    addProviderTiles(providers$Esri.WorldImagery) %>%
+    addProviderTiles(providers$CartoDB.Positron) %>%
+    addProviderTiles(providers$OpenStreetMap) %>%
+    addLayersControl(
+        baseGroups = c("Esri.WorldImagery", "CartoDB.Positron", "OpenStreetMap"),
+        options = layersControlOptions(collapsed = FALSE)
+    )
+
+leaflet_superpixel_map
 
