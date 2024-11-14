@@ -64,3 +64,204 @@ results <- ConsensusClusterPlus(
 # Calcola e visualizza la stabilità dei cluster
 icl <- calcICL(results)
 print(icl$clusterConsensus)  # Mostra la stabilità di ciascun cluster per ogni valore di k
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Carica le librerie necessarie
+library(terra)
+library(leaflet)
+library(mapview)
+library(mapedit)
+library(sf)
+library(kohonen)
+library(NbClust)
+library(fpc)
+library(viridisLite)
+library(lwgeom)  # Carica lwgeom per la validazione delle geometrie
+library(raster)  # Necessario per la conversione in RasterBrick
+library(terra)
+library(leaflet)
+library(sf)
+library(mapedit)
+library(viridisLite)
+
+# Imposta la working directory e carica il raster multibanda completo
+setwd("C:/composite")  # Modifica con il percorso della tua cartella
+img_84 <- rast("L5 Composite 1984-1990_masked.tif")  # Assicurati che contenga tutte le bande necessarie
+
+# Seleziona una singola banda per la visualizzazione (es. infrarosso)
+infrared_band <- img_84[[4]]  # Sostituisci 4 con l'indice della banda infrarossa nel tuo raster, se diverso
+infrared_band_wgs84 <- project(infrared_band, "EPSG:4326")  # Proietta in WGS84 per la visualizzazione
+
+# Crea una mappa interattiva con leaflet e visualizza la banda infrarossa
+mappa <- leaflet() %>%
+  addTiles(group = "OpenStreetMap") %>%
+  addProviderTiles("Esri.WorldImagery", group = "Immagine Satellitare") %>%
+  addProviderTiles("CartoDB.Positron", group = "Mappa Chiara") %>%
+  addRasterImage(infrared_band_wgs84, opacity = 0.8, group = "Infrarosso") %>%
+  addLayersControl(
+    baseGroups = c("OpenStreetMap", "Immagine Satellitare", "Mappa Chiara"),
+    overlayGroups = c("Infrarosso"),
+    options = layersControlOptions(collapsed = FALSE)
+  ) %>%
+  addScaleBar(position = "bottomright", options = scaleBarOptions(imperial = FALSE)) %>%
+  setView(lng = 16.5, lat = 39.0, zoom = 10)
+
+# Usa mapedit per disegnare il poligono
+poligono_disegnato <- editMap(mappa)
+aoi_polygon <- poligono_disegnato$finished
+
+# Verifica e correggi eventuali geometrie non valide
+if (!all(st_is_valid(aoi_polygon))) {
+  aoi_polygon <- st_make_valid(aoi_polygon)
+}
+
+# Assicurati che il CRS del poligono corrisponda a quello del raster originale
+if (st_crs(aoi_polygon) != crs(img_84)) {
+  aoi_polygon <- st_transform(aoi_polygon, crs = crs(img_84))
+}
+
+# Ritaglia e maschera il raster originale utilizzando il poligono
+img_84_cropped <- crop(img_84, aoi_polygon)
+img_84_masked <- mask(img_84_cropped, aoi_polygon)
+
+# Proietta il raster mascherato in WGS84 per la visualizzazione
+img_84_masked_wgs84 <- project(img_84_masked, "EPSG:4326")
+
+# Visualizza il raster mascherato per conferma
+plotRGB(img_84_masked_wgs84, r = 3, g = 2, b = 1, scale = 1)
+
+# **Analisi del Raster Mascherato**
+
+# Seleziona le bande necessarie (B1, B2, B3, B4, B5, B7)
+# Assicurati che il tuo raster abbia almeno 7 bande
+l1984 <- img_84_masked[[c(1, 2, 3, 4, 5, 7)]]
+
+# Calcola gli indici NDVI, MNDWI e NDBI
+ndvi_1984 <- (l1984[[4]] - l1984[[3]]) / (l1984[[4]] + l1984[[3]])
+mndwi_1984 <- (l1984[[2]] - l1984[[5]]) / (l1984[[2]] + l1984[[5]])
+ndbi_1984 <- (l1984[[5]] - l1984[[4]]) / (l1984[[5]] + l1984[[4]])
+
+# Crea lo stack con le bande e gli indici
+stack_1984 <- c(l1984, ndvi_1984, mndwi_1984, ndbi_1984)
+
+# Estrai i valori dal raster stack come dataframe e rimuovi i valori NA
+values_stack_1984 <- as.data.frame(values(stack_1984))
+values_stack_1984_non_na <- values_stack_1984[complete.cases(values_stack_1984), ]
+
+# PCA: esegui la PCA sullo stack e seleziona le prime tre componenti principali
+pca_result <- prcomp(values_stack_1984_non_na, center = TRUE, scale. = TRUE)
+pca_values <- pca_result$x[, 1:3]
+
+# Conta il numero di osservazioni valide e calcola i neuroni per SOM
+n <- nrow(pca_values)
+neurons <- 20 * sqrt(n)
+x_dim <- round(sqrt(neurons))
+y_dim <- round(neurons / x_dim)
+som_grid <- somgrid(xdim = x_dim, ydim = y_dim, topo = "hexagonal")
+
+# Esegui SuperSOM con i dati PCA e alpha = 0
+som_model <- supersom(
+  list(pca_values), 
+  grid = som_grid, 
+  rlen = 500, 
+  mode = "pbatch", 
+  cores = -1
+)
+
+# Visualizza i cambiamenti durante l'addestramento della SOM
+plot(som_model, type = "changes")
+
+# Ottieni i codici della SOM (valori ridotti dimensionalmente)
+som_values <- som_model$codes[[1]]
+
+# Determina il numero ottimale di cluster con NbClust
+nbclust_result <- NbClust(
+  data = som_values, 
+  distance = "euclidean",
+  min.nc = 2,
+  max.nc = 10,
+  method = "kmeans",
+  index = "all"
+)
+
+# Trova il numero ottimale di cluster dalla moda dei risultati
+optimal_clusters <- as.numeric(names(which.max(table(nbclust_result$Best.nc[1, ]))))
+cat("Il numero ottimale di cluster secondo NbClust è:", optimal_clusters, "\n")
+
+# Clustering di stabilità con clusterboot e kmeansCBI
+clusterboot_result <- clusterboot(
+  data = som_values,
+  B = 500,
+  clustermethod = kmeansCBI,
+  bootmethod = "boot",
+  dissolution = 0.5,
+  recover = 0.75,
+  count = FALSE,
+  k = optimal_clusters
+)
+
+# Stampa i risultati della stabilità dei cluster
+cat("Risultati della stabilità dei cluster con clusterboot:\n")
+
+cat("Media della stabilità per ogni cluster:\n")
+print(clusterboot_result$bootmean)
+
+cat("Numero di volte che ogni cluster è stato recuperato:\n")
+print(clusterboot_result$bootrecover)
+
+cat("Numero di volte che ogni cluster è stato dissolto:\n")
+print(clusterboot_result$bootbrd)
+
+# Visualizzazione della stabilità
+barplot(clusterboot_result$bootmean, 
+        main = "Stabilità dei Cluster con K-means e Bootstrap", 
+        ylab = "Media della Similarità di Jaccard", 
+        xlab = "Cluster", 
+        col = "lightblue",
+        names.arg = paste("Cluster", 1:length(clusterboot_result$bootmean)))
+
+
+# Esegui K-means con il numero ottimale di cluster
+kmeans_nbclust <- kmeans(som_values, centers = optimal_clusters, nstart = 100, iter.max = 1000)
+
+# Crea un raster classificato usando i cluster di K-means
+classified_raster_nbclust <- rast(img_84_masked)
+values(classified_raster_nbclust) <- NA
+mask <- !is.na(values(img_84_masked[[1]]))
+values(classified_raster_nbclust)[mask] <- kmeans_nbclust$cluster[som_model$unit.classif]
+
+# Proietta il raster classificato in WGS84 per la visualizzazione
+classified_raster_nbclust_wgs84 <- project(classified_raster_nbclust, "EPSG:4326")
+
+# Visualizza il raster classificato con leaflet
+leaflet() %>%
+  addTiles(group = "OpenStreetMap") %>%
+  addProviderTiles("Esri.WorldImagery", group = "Immagine Satellitare") %>%
+  addProviderTiles("CartoDB.Positron", group = "Mappa Chiara") %>%
+  addRasterImage(classified_raster_nbclust_wgs84, 
+                 colors = viridisLite::turbo(optimal_clusters), 
+                 opacity = 0.6, 
+                 group = paste("Classificato con K-means (", optimal_clusters, " Cluster)", sep = "")) %>%
+  addLayersControl(
+    baseGroups = c("OpenStreetMap", "Immagine Satellitare", "Mappa Chiara"),
+    overlayGroups = c(paste("Classificato con K-means (", optimal_clusters, " Cluster)", sep = "")),
+    options = layersControlOptions(collapsed = FALSE)
+  ) %>%
+  addScaleBar(position = "bottomright", options = scaleBarOptions(imperial = FALSE)) %>%
+  setView(lng = 16.5, lat = 39.0, zoom = 10)
+
+cat("Visualizzazione completata con successo.\n")
