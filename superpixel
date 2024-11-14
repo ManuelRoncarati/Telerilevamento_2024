@@ -592,3 +592,126 @@ leaflet_map %>%
         overlayGroups = c("Original RGB", "KMeans RGB"),
         options = layersControlOptions(collapsed = FALSE)
     )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Carica le librerie necessarie
+library(terra)
+library(leaflet)
+library(leafem)
+library(raster)
+library(OpenImageR)
+library(SuperpixelImageSegmentation)
+
+# Imposta la working directory
+setwd("C:/composite")
+
+# Carica il raster multibanda
+img_84 <- rast("ritaglio.tif")
+
+# Seleziona le bande necessarie (B1, B2, B3, B4, B5, B7)
+l1984 <- img_84[[c(1, 2, 3, 4, 5, 6)]]
+
+# Riduci il numero di bande a 3 per evitare problemi di dimensionalità
+l1984_reduced <- l1984[[1:3]]
+
+# Crea una maschera per i valori non NA
+valid_mask <- !is.na(l1984_reduced[[1]]) & !is.na(l1984_reduced[[2]]) & !is.na(l1984_reduced[[3]])
+
+# Applica la maschera per ottenere solo i valori non NA
+l1984_reduced_non_na <- mask(l1984_reduced, valid_mask, maskvalue = FALSE)
+
+# Converti il raster ridotto in un RasterBrick per leaflet
+rgb_image_raster <- brick(l1984_reduced_non_na)
+
+# Converti l'immagine in array per OpenImageR
+pca_rgb_array <- as.array(l1984_reduced_non_na)
+
+# Normalizza i valori dell'immagine tra 0 e 255
+pca_rgb_array <- pca_rgb_array * 255 / max(pca_rgb_array, na.rm = TRUE)
+
+# Inizializza l'oggetto Image_Segmentation
+init <- Image_Segmentation$new()
+
+# Esegui la segmentazione dei superpixel con Affinity Propagation e SLIC (SLICAP)
+spx <- init$spixel_segmentation(
+    method = "slic",
+    input_image = pca_rgb_array,
+    superpixel = 10000,
+    AP_data = TRUE,
+    use_median = TRUE,
+    sim_wL = 3,
+    sim_wA = 10,
+    sim_wB = 10,
+    sim_color_radius = 10,
+    kmeans_method = "kmeans",
+    kmeans_initializer = "kmeans++",
+    kmeans_num_init = 3,
+    kmeans_max_iters = 100,
+    colour_type = "LAB",
+    verbose = TRUE
+)
+
+# Visualizza la struttura dell'output spx
+str(spx)
+
+# Applica la maschera di valori validi all'immagine segmentata KMeans
+if (!is.null(spx$KMeans_image_data)) {
+    kmeans_rgb_array <- spx$KMeans_image_data
+    kmeans_rgb_array[!as.array(valid_mask)] <- NA  # Imposta i valori non validi a NA per la trasparenza
+    kmeans_raster_1 <- raster(as.matrix(kmeans_rgb_array[,,1]))
+    kmeans_raster_2 <- raster(as.matrix(kmeans_rgb_array[,,2]))
+    kmeans_raster_3 <- raster(as.matrix(kmeans_rgb_array[,,3]))
+    kmeans_rgb_image_raster <- brick(kmeans_raster_1, kmeans_raster_2, kmeans_raster_3)
+    crs(kmeans_rgb_image_raster) <- crs(l1984_reduced_non_na)
+    extent(kmeans_rgb_image_raster) <- extent(rgb_image_raster)
+    leaflet_map <- leaflet() %>%
+        addProviderTiles(providers$Esri.WorldImagery, group = "Esri World Imagery") %>%
+        addProviderTiles(providers$CartoDB.Positron, group = "CartoDB Positron") %>%
+        addProviderTiles(providers$OpenStreetMap, group = "OpenStreetMap") %>%
+        addRasterRGB(
+            rgb_image_raster,
+            r = 1, g = 2, b = 3,
+            group = "Original RGB",
+            options = tileOptions(opacity = 0.7, minZoom = 1, maxZoom = 18)
+        ) %>%
+        addRasterRGB(
+            kmeans_rgb_image_raster,
+            r = 1, g = 2, b = 3,
+            group = "KMeans RGB",
+            options = tileOptions(opacity = 0.7, minZoom = 1, maxZoom = 18)
+        ) %>%
+        addLayersControl(
+            baseGroups = c("Esri World Imagery", "CartoDB Positron", "OpenStreetMap"),
+            overlayGroups = c("Original RGB", "KMeans RGB"),
+            options = layersControlOptions(collapsed = FALSE)
+        )
+}
+
+leaflet_map
