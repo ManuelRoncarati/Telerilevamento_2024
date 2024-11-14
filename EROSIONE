@@ -81,3 +81,193 @@ eroded_rgb_image <- c(eroded_rast1, eroded_rast2, eroded_rast3)
 
 # Visualizza l'immagine RGB erosa
 plotRGB(eroded_rgb_image, stretch = "hist", main = "Eroded PCA RGB Image (First 3 Components)")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Carica le librerie necessarie
+check_and_install <- function(packages) {
+    installed <- packages %in% rownames(installed.packages())
+    if (any(!installed)) {
+        install.packages(packages[!installed])
+    }
+    invisible(lapply(packages, library, character.only = TRUE))
+}
+
+required_packages <- c("terra", "mmand")
+check_and_install(required_packages)
+
+# Imposta la working directory
+setwd("C:/composite")
+
+# Carica il raster multibanda
+img_84 <- rast("ritaglio.tif")
+
+# Seleziona le bande necessarie (B1, B2, B3, B4, B5, B7)
+l1984 <- img_84[[c(1, 2, 3, 4, 5, 6)]]
+
+# Calcola gli indici NDVI, MNDWI e NDBI
+ndvi_1984 <- (l1984[[4]] - l1984[[3]]) / (l1984[[4]] + l1984[[3]])
+mndwi_1984 <- (l1984[[2]] - l1984[[5]]) / (l1984[[2]] + l1984[[5]])
+ndbi_1984 <- (l1984[[5]] - l1984[[4]]) / (l1984[[5]] + l1984[[4]])
+
+# Crea lo stack con bande e indici
+stack_1984 <- c(l1984, ndvi_1984, mndwi_1984, ndbi_1984)
+
+# Estrai i valori dal raster stack come dataframe e rimuovi i valori NA
+values_stack_1984 <- as.data.frame(values(stack_1984))
+values_stack_1984_non_na <- values_stack_1984[complete.cases(values_stack_1984), ]
+
+# PCA: esegui la PCA sullo stack e seleziona le prime tre componenti principali
+pca_result <- prcomp(values_stack_1984_non_na, center = TRUE, scale. = TRUE)
+pca_values <- pca_result$x[, 1:3]  # Seleziona le prime tre componenti
+
+# Reintegra i pixel NA nella matrice della PCA per mantenere la dimensione dell'immagine per ogni componente
+full_pca1 <- rep(NA, ncell(stack_1984[[1]]))
+full_pca2 <- rep(NA, ncell(stack_1984[[1]]))
+full_pca3 <- rep(NA, ncell(stack_1984[[1]]))
+
+full_pca1[!is.na(values(stack_1984[[1]]))] <- pca_values[, 1]
+full_pca2[!is.na(values(stack_1984[[1]]))] <- pca_values[, 2]
+full_pca3[!is.na(values(stack_1984[[1]]))] <- pca_values[, 3]
+
+# Converti ciascuna componente in SpatRaster senza erosione
+pca_rast1 <- rast(matrix(full_pca1, nrow = nrow(stack_1984[[1]]), ncol = ncol(stack_1984[[1]]), byrow = TRUE))
+pca_rast2 <- rast(matrix(full_pca2, nrow = nrow(stack_1984[[1]]), ncol = ncol(stack_1984[[1]]), byrow = TRUE))
+pca_rast3 <- rast(matrix(full_pca3, nrow = nrow(stack_1984[[1]]), ncol = ncol(stack_1984[[1]]), byrow = TRUE))
+
+# Imposta l'estensione per mantenere la risoluzione originale
+ext(pca_rast1) <- ext(stack_1984)
+ext(pca_rast2) <- ext(stack_1984)
+ext(pca_rast3) <- ext(stack_1984)
+
+# Crea l'immagine RGB senza erosione
+rgb_image <- c(pca_rast1, pca_rast2, pca_rast3)
+
+# Visualizza l'immagine RGB senza erosione
+plotRGB(rgb_image, stretch = "hist", main = "PCA RGB Image (First 3 Components, No Erosion)")
+
+# Applica la smoothatura gaussiana a ciascuna componente utilizzando gaussianSmooth
+gaussian_sigma <- 1.5
+smoothed_matrix1 <- gaussianSmooth(matrix(full_pca1, nrow = nrow(stack_1984[[1]]), ncol = ncol(stack_1984[[1]]), byrow = TRUE), gaussian_sigma)
+smoothed_matrix2 <- gaussianSmooth(matrix(full_pca2, nrow = nrow(stack_1984[[1]]), ncol = ncol(stack_1984[[1]]), byrow = TRUE), gaussian_sigma)
+smoothed_matrix3 <- gaussianSmooth(matrix(full_pca3, nrow = nrow(stack_1984[[1]]), ncol = ncol(stack_1984[[1]]), byrow = TRUE), gaussian_sigma)
+
+# Converti le componenti smussate in SpatRaster
+smoothed_rast1 <- rast(smoothed_matrix1)
+smoothed_rast2 <- rast(smoothed_matrix2)
+smoothed_rast3 <- rast(smoothed_matrix3)
+
+# Imposta l'estensione e la risoluzione delle immagini smussate
+ext(smoothed_rast1) <- ext(stack_1984)
+ext(smoothed_rast2) <- ext(stack_1984)
+ext(smoothed_rast3) <- ext(stack_1984)
+
+# Crea l'immagine RGB delle componenti smussate
+smoothed_rgb_image <- c(smoothed_rast1, smoothed_rast2, smoothed_rast3)
+
+# Visualizza l'immagine RGB smussata
+plotRGB(smoothed_rgb_image, stretch = "hist", main = "Smoothed PCA RGB Image (First 3 Components)")
+
+# Applica l'erosione a ciascuna componente
+eroded_matrix1 <- erode(smoothed_matrix1, shapeKernel(c(3, 3), type = "disc"))
+eroded_matrix2 <- erode(smoothed_matrix2, shapeKernel(c(3, 3), type = "disc"))
+eroded_matrix3 <- erode(smoothed_matrix3, shapeKernel(c(3, 3), type = "disc"))
+
+# Converti le componenti erose in SpatRaster
+eroded_rast1 <- rast(eroded_matrix1)
+eroded_rast2 <- rast(eroded_matrix2)
+eroded_rast3 <- rast(eroded_matrix3)
+
+# Imposta l'estensione e la risoluzione delle immagini erose
+ext(eroded_rast1) <- ext(stack_1984)
+ext(eroded_rast2) <- ext(stack_1984)
+ext(eroded_rast3) <- ext(stack_1984)
+
+# Crea l'immagine RGB delle componenti erose
+eroded_rgb_image <- c(eroded_rast1, eroded_rast2, eroded_rast3)
+
+# Visualizza l'immagine RGB erosa
+plotRGB(eroded_rgb_image, stretch = "hist", main = "Eroded PCA RGB Image (First 3 Components)")
+
+# Applica la dilatazione a ciascuna componente
+dilated_matrix1 <- morph(smoothed_matrix1, shapeKernel(c(3, 3), type = "disc"), operation = 'dilation')
+dilated_matrix2 <- morph(smoothed_matrix2, shapeKernel(c(3, 3), type = "disc"), operation = 'dilation')
+dilated_matrix3 <- morph(smoothed_matrix3, shapeKernel(c(3, 3), type = "disc"), operation = 'dilation')
+
+# Converti le componenti dilatate in SpatRaster
+dilated_rast1 <- rast(dilated_matrix1)
+dilated_rast2 <- rast(dilated_matrix2)
+dilated_rast3 <- rast(dilated_matrix3)
+
+# Imposta l'estensione e la risoluzione delle immagini dilatate
+ext(dilated_rast1) <- ext(stack_1984)
+ext(dilated_rast2) <- ext(stack_1984)
+ext(dilated_rast3) <- ext(stack_1984)
+
+# Crea l'immagine RGB delle componenti dilatate
+dilated_rgb_image <- c(dilated_rast1, dilated_rast2, dilated_rast3)
+
+# Visualizza l'immagine RGB dilatata
+plotRGB(dilated_rgb_image, stretch = "hist", main = "Dilated PCA RGB Image (First 3 Components)")
+
+# Applica l'apertura morfologica a ciascuna componente
+opened_matrix1 <- morph(smoothed_matrix1, shapeKernel(c(3, 3), type = "disc"), operation = 'opening')
+opened_matrix2 <- morph(smoothed_matrix2, shapeKernel(c(3, 3), type = "disc"), operation = 'opening')
+opened_matrix3 <- morph(smoothed_matrix3, shapeKernel(c(3, 3), type = "disc"), operation = 'opening')
+
+# Converti le componenti aperte in SpatRaster
+opened_rast1 <- rast(opened_matrix1)
+opened_rast2 <- rast(opened_matrix2)
+opened_rast3 <- rast(opened_matrix3)
+
+# Imposta l'estensione e la risoluzione delle immagini aperte
+ext(opened_rast1) <- ext(stack_1984)
+ext(opened_rast2) <- ext(stack_1984)
+ext(opened_rast3) <- ext(stack_1984)
+
+# Crea l'immagine RGB delle componenti aperte
+opened_rgb_image <- c(opened_rast1, opened_rast2, opened_rast3)
+
+# Visualizza l'immagine RGB aperta
+plotRGB(opened_rgb_image, stretch = "hist", main = "Opened PCA RGB Image (First 3 Components)")
+
+# Applica la chiusura morfologica a ciascuna componente
+closed_matrix1 <- morph(smoothed_matrix1, shapeKernel(c(3, 3), type = "disc"), operation = 'closing')
+closed_matrix2 <- morph(smoothed_matrix2, shapeKernel(c(3, 3), type = "disc"), operation = 'closing')
+closed_matrix3 <- morph(smoothed_matrix3, shapeKernel(c(3, 3), type = "disc"), operation = 'closing')
+
+# Converti le componenti chiuse in SpatRaster
+closed_rast1 <- rast(closed_matrix1)
+closed_rast2 <- rast(closed_matrix2)
+closed_rast3 <- rast(closed_matrix3)
+
+# Imposta l'estensione e la risoluzione delle immagini chiuse
+ext(closed_rast1) <- ext(stack_1984)
+ext(closed_rast2) <- ext(stack_1984)
+ext(closed_rast3) <- ext(stack_1984)
+
+# Crea l'immagine RGB delle componenti chiuse
+closed_rgb_image <- c(closed_rast1, closed_rast2, closed_rast3)
+
+# Visualizza l'immagine RGB chiusa
+plotRGB(closed_rgb_image, stretch = "hist", main = "Closed PCA RGB Image (First 3 Components)")
+
