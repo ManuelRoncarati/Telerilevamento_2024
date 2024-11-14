@@ -220,3 +220,150 @@ if (!is.null(spx$KMeans_image_data)) {
 } else {
   cat("KMeans_image_data non disponibile per la visualizzazione.\n")
 }
+
+
+
+
+
+
+
+
+# Carica le librerie necessarie
+library(terra)
+library(OpenImageR)
+library(SuperpixelImageSegmentation)
+
+# Imposta la working directory
+setwd("C:/composite")
+
+# Carica il raster multibanda
+img_84 <- rast("ritaglio.tif")
+
+# Seleziona le bande necessarie (B1, B2, B3, B4, B5, B7)
+l1984 <- img_84[[c(1, 2, 3, 4, 5, 6)]]
+
+# Riduci il numero di bande a 3 per evitare problemi di dimensionalità
+l1984_reduced <- l1984[[1:3]]
+
+# Crea una maschera per i valori non NA
+valid_mask <- !is.na(l1984_reduced[[1]]) & !is.na(l1984_reduced[[2]]) & !is.na(l1984_reduced[[3]])
+
+# Applica la maschera per ottenere solo i valori non NA
+l1984_reduced_non_na <- mask(l1984_reduced, valid_mask, maskvalue = FALSE)
+l1984_reduced_non_na[is.na(l1984_reduced_non_na)] <- 0
+
+# Converti l'immagine in array per OpenImageR
+pca_rgb_array <- as.array(l1984_reduced_non_na)
+
+# Normalizza i valori dell'immagine tra 0 e 255
+pca_rgb_array <- pca_rgb_array * 255 / max(pca_rgb_array, na.rm = TRUE)
+
+# Inizializza l'oggetto Image_Segmentation
+init <- Image_Segmentation$new()
+
+# Esegui la segmentazione dei superpixel con Affinity Propagation e K-means
+spx <- init$spixel_segmentation(
+    input_image = pca_rgb_array, 
+    superpixel = 1000, 
+    AP_data = TRUE, 
+    use_median = TRUE, 
+    sim_wL = 3, 
+    sim_wA = 10, 
+    sim_wB = 10, 
+    sim_color_radius = 10, 
+    kmeans_method = "kmeans", 
+    kmeans_initializer = "kmeans++", 
+    kmeans_num_init = 3, 
+    kmeans_max_iters = 100, 
+    verbose = TRUE
+)
+
+# Visualizza la struttura dell'output spx
+str(spx)
+
+# Visualizza l'immagine basata su Affinity Propagation
+if (!is.null(spx$AP_image_data)) {
+    OpenImageR::imageShow(spx$AP_image_data)
+} else {
+    cat("AP_image_data non disponibile per la visualizzazione.\n")
+}
+
+# Visualizza l'immagine basata su Affinity Propagation e K-means
+if (!is.null(spx$KMeans_image_data)) {
+    OpenImageR::imageShow(spx$KMeans_image_data)
+} else {
+    cat("KMeans_image_data non disponibile per la visualizzazione.\n")
+}
+
+
+
+
+
+
+
+
+
+
+
+# Carica le librerie necessarie
+library(terra)
+library(OpenImageR)
+library(SuperpixelImageSegmentation)
+
+# Imposta la working directory
+setwd("C:/composite")
+
+# Carica il raster multibanda
+img_84 <- rast("ritaglio.tif")
+
+# Seleziona le bande necessarie (B1, B2, B3, B4, B5, B7)
+l1984 <- img_84[[c(1, 2, 3, 4, 5, 6)]]
+
+# Riduci il numero di bande a 3 per evitare problemi di dimensionalità
+l1984_reduced <- l1984[[1:3]]
+
+# Crea una maschera per i valori non NA
+valid_mask <- !is.na(l1984_reduced[[1]]) & !is.na(l1984_reduced[[2]]) & !is.na(l1984_reduced[[3]])
+
+# Applica la maschera per ottenere solo i valori non NA
+l1984_reduced_non_na <- mask(l1984_reduced, valid_mask, maskvalue = FALSE)
+l1984_reduced_non_na[is.na(l1984_reduced_non_na)] <- 0
+
+# Converti l'immagine in array per OpenImageR
+pca_rgb_array <- as.array(l1984_reduced_non_na)
+
+# Normalizza i valori dell'immagine tra 0 e 255
+pca_rgb_array <- pca_rgb_array * 255 / max(pca_rgb_array, na.rm = TRUE)
+
+# Inizializza l'oggetto Image_Segmentation
+init <- Image_Segmentation$new()
+
+# Esegui la segmentazione dei superpixel con Affinity Propagation e SLIC (SLICAP)
+spx <- init$spixel_segmentation(
+    method = "slico",
+    input_image = pca_rgb_array,
+    superpixel = 1000,
+    AP_data = TRUE,
+    use_median = TRUE,
+    sim_wL = 3,
+    sim_wA = 10,
+    sim_wB = 10,
+    sim_color_radius = 10,
+    kmeans_method = "mini_batch_kmeans",
+    kmeans_initializer = "kmeans++",
+    kmeans_num_init = 3,
+    kmeans_max_iters = 100,
+    minib_kmeans_batch = 10,
+    minib_kmeans_init_fraction = 0.75,
+    verbose = TRUE
+)
+
+# Visualizza la struttura dell'output spx
+str(spx)
+
+# Visualizza l'immagine basata su Affinity Propagation
+if (!is.null(spx$AP_image_data)) {
+    OpenImageR::imageShow(spx$AP_image_data)
+} else {
+    cat("AP_image_data non disponibile per la visualizzazione.\n")
+}
