@@ -1,3 +1,6 @@
+https://github.com/krishnakafle/gee-tutorials/blob/main/Part%20F%20-%20Fundamentals/F3%20-%20Advanced%20Image%20Processing/F3.1%20Advanced%20Pixel-based%20Image%20Transformation/F31a-code.js
+
+
 // Definisci l'AOI dal tuo shapefile
 var aoi = ee.FeatureCollection('projects/ee-manuelroncarati1/assets/shape_sila');
 
