@@ -1240,3 +1240,217 @@ leaflet() %>%
     )
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Carica le librerie necessarie
+check_and_install <- function(packages) {
+    installed <- packages %in% rownames(installed.packages())
+    if (any(!installed)) {
+        install.packages(packages[!installed])
+    }
+    invisible(lapply(packages, library, character.only = TRUE))
+}
+
+required_packages <- c("terra", "mmand", "leaflet", "leafem", "htmlwidgets", "png", "magick", "raster")
+check_and_install(required_packages)
+
+library(terra)
+library(mmand)
+library(leaflet)
+library(leafem)
+library(htmlwidgets)
+library(png)
+library(magick)
+library(raster)
+
+# Imposta la working directory (modifica il percorso secondo necessità)
+setwd("C:/composite")
+
+# Carica il raster multibanda
+img_84 <- rast("ritaglino.tif")
+
+# Seleziona le bande necessarie (B1, B2, B3, B4, B5, B7)
+l1984 <- img_84[[c(1, 2, 3, 4, 5, 6)]]
+
+# Calcola gli indici NDVI, MNDWI e NDBI
+ndvi_1984 <- (l1984[[4]] - l1984[[3]]) / (l1984[[4]] + l1984[[3]])
+mndwi_1984 <- (l1984[[2]] - l1984[[5]]) / (l1984[[2]] + l1984[[5]])
+ndbi_1984 <- (l1984[[5]] - l1984[[4]]) / (l1984[[5]] + l1984[[4]])
+
+# Crea lo stack con bande e indici
+stack_1984 <- c(l1984, ndvi_1984, mndwi_1984, ndbi_1984)
+
+# Estrai i valori dal raster stack come dataframe e rimuovi i valori NA
+values_stack_1984 <- as.data.frame(values(stack_1984))
+values_stack_1984_non_na <- values_stack_1984[complete.cases(values_stack_1984), ]
+
+# PCA: esegui la PCA sullo stack e seleziona le prime tre componenti principali
+pca_result <- prcomp(values_stack_1984_non_na, center = TRUE, scale. = TRUE)
+pca_values <- pca_result$x[, 1:3]  # Seleziona le prime tre componenti
+
+# Reintegra i pixel NA nella matrice della PCA per mantenere la dimensione del raster
+full_pca1 <- rep(NA, ncell(stack_1984[[1]]))
+full_pca2 <- rep(NA, ncell(stack_1984[[1]]))
+full_pca3 <- rep(NA, ncell(stack_1984[[1]]))
+
+full_pca1[!is.na(values(stack_1984[[1]]))] <- pca_values[, 1]
+full_pca2[!is.na(values(stack_1984[[1]]))] <- pca_values[, 2]
+full_pca3[!is.na(values(stack_1984[[1]]))] <- pca_values[, 3]
+
+# Converti ciascuna componente in SpatRaster
+pca_rast1 <- rast(matrix(full_pca1, nrow = nrow(stack_1984[[1]]), ncol = ncol(stack_1984[[1]]), byrow = TRUE))
+pca_rast2 <- rast(matrix(full_pca2, nrow = nrow(stack_1984[[1]]), ncol = ncol(stack_1984[[1]]), byrow = TRUE))
+pca_rast3 <- rast(matrix(full_pca3, nrow = nrow(stack_1984[[1]]), ncol = ncol(stack_1984[[1]]), byrow = TRUE))
+
+# Imposta l'estensione per mantenere la risoluzione originale
+ext(pca_rast1) <- ext(stack_1984)
+ext(pca_rast2) <- ext(stack_1984)
+ext(pca_rast3) <- ext(stack_1984)
+
+# Crea lo stack delle componenti PCA
+pca_stack <- c(pca_rast1, pca_rast2, pca_rast3)
+
+# Parametro per la smussatura gaussiana
+gaussian_sigma <- 1.5
+
+# Applica la smussatura gaussiana a ciascuna componente
+smoothed_matrix1 <- gaussianSmooth(
+    matrix(full_pca1, nrow = nrow(stack_1984[[1]]), ncol = ncol(stack_1984[[1]]), byrow = TRUE),
+    sigma = gaussian_sigma
+)
+smoothed_matrix2 <- gaussianSmooth(
+    matrix(full_pca2, nrow = nrow(stack_1984[[1]]), ncol = ncol(stack_1984[[1]]), byrow = TRUE),
+    sigma = gaussian_sigma
+)
+smoothed_matrix3 <- gaussianSmooth(
+    matrix(full_pca3, nrow = nrow(stack_1984[[1]]), ncol = ncol(stack_1984[[1]]), byrow = TRUE),
+    sigma = gaussian_sigma
+)
+
+# Converti le matrici smussate in SpatRaster
+smoothed_rast1 <- rast(smoothed_matrix1)
+smoothed_rast2 <- rast(smoothed_matrix2)
+smoothed_rast3 <- rast(smoothed_matrix3)
+
+# Imposta l'estensione e la risoluzione delle immagini smussate
+ext(smoothed_rast1) <- ext(stack_1984)
+ext(smoothed_rast2) <- ext(stack_1984)
+ext(smoothed_rast3) <- ext(stack_1984)
+
+# Crea lo stack delle componenti smussate
+smoothed_stack <- c(smoothed_rast1, smoothed_rast2, smoothed_rast3)
+
+# Funzione per scalare i valori di un layer tra 0 e 255
+scale_to_255 <- function(raster_layer) {
+    min_val <- minmax(raster_layer)[1]  # Minimo
+    max_val <- minmax(raster_layer)[2]  # Massimo
+    
+    # Formula per scalare i valori nel range [0, 255]
+    scaled_values <- 255 * (values(raster_layer) - min_val) / (max_val - min_val)
+    
+    # Reintegra i valori scalati nel raster
+    values(raster_layer) <- scaled_values
+    return(raster_layer)
+}
+
+# Applica la funzione di scaling a ciascun layer del raster smussato
+scaled_r1 <- scale_to_255(smoothed_stack[[1]])
+scaled_r2 <- scale_to_255(smoothed_stack[[2]])
+scaled_r3 <- scale_to_255(smoothed_stack[[3]])
+
+# Combina i layer scalati in un unico SpatRaster
+scaled_rgb_image <- c(scaled_r1, scaled_r2, scaled_r3)
+
+# Verifica i nuovi valori minimi e massimi
+print(minmax(scaled_rgb_image))
+
+# **Conversione da SpatRaster a RasterBrick**
+
+# Definisci un percorso temporaneo per salvare il raster
+temp_file <- tempfile(fileext = ".tif")
+
+# Scrivi il SpatRaster su disco come GeoTIFF
+writeRaster(scaled_rgb_image, temp_file, overwrite = TRUE)
+
+# Importa il GeoTIFF come RasterBrick
+rgb_image_raster_brick <- brick(temp_file)
+
+# Rimuovi il file temporaneo se non necessario
+# file.remove(temp_file)  # Puoi decomentare questa linea per eliminare il file dopo la lettura
+
+# Assicurati che il CRS sia impostato correttamente
+crs(rgb_image_raster_brick) <- crs(img_84)
+
+# **Visualizzazione con Leaflet**
+
+# Crea la mappa Leaflet
+leaflet_map <- leaflet() %>%
+    addProviderTiles(providers$Esri.WorldImagery, group = "Esri World Imagery") %>%
+    addProviderTiles(providers$CartoDB.Positron, group = "CartoDB Positron") %>%
+    addProviderTiles(providers$OpenStreetMap, group = "OpenStreetMap") %>%
+    addRasterRGB(
+        rgb_image_raster_brick,
+        r = 1, g = 2, b = 3,
+        group = "PCA RGB",
+        opacity = 0.8
+    )
+
+# **Opzionale: Aggiungere ulteriori layer o elaborazioni (es. KMeans)**
+
+# Se desideri aggiungere ulteriori elaborazioni come la segmentazione con KMeans,
+# puoi integrare il tuo flusso di lavoro originale qui.
+# Per questo esempio, consideriamo solo l'immagine PCA RGB.
+
+# Aggiungi controlli dei layer
+leaflet_map <- leaflet_map %>%
+    addLayersControl(
+        baseGroups = c("Esri World Imagery", "CartoDB Positron", "OpenStreetMap"),
+        overlayGroups = c("PCA RGB"),
+        options = layersControlOptions(collapsed = FALSE)
+    ) %>%
+    addLegend(position = "bottomright",
+              colors = c("red", "green", "blue"),
+              labels = c("Red", "Green", "Blue"),
+              title = "PCA RGB Channels",
+              opacity = 0.8)
+
+# **Visualizza la mappa**
+leaflet_map
+
