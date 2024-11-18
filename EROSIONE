@@ -1454,3 +1454,233 @@ leaflet_map <- leaflet_map %>%
 # **Visualizza la mappa**
 leaflet_map
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# -------------------------------------------
+# 1. Caricamento e installazione delle librerie
+# -------------------------------------------
+check_and_install <- function(packages) {
+    installed <- packages %in% rownames(installed.packages())
+    if (any(!installed)) {
+        install.packages(packages[!installed], dependencies = TRUE)
+    }
+    invisible(lapply(packages, library, character.only = TRUE))
+}
+
+required_packages <- c(
+    "terra", "mmand", "kohonen", "NbClust", "stats", "RColorBrewer"
+)
+check_and_install(required_packages)
+
+# Carica le librerie
+library(terra)
+library(mmand)
+library(kohonen)
+library(NbClust)
+library(stats)
+library(RColorBrewer)
+
+# -------------------------------------------
+# 2. Impostazione della directory di lavoro e caricamento del raster
+# -------------------------------------------
+# Imposta la working directory (modifica il percorso secondo necessità)
+setwd("C:/composite")  # Modifica questo percorso se necessario
+
+# Carica il raster multibanda
+img_84 <- rast("ritaglino.tif")  # Assicurati che il file esista nel percorso specificato
+
+# Seleziona le bande necessarie (B1, B2, B3, B4, B5, B7)
+l1984 <- img_84[[c(1, 2, 3, 4, 5, 6)]]
+
+# -------------------------------------------
+# 3. Estrazione dei valori e PCA
+# -------------------------------------------
+# Estrai i valori dal raster stack come dataframe e rimuovi i valori NA
+values_stack_1984 <- as.data.frame(values(l1984))
+values_stack_1984_non_na <- values_stack_1984[complete.cases(values_stack_1984), ]
+
+# PCA: esegui la PCA sullo stack e seleziona le prime tre componenti principali
+pca_result <- prcomp(values_stack_1984_non_na, center = TRUE, scale. = TRUE)
+pca_values <- pca_result$x[, 1:3]  # Seleziona le prime tre componenti
+
+# Reintegra i pixel NA nella matrice della PCA per mantenere la dimensione del raster
+full_pca1 <- rep(NA, ncell(l1984[[1]]))
+full_pca2 <- rep(NA, ncell(l1984[[1]]))
+full_pca3 <- rep(NA, ncell(l1984[[1]]))
+
+full_pca1[!is.na(values(l1984[[1]]))] <- pca_values[, 1]
+full_pca2[!is.na(values(l1984[[1]]))] <- pca_values[, 2]
+full_pca3[!is.na(values(l1984[[1]]))] <- pca_values[, 3]
+
+# Converti ciascuna componente in SpatRaster
+pca_rast1 <- rast(matrix(full_pca1, nrow = nrow(l1984[[1]]), ncol = ncol(l1984[[1]]), byrow = TRUE))
+pca_rast2 <- rast(matrix(full_pca2, nrow = nrow(l1984[[1]]), ncol = ncol(l1984[[1]]), byrow = TRUE))
+pca_rast3 <- rast(matrix(full_pca3, nrow = nrow(l1984[[1]]), ncol = ncol(l1984[[1]]), byrow = TRUE))
+
+# Imposta l'estensione per mantenere la risoluzione originale
+ext(pca_rast1) <- ext(l1984)
+ext(pca_rast2) <- ext(l1984)
+ext(pca_rast3) <- ext(l1984)
+
+# Crea lo stack delle componenti PCA
+pca_stack <- c(pca_rast1, pca_rast2, pca_rast3)
+
+# -------------------------------------------
+# 4. Smussatura gaussiana delle componenti PCA
+# -------------------------------------------
+# Parametro per la smussatura gaussiana
+gaussian_sigma <- 1.5
+
+# Applica la smussatura gaussiana a ciascuna componente
+smoothed_matrix1 <- gaussianSmooth(
+    matrix(full_pca1, nrow = nrow(l1984[[1]]), 
+           ncol = ncol(l1984[[1]]), byrow = TRUE),
+    sigma = gaussian_sigma
+)
+smoothed_matrix2 <- gaussianSmooth(
+    matrix(full_pca2, nrow = nrow(l1984[[1]]), 
+           ncol = ncol(l1984[[1]]), byrow = TRUE),
+    sigma = gaussian_sigma
+)
+smoothed_matrix3 <- gaussianSmooth(
+    matrix(full_pca3, nrow = nrow(l1984[[1]]), 
+           ncol = ncol(l1984[[1]]), byrow = TRUE),
+    sigma = gaussian_sigma
+)
+
+# Converti le matrici smussate in SpatRaster
+smoothed_rast1 <- rast(smoothed_matrix1)
+smoothed_rast2 <- rast(smoothed_matrix2)
+smoothed_rast3 <- rast(smoothed_matrix3)
+
+# Imposta l'estensione e la risoluzione delle immagini smussate
+ext(smoothed_rast1) <- ext(l1984)
+ext(smoothed_rast2) <- ext(l1984)
+ext(smoothed_rast3) <- ext(l1984)
+
+# Crea lo stack delle componenti smussate
+smoothed_stack <- c(smoothed_rast1, smoothed_rast2, smoothed_rast3)
+
+# -------------------------------------------
+# 5. Calcolo dei neuroni e configurazione della griglia SOM
+# -------------------------------------------
+# Calcola il numero totale di neuroni suggerito dalla formula
+n <- sum(!is.na(values(smoothed_stack[[1]])))  # Numero totale di pixel non NA
+neurons <- 5 * sqrt(n)
+cat("Numero suggerito di neuroni:", round(neurons), "\n")
+
+# Suggerisci una configurazione di griglia approssimata
+x_dim <- round(sqrt(neurons))
+y_dim <- round(neurons / x_dim)
+cat("Dimensioni della griglia suggerite:", x_dim, "x", y_dim, "\n")
+
+# -------------------------------------------
+# 6. Applicazione del modello SuperSOM
+# -------------------------------------------
+# Estrazione e normalizzazione dei valori RGB
+rgb_values <- as.data.frame(values(smoothed_stack))
+rgb_values <- rgb_values[complete.cases(rgb_values), ]  # Rimuovi NA
+rgb_values_norm <- scale(rgb_values)  # Normalizza i dati
+
+# Definizione della griglia SOM
+som_grid <- somgrid(xdim = x_dim, ydim = y_dim, topo = "hexagonal")  # Usa le dimensioni calcolate
+
+# Allena il modello SuperSOM
+  # Per riproducibilità
+supersom_model <- supersom(
+    list(rgb_values_norm), # Lista con input multipli; nel nostro caso è uno solo
+    grid = som_grid,
+    rlen = 100, # Numero di iterazioni
+    cores = -1
+)
+
+# -------------------------------------------
+# 7. Determinazione del numero ottimale di cluster con NbClust
+# -------------------------------------------
+# Ottieni i codici della SOM dal modello SuperSOM
+som_values <- supersom_model$codes[[1]]  # Codici dei neuroni SOM
+
+# Usa NbClust per determinare il numero ottimale di cluster
+  # Per riproducibilità
+nbclust_result <- NbClust(
+    data = som_values,       # Usa i codici della SOM
+    diss = NULL,             # Usa i dati direttamente
+    distance = "euclidean",  # Distanza euclidea
+    min.nc = 2,              # Numero minimo di cluster
+    max.nc = 10,             # Numero massimo di cluster
+    method = "kmeans",       # Metodo di clustering K-means
+    index = "all"            # Usa tutti i criteri di validazione
+)
+
+# Trova il numero ottimale di cluster dalla moda dei risultati
+optimal_clusters <- as.numeric(names(which.max(table(nbclust_result$Best.nc[1, ]))))
+
+# Stampa il numero ottimale di cluster
+cat("Il numero ottimale di cluster secondo NbClust è:", optimal_clusters, "\n")
+
+# -------------------------------------------
+# 8. Applicazione di KMeans e mappatura dei cluster
+# -------------------------------------------
+# Applica KMeans ai codici della SOM
+kmeans_result <- kmeans(som_values, centers = optimal_clusters)
+
+# Etichette dei cluster per ciascun neurone
+som_cluster_labels <- kmeans_result$cluster
+
+# Mappa i cluster ai pixel originali
+pixel_clusters <- supersom_model$unit.classif  # Ogni pixel ha un riferimento a un neurone
+pixel_cluster_labels <- som_cluster_labels[pixel_clusters]
+
+# Crea un raster vuoto con la stessa estensione e risoluzione di smoothed_stack
+cluster_raster <- rast(smoothed_stack[[1]])
+
+# Inizializza i valori del raster con NA
+values(cluster_raster) <- NA
+
+# Associa i cluster ai pixel usando pixel_cluster_labels
+values(cluster_raster)[!is.na(values(smoothed_stack[[1]]))] <- pixel_cluster_labels
+
+# Verifica che i valori siano stati assegnati correttamente
+print(summary(values(cluster_raster)))
+
+# -------------------------------------------
+# 9. Visualizzazione del raster dei cluster
+# -------------------------------------------
+# Visualizza il raster usando la funzione plot di base
+plot(
+    cluster_raster,
+    main = paste("Cluster da NbClust e KMeans (", optimal_clusters, " clusters)", sep = ""),
+    col = rainbow(optimal_clusters),
+    axes = TRUE,
+    legend = TRUE
+)
+
+# -------------------------------------------
+# Fine dello script
+# -------------------------------------------
