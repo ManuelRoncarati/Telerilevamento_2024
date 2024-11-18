@@ -1481,7 +1481,7 @@ leaflet_map
 
 
 
-EROSIONE
+SMUSSATURA GAUSSIANA
 # -------------------------------------------
 # 1. Caricamento e installazione delle librerie
 # -------------------------------------------
