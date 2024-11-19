@@ -971,3 +971,59 @@ leaflet() %>%
   setView(lng = 16.5, lat = 39.0, zoom = 10)
 
 cat("Visualizzazione completata con successo.\n")
+
+
+
+
+
+
+
+# Carica le librerie necessarie
+check_and_install <- function(packages) {
+    installed <- packages %in% rownames(installed.packages())
+    if (any(!installed)) {
+        install.packages(packages[!installed])
+    }
+    invisible(lapply(packages, library, character.only = TRUE))
+}
+
+required_packages <- c("terra", "OpenImageR")
+check_and_install(required_packages)
+
+# Carica l'immagine con un singolo layer
+cazzo <- rast('cazzo.tif')
+
+# Normalizza i valori dell'immagine tra 0 e 255
+cazzo_values <- values(cazzo)
+cazzo_normalized <- cazzo_values * 255 / max(cazzo_values, na.rm = TRUE)
+
+# Converti l'immagine in un array a due dimensioni per SNIC
+cazzo_array <- matrix(cazzo_normalized, nrow = nrow(cazzo), ncol = ncol(cazzo), byrow = TRUE)
+
+# Applica l'algoritmo di superpixel utilizzando OpenImageR (usando una rappresentazione bidimensionale)
+superpixel_result <- superpixels(
+    input_image = cazzo_array,
+    method = "slic",
+    superpixel = 500,
+    compactness = 10,
+    return_labels = TRUE
+)
+
+# Ottieni le etichette dei superpixel
+superpixel_labels <- superpixel_result$labels
+
+# Visualizza la struttura dell'output "superpixel_labels"
+str(superpixel_labels)
+
+# Crea un raster per i superpixel
+superpixel_raster <- rast(matrix(superpixel_labels, nrow = nrow(cazzo), ncol = ncol(cazzo), byrow = TRUE))
+
+# Imposta l'estensione e il sistema di riferimento del raster per mantenerli consistenti con l'immagine originale
+ext(superpixel_raster) <- ext(cazzo)
+crs(superpixel_raster) <- crs(cazzo)
+
+# Salva il risultato dei superpixel come raster
+writeRaster(superpixel_raster, 'superpixel_result_singolo_layer.tif', overwrite = TRUE)
+
+# Visualizza il raster dei superpixel
+plot(superpixel_raster, main = "Superpixel Segmentation (Layer Singolo)")
