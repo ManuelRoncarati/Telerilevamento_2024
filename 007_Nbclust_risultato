@@ -760,3 +760,214 @@ eroded_stack_array <- closing(stack_array,k)
 eroded_stack_raster <- rast(eroded_stack_array, crs = crs(classified_raster_nbclust), extent = ext(classified_raster_nbclust))
 
 plot(eroded_stack_raster)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Carica le librerie necessarie
+check_and_install <- function(packages) {
+  installed <- packages %in% rownames(installed.packages())
+  if (any(!installed)) {
+    install.packages(packages[!installed])
+  }
+  invisible(lapply(packages, library, character.only = TRUE))
+}
+
+required_packages <- c("fpc", "NbClust", "terra", "dplyr", 'mmand',"kohonen", "parallel", "leaflet", "ggplot2", "viridis")
+check_and_install(required_packages)
+
+# Imposta la working directory
+setwd("D:/composite")
+
+# Carica il raster multibanda
+img_84 <- rast("ritaglio.tif")
+
+# Seleziona le bande necessarie (B1, B2, B3, B4, B5, B7)
+l1984 <- img_84[[c(1, 2, 3, 4, 5, 6)]]
+
+# Calcola gli indici NDVI, MNDWI e NDBI
+ndvi_1984 <- (l1984[[4]] - l1984[[3]]) / (l1984[[4]] + l1984[[3]])
+mndwi_1984 <- (l1984[[2]] - l1984[[5]]) / (l1984[[2]] + l1984[[5]])
+ndbi_1984 <- (l1984[[5]] - l1984[[4]]) / (l1984[[5]] + l1984[[4]])
+
+# Crea lo stack con bande e indici
+stack_1984 <- c(l1984, ndvi_1984, mndwi_1984, ndbi_1984)
+
+# Estrai i valori dal raster stack come dataframe e rimuovi i valori NA
+values_stack_1984 <- as.data.frame(values(stack_1984))
+values_stack_1984_non_na <- values_stack_1984[complete.cases(values_stack_1984), ]
+
+# PCA: esegui la PCA sullo stack e seleziona le prime tre componenti principali
+pca_result <- prcomp(values_stack_1984_non_na, center = TRUE, scale. = TRUE)
+pca_values <- pca_result$x[, 1:3]  # Seleziona solo le prime tre componenti
+
+# Conta il numero di osservazioni valide
+n <- nrow(pca_values)
+print(paste("Numero di osservazioni valide:", n))
+
+# Calcola il numero totale di neuroni suggerito dalla formula
+neurons <- 5 * sqrt(n)
+print(paste("Numero suggerito di neuroni:", round(neurons)))
+
+# Suggerisci una configurazione di griglia approssimata
+x_dim <- round(sqrt(neurons))
+y_dim <- round(neurons / x_dim)
+print(paste("Dimensioni della griglia suggerite:", x_dim, "x", y_dim))
+
+# Definisci una griglia SOM con le dimensioni calcolate
+som_grid <- somgrid(xdim = x_dim, ydim = y_dim, topo = "hexagonal")
+
+# Esegui SuperSOM con parallelizzazione usando la PCA come input
+som_model <- supersom(
+  list(pca_values), 
+  grid = som_grid, 
+  rlen = 50, 
+  mode = "pbatch", 
+  cores = -1  # Usa tutti i core disponibili
+)
+
+# Visualizza i cambiamenti durante l'addestramento della SOM
+plot(som_model, type = "changes")
+
+# Ottieni i codici della SOM (valori ridotti dimensionalmente)
+som_values <- som_model$codes[[1]]
+
+# Determina il numero ottimale di cluster con NbClust
+nbclust_result <- NbClust(
+  data = som_values, 
+  diss = NULL, 
+  distance = "euclidean",  # Distanza euclidea
+  min.nc = 2,              # Numero minimo di cluster
+  max.nc = 10,             # Numero massimo di cluster
+  method = "kmeans",       # Metodo di clustering K-means
+  index = "all"            # Usa tutti i criteri di validazione
+)
+
+# Trova il numero ottimale di cluster dalla moda dei risultati
+optimal_clusters <- as.numeric(names(which.max(table(nbclust_result$Best.nc[1, ]))))
+
+# Stampa il numero ottimale di cluster
+cat("Il numero ottimale di cluster secondo NbClust è:", optimal_clusters, "\n")
+
+# Usa il numero ottimale di cluster con clusterboot e kmeansCBI
+clusterboot_result <- clusterboot(
+  data = som_values,            # Usa i valori SOM
+  B = 500,                      # Numero di campioni bootstrap
+  clustermethod = kmeansCBI,    # Metodo K-means tramite interfaccia kmeansCBI
+  bootmethod = "boot",          # Usa bootstrap non parametrico
+  dissolution = 0.5,            # Valore di dissoluzione per i cluster instabili
+  recover = 0.75,               # Valore di recupero per i cluster stabili
+  count = FALSE,                # Mostra il progresso durante il bootstrap
+  k = optimal_clusters          # Usa il numero ottimale di cluster trovato con NbClust
+)
+
+# Stampa i risultati della stabilità dei cluster
+cat("Risultati della stabilità dei cluster con clusterboot:\n")
+print(clusterboot_result$bootmean)    # Media della stabilità per ogni cluster
+print(clusterboot_result$bootrecover) # Numero di volte che ogni cluster è stato recuperato
+print(clusterboot_result$bootbrd)     # Numero di volte che ogni cluster è stato dissolto
+
+# Visualizzazione della stabilità
+barplot(clusterboot_result$bootmean, 
+        main = "Stabilità dei Cluster con K-means e Bootstrap", 
+        ylab = "Media della Similarità di Jaccard", 
+        xlab = "Cluster", 
+        col = "lightblue")
+
+# Esegui K-means con il numero di cluster ottimale
+kmeans_nbclust <- kmeans(som_values, centers = optimal_clusters, nstart = 100, iter.max = 1000)
+
+# Crea un raster classificato usando i cluster di K-means
+classified_raster_nbclust <- rast(img_84)
+values(classified_raster_nbclust) <- NA
+mask <- !is.na(values(img_84[[1]]))  # Crea una maschera dai valori non NA del raster originale
+values(classified_raster_nbclust)[mask] <- kmeans_nbclust$cluster[som_model$unit.classif]
+
+# Seleziona solo la prima banda del raster per evitare messaggi di avvertimento
+classified_raster_nbclust_single <- classified_raster_nbclust[[1]]
+
+# Carica la palette turbo
+palette_turbo <- viridisLite::turbo
+
+# Visualizza il raster classificato con leaflet
+leaflet() %>%
+  addTiles(group = "OpenStreetMap") %>%
+  addProviderTiles("Esri.WorldImagery", group = "Immagine Satellitare") %>%
+  addProviderTiles("CartoDB.Positron", group = "Mappa Chiara") %>%
+  addRasterImage(classified_raster_nbclust_single, 
+                 colors = palette_turbo(optimal_clusters), 
+                 opacity = 0.6, 
+                 group = "Classificato con K-means (5 Cluster)") %>%
+  addLayersControl(
+    baseGroups = c("OpenStreetMap", "Immagine Satellitare", "Mappa Chiara"),
+    overlayGroups = c("Classificato con K-means (5 Cluster)"),
+    options = layersControlOptions(collapsed = FALSE)
+  ) %>%
+  addScaleBar(position = "bottomright", options = scaleBarOptions(imperial = FALSE)) %>%
+  hideGroup("Classificato con K-means (5 Cluster)") %>%  # Nascondi i layer inizialmente per evitare conflitti
+  setView(lng = 16.5, lat = 39.0, zoom = 10)
+
+cat("Visualizzazione completata con successo.\n")
+
+# Converte lo stack in un array
+stack_array <- as.array(classified_raster_nbclust)
+
+# Crea il kernel "diamond"
+k <- shapeKernel(c(2,2), type = "disc")
+
+# Applica l'erosione su tutte le bande
+eroded_stack_array <- opening(stack_array, k)
+
+# Riconverti l'array in uno SpatRaster
+eroded_stack_raster <- rast(eroded_stack_array, crs = crs(classified_raster_nbclust_single), extent = ext(classified_raster_nbclust_single))
+pippo <- eroded_stack_raster[[1]]
+plot(pippo)
+
+# Sostituisci valori non validi con NA
+pippo[is.infinite(pippo)] <- NA
+pippo[pippo < 0] <- NA  # Elimina valori negativi non attesi
+
+leaflet() %>%
+  addTiles(group = "OpenStreetMap") %>%
+  addProviderTiles("Esri.WorldImagery", group = "Immagine Satellitare") %>%
+  addProviderTiles("CartoDB.Positron", group = "Mappa Chiara") %>%
+  addRasterImage(classified_raster_nbclust_single, 
+                 colors = palette_turbo(optimal_clusters), opacity = 0.6,
+                 group = "Classificato con kmeans") %>%
+  addRasterImage(pippo, 
+                 colors = palette_turbo(optimal_clusters), opacity = 0.6,
+                 group = "Classificato con kmeans + erode") %>%
+  addLayersControl(
+    baseGroups = c("OpenStreetMap", "Immagine Satellitare", "Mappa Chiara"),
+    overlayGroups = c("Classificato con kmeans", "Classificato con kmeans + erode"),
+    options = layersControlOptions(collapsed = FALSE)
+  ) %>%
+  addScaleBar(position = "bottomright", options = scaleBarOptions(imperial = FALSE)) %>%
+  hideGroup("Classificato con kmeans") %>%  # Nascondi i layer inizialmente per evitare conflitti
+  hideGroup("Classificato con kmeans + erode") %>%
+  setView(lng = 16.5, lat = 39.0, zoom = 10)
+
+cat("Visualizzazione completata con successo.\n")
