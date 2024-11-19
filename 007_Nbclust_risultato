@@ -14,7 +14,7 @@ check_and_install(required_packages)
 setwd("D:/composite")
 
 # Carica il raster multibanda
-img_84 <- rast("L5 Composite 1984-1990_masked.tif")
+img_84 <- rast("ritaglino.tif")
 
 # Seleziona le bande necessarie (B1, B2, B3, B4, B5, B7)
 l1984 <- img_84[[c(1, 2, 3, 4, 5, 6)]]
@@ -59,8 +59,6 @@ som_model <- supersom(
     list(pca_values), 
     grid = som_grid, 
     rlen = 500, 
-    alpha = 0,                  # Imposta alpha a 0 per non avere apprendimento progressivo
-    radius = quantile(dist(som_grid$pts), 2/3), 
     mode = "pbatch", 
     cores = -1  # Usa tutti i core disponibili
 )
@@ -134,7 +132,7 @@ barplot(clusterboot_result$bootmean,
 
 # Esegui K-means con 5 cluster e gestisci le iterazioni
 set.seed(42)  # Imposta il seme per garantire la riproducibilità
-kmeans_nbclust <- kmeans(som_values, centers = 5, nstart = 100, iter.max = 1000)
+kmeans_nbclust <- kmeans(som_values, centers = optimal_clusters, nstart = 100, iter.max = 1000)
 
 # Crea un raster classificato usando i cluster di K-means con 5 cluster
 classified_raster_nbclust <- rast(img_84)
@@ -150,32 +148,31 @@ palette_turbo <- viridisLite::turbo
 
 # Visualizza il raster classificato con leaflet
 leaflet() %>%
-  # Aggiungi le tiles di base
-  addTiles(group = "OpenStreetMap") %>%
-  addProviderTiles("Esri.WorldImagery", group = "Immagine Satellitare") %>%
-  addProviderTiles("CartoDB.Positron", group = "Mappa Chiara") %>%
-  
-  # Aggiungi il raster classificato con 5 cluster
-  addRasterImage(classified_raster_nbclust_single, 
-                 colors = palette_turbo(5), 
-                 opacity = 0.6, 
-                 group = "Classificato con K-means (5 Cluster)") %>%
-  
-  # Aggiungi i controlli per cambiare i layer di base e i gruppi di layer
-  addLayersControl(
-    baseGroups = c("OpenStreetMap", "Immagine Satellitare", "Mappa Chiara"),  # Layer di base
-    overlayGroups = c("Classificato con K-means (5 Cluster)"),  # Layer classificati
-    options = layersControlOptions(collapsed = FALSE)  # Espandi il menu dei layer di default
-  ) %>%
-  
-  # Aggiungi una barra di scala
-  addScaleBar(position = "bottomright", options = scaleBarOptions(imperial = FALSE)) %>%
-  
-  # Centra la mappa sul raster (modifica i valori per il tuo AOI)
-  setView(lng = 16.5, lat = 39.0, zoom = 10)
+    # Aggiungi le tiles di base
+    addTiles(group = "OpenStreetMap") %>%
+    addProviderTiles("Esri.WorldImagery", group = "Immagine Satellitare") %>%
+    addProviderTiles("CartoDB.Positron", group = "Mappa Chiara") %>%
+    
+    # Aggiungi il raster classificato con 5 cluster
+    addRasterImage(classified_raster_nbclust_single, 
+                   colors = palette_turbo(optimal_clusters), 
+                   opacity = 0.6, 
+                   group = "Classificato con K-means (5 Cluster)") %>%
+    
+    # Aggiungi i controlli per cambiare i layer di base e i gruppi di layer
+    addLayersControl(
+        baseGroups = c("OpenStreetMap", "Immagine Satellitare", "Mappa Chiara"),  # Layer di base
+        overlayGroups = c("Classificato con K-means (5 Cluster)"),  # Layer classificati
+        options = layersControlOptions(collapsed = FALSE)  # Espandi il menu dei layer di default
+    ) %>%
+    
+    # Aggiungi una barra di scala
+    addScaleBar(position = "bottomright", options = scaleBarOptions(imperial = FALSE)) %>%
+    
+    # Centra la mappa sul raster (modifica i valori per il tuo AOI)
+    setView(lng = 16.5, lat = 39.0, zoom = 10)
 
 cat("Visualizzazione completata con successo.\n")
-
 
 
 
