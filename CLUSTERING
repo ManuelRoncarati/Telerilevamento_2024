@@ -1,0 +1,73 @@
+#HCLUST
+
+
+
+
+# Carica le librerie necessarie
+library(fpc)          # Per clusterboot
+library(leaflet)
+library(viridisLite)
+library(raster)       # Per la gestione dei raster, se non già caricato
+
+# Validazione della stabilità dei cluster con clusterboot
+clusterboot_result <- clusterboot(
+    data = som_values,                  # Usa i valori SOM
+    B = 100,                            # Aumentato il numero di bootstrap
+    clustermethod = hclustCBI,          # Metodo di clustering gerarchico personalizzato
+    bootmethod = "boot",                # Bootstrap non parametrico
+    dissolution = 0.5, 
+    k = 5,
+    method = 'ward.D2',                  # Metodo di clustering
+    recover = 0.75, 
+    count = FALSE
+)
+
+# Stampa i risultati della stabilità dei cluster
+cat("Risultati della stabilità dei cluster con clusterboot:\n")
+print(clusterboot_result$bootmean)
+print(clusterboot_result$bootrecover)
+print(clusterboot_result$bootbrd)
+
+# Visualizzazione della stabilità
+barplot(clusterboot_result$bootmean, 
+        main = "Stabilità dei Cluster con hclust e Bootstrap", 
+        ylab = "Media della Similarità di Jaccard", 
+        xlab = "Cluster", 
+        col = "lightblue",
+        ylim = c(0,1))  # Aggiunto ylim per limitare l'asse y
+
+# Esecuzione del clustering gerarchico definitivo
+distance_matrix_full <- dist(som_values, method = "euclidean")
+hc_full <- hclust(distance_matrix_full, method = "ward.D2")
+cluster_assignments <- cutree(hc_full, k = optimal_clusters)
+
+# Creazione del raster classificato
+classified_raster_hclust <- img_84[[1]]
+values(classified_raster_hclust) <- NA
+mask <- !is.na(values(img_84[[1]]))
+values(classified_raster_hclust)[mask] <- cluster_assignments[som_model$unit.classif]
+
+# Seleziona solo la prima banda del raster
+classified_raster_hclust_single <- classified_raster_hclust[[1]]
+
+# Carica la palette turbo
+palette_turbo <- viridisLite::turbo(optimal_clusters)
+
+# Visualizzazione con Leaflet
+leaflet() %>%
+    addTiles(group = "OpenStreetMap") %>%
+    addProviderTiles("Esri.WorldImagery", group = "Immagine Satellitare") %>%
+    addProviderTiles("CartoDB.Positron", group = "Mappa Chiara") %>%
+    addRasterImage(classified_raster_hclust_single, 
+                   colors = palette_turbo, 
+                   opacity = 0.6, 
+                   group = "Classificato con hclust") %>%
+    addLayersControl(
+        baseGroups = c("OpenStreetMap", "Immagine Satellitare", "Mappa Chiara"),
+        overlayGroups = c("Classificato con hclust"),
+        options = layersControlOptions(collapsed = FALSE)
+    ) %>%
+    addScaleBar(position = "bottomright", options = scaleBarOptions(imperial = FALSE)) %>%
+    setView(lng = 16.5, lat = 39.0, zoom = 10)
+
+cat("Visualizzazione completata con successo.\n")
