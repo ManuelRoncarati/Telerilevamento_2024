@@ -232,3 +232,66 @@ leaflet() %>%
     setView(lng = 16.5, lat = 39.0, zoom = 10)
 
 cat("Visualizzazione completata con successo.\n")
+
+
+
+
+
+
+
+
+
+
+
+
+
+#TCLUSTCBI
+
+# Carica le librerie necessarie
+library(fpc)          # Per tclustCBI
+library(leaflet)      # Per la visualizzazione interattiva delle mappe
+library(viridisLite)  # Per le palette di colori
+library(terra)        # Per la gestione dei raster
+
+# Esegui il clustering con tclustCBI
+fixmahal_result <- tclustCBI(som_values, 6, trim = 0, restr.fact = 256)
+
+# Crea un raster classificato usando i cluster di tclustCBI
+classified_raster_mahal <- rast(img_84)
+values(classified_raster_mahal) <- NA
+mask <- !is.na(values(img_84[[1]]))
+
+# Accedi alle assegnazioni dei cluster corrette
+cluster_assignments <- fixmahal_result$partition[som_model$unit.classif]
+
+# Assegna i valori di cluster al raster
+values(classified_raster_mahal)[mask] <- cluster_assignments
+
+# Seleziona solo la prima banda del raster
+classified_raster_mahal_single <- classified_raster_mahal[[1]]
+
+# Carica la palette turbo
+palette_turbo <- viridisLite::turbo(6)  # 6 cluster
+
+# Visualizza il raster classificato con leaflet
+leaflet() %>%
+    addTiles(group = "OpenStreetMap") %>%
+    addProviderTiles("Esri.WorldImagery", group = "Immagine Satellitare") %>%
+    addProviderTiles("CartoDB.Positron", group = "Mappa Chiara") %>%
+    
+    addRasterImage(classified_raster_mahal_single, 
+                   colors = palette_turbo, 
+                   opacity = 0.6, 
+                   group = "Classificato con tclustCBI") %>%
+    
+    addLayersControl(
+        baseGroups = c("OpenStreetMap", "Immagine Satellitare", "Mappa Chiara"),
+        overlayGroups = c("Classificato con tclustCBI"),
+        options = layersControlOptions(collapsed = FALSE)
+    ) %>%
+    
+    addScaleBar(position = "bottomright", options = scaleBarOptions(imperial = FALSE)) %>%
+    
+    setView(lng = 16.5, lat = 39.0, zoom = 10)
+
+cat("Visualizzazione completata con successo.\n")
