@@ -208,7 +208,7 @@ check_and_install <- function(packages) {
 }
 
 required_packages <- c(
-  "fpc", "NbClust", "terra", "dplyr", "kohonen",
+  "fpc", "terra", "dplyr", "kohonen",
   "parallel", "leaflet", "ggplot2", "viridis", 
   "mclust", "tclust", "viridisLite", "htmltools"
 )
@@ -244,16 +244,16 @@ cat("Modello SOM caricato correttamente.\n")
 som_values <- som_model$codes[[1]]
 
 # ====================================================
-# Sezione 4: Clustering con K-means
+# Sezione 4: Impostazione del numero ottimale di cluster
 # ====================================================
 
-# Definisci il numero ottimale di cluster
-# Nota: Assicurati che 'optimal_clusters' sia definito prima di eseguire questo codice
-# Ad esempio, puoi utilizzare NbClust per determinarlo
-# library(NbClust)
-# nbclust_result <- NbClust(data = som_values, distance = "euclidean", min.nc = 2, max.nc = 10, 
-#                          method = "kmeans")
-# optimal_clusters <- nbclust_result$Best.nc[1]
+# Imposta il numero ottimale di cluster a 5
+optimal_clusters <- 5
+cat("Numero ottimale di cluster impostato a:", optimal_clusters, "\n")
+
+# ====================================================
+# Sezione 5: Clustering con K-means
+# ====================================================
 
 # Esegui K-means con il numero ottimale di cluster
 kmeans_nbclust <- kmeans(
@@ -264,7 +264,32 @@ kmeans_nbclust <- kmeans(
 )
 
 # ====================================================
-# Sezione 5: Creazione del raster classificato
+# Sezione 6: Valutazione della stabilità dei cluster
+# ====================================================
+
+# Valutazione della stabilità dei cluster utilizzando clusterboot
+clusterboot_result <- clusterboot(
+  data = som_values,            # Usa i valori SOM
+  B = 50,                       # Numero di campioni bootstrap
+  clustermethod = kmeansCBI,     # Metodo K-means tramite interfaccia kmeansCBI
+  bootmethod = "boot",           # Usa bootstrap non parametrico
+  dissolution = 0.5,             # Valore di dissoluzione per i cluster instabili
+  recover = 0.75,                # Valore di recupero per i cluster stabili
+  count = FALSE,                 # Non mostrare il progresso durante il bootstrap
+  k = optimal_clusters           # Usa il numero ottimale di cluster impostato
+)
+
+# Visualizza i risultati della valutazione della stabilità
+print(clusterboot_result)
+
+# Opzionale: Analizza i risultati in dettaglio
+# Puoi accedere a diverse componenti del risultato, ad esempio:
+# clusterboot_result$bootmean   # Media dei Jaccard per cluster
+# clusterboot_result$dissolution # Numero di volte i cluster si sono dissolti
+# clusterboot_result$recovered    # Numero di volte i cluster sono stati recuperati
+
+# ====================================================
+# Sezione 7: Creazione del raster classificato
 # ====================================================
 
 # Crea un raster vuoto con le stesse caratteristiche di img_84
@@ -281,7 +306,7 @@ values(classified_raster_nbclust)[mask] <- kmeans_nbclust$cluster[som_model$unit
 classified_raster_nbclust_single <- classified_raster_nbclust[[1]]
 
 # ====================================================
-# Sezione 6: Preparazione della classificazione per la mappa
+# Sezione 8: Preparazione della classificazione per la mappa
 # ====================================================
 
 # Converti il raster in fattore
@@ -289,16 +314,21 @@ classified_raster_nbclust_single <- as.factor(classified_raster_nbclust_single)
 
 # Definizione delle etichette delle classi
 class_labels <- data.frame(
-  ID = 1:6,
+  ID = 1:optimal_clusters,
   Classe = c(
     "Agricoltura", 
     "Foresta", 
     "Urbano", 
     "Acqua", 
-    "Arido", 
-    "Zone Umide"
+    "Arido"
+    # Puoi modificare o aggiungere le etichette in base ai tuoi cluster
   )
 )
+
+# Verifica che il numero di etichette corrisponda al numero di cluster
+if (nrow(class_labels) != optimal_clusters) {
+  stop("Il numero di etichette delle classi non corrisponde al numero di cluster.")
+}
 
 # Assegnazione delle etichette al raster
 levels(classified_raster_nbclust_single) <- class_labels
@@ -321,7 +351,7 @@ color_pal <- colorNumeric(
 )
 
 # ====================================================
-# Sezione 7: Creazione della mappa Leaflet
+# Sezione 9: Creazione della mappa Leaflet
 # ====================================================
 
 leaflet_map <- leaflet() %>%
@@ -357,7 +387,7 @@ leaflet_map <- leaflet() %>%
   )
 
 # ====================================================
-# Sezione 8: Visualizzazione della mappa
+# Sezione 10: Visualizzazione della mappa
 # ====================================================
 
 leaflet_map
