@@ -160,3 +160,139 @@ leaflet() %>%
     setView(lng = 16.5, lat = 39.0, zoom = 10)
 
 cat("Visualizzazione completata con successo.\n")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Caricamento dei pacchetti necessari
+library(terra)
+library(leaflet)
+library(viridisLite)
+library(htmltools)  # Opzionale, per l'uso di colori personalizzati nelle legende
+
+# Preparazione del raster
+classified_raster_nbclust_single <- as.factor(classified_raster_nbclust_single)
+
+# Definizione delle etichette delle classi
+class_labels <- data.frame(
+    ID = 1:6,
+    Classe = c("Agricoltura", 
+               "Foresta", 
+               "Urbano", 
+               "Acqua", 
+               "Arido", 
+               "Zone Umide")
+)
+
+# Assegnazione delle etichette al raster
+levels(classified_raster_nbclust_single) <- class_labels
+
+# Generazione della palette "turbo"
+n_classes <- nrow(class_labels)
+col_pal <- turbo(n_classes)
+
+# Creazione della mappatura tra ID e colori
+col_vector <- setNames(col_pal, class_labels$ID)
+
+# Vettore delle etichette delle classi
+labels_vector <- class_labels$Classe
+
+# Creazione della funzione di mappatura dei colori con NA trasparente
+color_pal <- colorNumeric(
+    palette = col_pal,
+    domain = class_labels$ID,
+    na.color = "transparent"  # Imposta i valori NA come trasparenti
+)
+
+# Creazione della mappa Leaflet con layer di base multipli e controllo dei layer
+leaflet_map <- leaflet() %>%
+    # Aggiungi i diversi layer di base con i relativi gruppi
+    addTiles(group = "OpenStreetMap") %>%  # Layer di base predefinito
+    addProviderTiles("Esri.WorldImagery", group = "Immagine Satellitare") %>%  # Layer di base Esri
+    addProviderTiles("CartoDB.Positron", group = "Mappa Chiara") %>%  # Layer di base CartoDB
+
+    # Aggiungi il raster classificato come overlay
+    addRasterImage(
+        classified_raster_nbclust_single, 
+        colors = color_pal, 
+        opacity = 0.8,
+        project = TRUE,
+        group = "Raster Classificato"
+    ) %>%
+
+    # Aggiungi la legenda
+    addLegend(
+        position = "bottomright",
+        colors = col_pal, 
+        labels = labels_vector, 
+        title = "Classi di Uso del Suolo",
+        opacity = 1
+    ) %>%
+
+    # Aggiungi il controllo dei layer
+    addLayersControl(
+        baseGroups = c("OpenStreetMap", "Immagine Satellitare", "Mappa Chiara"),
+        overlayGroups = c("Raster Classificato"),
+        options = layersControlOptions(collapsed = FALSE),
+        position = "topright"
+    )
+
+# Visualizzazione della mappa
+leaflet_map
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
