@@ -195,24 +195,109 @@ cat("Visualizzazione completata con successo.\n")
 
 
 
-# Caricamento dei pacchetti necessari
-library(terra)
-library(leaflet)
-library(viridisLite)
-library(htmltools)  # Opzionale, per l'uso di colori personalizzati nelle legende
+# ====================================================
+# Sezione 1: Installazione e caricamento delle librerie
+# ====================================================
 
-# Preparazione del raster
+check_and_install <- function(packages) {
+  installed <- packages %in% rownames(installed.packages())
+  if (any(!installed)) {
+    install.packages(packages[!installed])
+  }
+  invisible(lapply(packages, library, character.only = TRUE))
+}
+
+required_packages <- c(
+  "fpc", "NbClust", "terra", "dplyr", "kohonen",
+  "parallel", "leaflet", "ggplot2", "viridis", 
+  "mclust", "tclust", "viridisLite", "htmltools"
+)
+
+check_and_install(required_packages)
+
+# ====================================================
+# Sezione 2: Impostazioni iniziali
+# ====================================================
+
+# Imposta la working directory
+setwd("C:/composite")
+
+# Imposta il seme per la riproducibilità
+set.seed(42)
+
+# ====================================================
+# Sezione 3: Caricamento e preparazione dei dati
+# ====================================================
+
+# Carica il raster multibanda
+img_84 <- rast("L5 Composite 1984-1990_masked.tif")
+
+# Seleziona le bande necessarie (B1, B2, B3, B4, B5, B7)
+selected_bands <- c(1, 2, 3, 4, 5, 7)  # Assicurati che l'indice della banda 7 sia corretto
+l1984 <- img_84[[selected_bands]]
+
+# Carica il modello SOM dal file
+som_model <- readRDS("som_model_20X20_84-90_1000_NO_PCA.rds")
+cat("Modello SOM caricato correttamente.\n")
+
+# Ottieni i codici della SOM (valori ridotti dimensionalmente)
+som_values <- som_model$codes[[1]]
+
+# ====================================================
+# Sezione 4: Clustering con K-means
+# ====================================================
+
+# Definisci il numero ottimale di cluster
+# Nota: Assicurati che 'optimal_clusters' sia definito prima di eseguire questo codice
+# Ad esempio, puoi utilizzare NbClust per determinarlo
+# library(NbClust)
+# nbclust_result <- NbClust(data = som_values, distance = "euclidean", min.nc = 2, max.nc = 10, 
+#                          method = "kmeans")
+# optimal_clusters <- nbclust_result$Best.nc[1]
+
+# Esegui K-means con il numero ottimale di cluster
+kmeans_nbclust <- kmeans(
+  som_values, 
+  centers = optimal_clusters, 
+  nstart = 100, 
+  iter.max = 1000
+)
+
+# ====================================================
+# Sezione 5: Creazione del raster classificato
+# ====================================================
+
+# Crea un raster vuoto con le stesse caratteristiche di img_84
+classified_raster_nbclust <- rast(img_84)
+values(classified_raster_nbclust) <- NA
+
+# Crea una maschera dai valori non NA del raster originale
+mask <- !is.na(values(img_84[[1]]))
+
+# Assegna i cluster di K-means ai pixel del raster classificato
+values(classified_raster_nbclust)[mask] <- kmeans_nbclust$cluster[som_model$unit.classif]
+
+# Seleziona solo la prima banda del raster per evitare messaggi di avvertimento
+classified_raster_nbclust_single <- classified_raster_nbclust[[1]]
+
+# ====================================================
+# Sezione 6: Preparazione della classificazione per la mappa
+# ====================================================
+
+# Converti il raster in fattore
 classified_raster_nbclust_single <- as.factor(classified_raster_nbclust_single)
 
 # Definizione delle etichette delle classi
 class_labels <- data.frame(
-    ID = 1:6,
-    Classe = c("Agricoltura", 
-               "Foresta", 
-               "Urbano", 
-               "Acqua", 
-               "Arido", 
-               "Zone Umide")
+  ID = 1:6,
+  Classe = c(
+    "Agricoltura", 
+    "Foresta", 
+    "Urbano", 
+    "Acqua", 
+    "Arido", 
+    "Zone Umide"
+  )
 )
 
 # Assegnazione delle etichette al raster
@@ -220,7 +305,7 @@ levels(classified_raster_nbclust_single) <- class_labels
 
 # Generazione della palette "turbo"
 n_classes <- nrow(class_labels)
-col_pal <- turbo(n_classes)
+col_pal <- viridis::turbo(n_classes)
 
 # Creazione della mappatura tra ID e colori
 col_vector <- setNames(col_pal, class_labels$ID)
@@ -230,69 +315,49 @@ labels_vector <- class_labels$Classe
 
 # Creazione della funzione di mappatura dei colori con NA trasparente
 color_pal <- colorNumeric(
-    palette = col_pal,
-    domain = class_labels$ID,
-    na.color = "transparent"  # Imposta i valori NA come trasparenti
+  palette = col_pal,
+  domain = class_labels$ID,
+  na.color = "transparent"  # Imposta i valori NA come trasparenti
 )
 
-# Creazione della mappa Leaflet con layer di base multipli e controllo dei layer
+# ====================================================
+# Sezione 7: Creazione della mappa Leaflet
+# ====================================================
+
 leaflet_map <- leaflet() %>%
-    # Aggiungi i diversi layer di base con i relativi gruppi
-    addTiles(group = "OpenStreetMap") %>%  # Layer di base predefinito
-    addProviderTiles("Esri.WorldImagery", group = "Immagine Satellitare") %>%  # Layer di base Esri
-    addProviderTiles("CartoDB.Positron", group = "Mappa Chiara") %>%  # Layer di base CartoDB
+  # Aggiungi i diversi layer di base con i relativi gruppi
+  addTiles(group = "OpenStreetMap") %>%  # Layer di base predefinito
+  addProviderTiles("Esri.WorldImagery", group = "Immagine Satellitare") %>%  # Layer di base Esri
+  addProviderTiles("CartoDB.Positron", group = "Mappa Chiara") %>%  # Layer di base CartoDB
+  
+  # Aggiungi il raster classificato come overlay
+  addRasterImage(
+    classified_raster_nbclust_single, 
+    colors = color_pal, 
+    opacity = 0.8,
+    project = TRUE,
+    group = "Raster Classificato"
+  ) %>%
+  
+  # Aggiungi la legenda
+  addLegend(
+    position = "bottomright",
+    colors = col_pal, 
+    labels = labels_vector, 
+    title = "Classi di Uso del Suolo",
+    opacity = 1
+  ) %>%
+  
+  # Aggiungi il controllo dei layer
+  addLayersControl(
+    baseGroups = c("OpenStreetMap", "Immagine Satellitare", "Mappa Chiara"),
+    overlayGroups = c("Raster Classificato"),
+    options = layersControlOptions(collapsed = FALSE),
+    position = "topright"
+  )
 
-    # Aggiungi il raster classificato come overlay
-    addRasterImage(
-        classified_raster_nbclust_single, 
-        colors = color_pal, 
-        opacity = 0.8,
-        project = TRUE,
-        group = "Raster Classificato"
-    ) %>%
+# ====================================================
+# Sezione 8: Visualizzazione della mappa
+# ====================================================
 
-    # Aggiungi la legenda
-    addLegend(
-        position = "bottomright",
-        colors = col_pal, 
-        labels = labels_vector, 
-        title = "Classi di Uso del Suolo",
-        opacity = 1
-    ) %>%
-
-    # Aggiungi il controllo dei layer
-    addLayersControl(
-        baseGroups = c("OpenStreetMap", "Immagine Satellitare", "Mappa Chiara"),
-        overlayGroups = c("Raster Classificato"),
-        options = layersControlOptions(collapsed = FALSE),
-        position = "topright"
-    )
-
-# Visualizzazione della mappa
 leaflet_map
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
