@@ -1,0 +1,310 @@
+# ====================================================
+# Sezione 1: Installazione e caricamento delle librerie
+# ====================================================
+
+check_and_install <- function(packages) {
+    installed <- packages %in% rownames(installed.packages())
+    if (any(!installed)) {
+        install.packages(packages[!installed])
+    }
+    invisible(lapply(packages, library, character.only = TRUE))
+}
+
+required_packages <- c(
+    "fpc", "terra", "dplyr", "kohonen",
+    "parallel", "leaflet", "ggplot2", "viridis", 
+    "mclust", "tclust", "viridisLite", "htmltools"
+)
+
+check_and_install(required_packages)
+
+# ====================================================
+# Sezione 2: Impostazioni iniziali
+# ====================================================
+
+# Imposta la working directory
+setwd("C:/composite")
+
+# Imposta il seme per la riproducibilità
+
+
+# ====================================================
+# Sezione 3: Caricamento e preparazione dei dati
+# ====================================================
+
+# Carica il raster multibanda
+img_84 <- rast("L5 Composite 1984-1990_masked.tif")
+
+# Seleziona le bande necessarie (B1, B2, B3, B4, B5, B7)
+selected_bands <- c(1, 2, 3, 4, 5, 7)  # Assicurati che l'indice della banda 7 sia corretto
+l1984 <- img_84[[selected_bands]]
+
+# Carica il modello SOM dal file
+som_model <- readRDS("som_model_20X20_84-90_1000_NO_PCA.rds")
+cat("Modello SOM caricato correttamente.\n")
+
+# Ottieni i codici della SOM (valori ridotti dimensionalmente)
+som_values <- som_model$codes[[1]]
+
+# ====================================================
+# Sezione 4: Impostazione del numero ottimale di cluster
+# ====================================================
+
+# Imposta il numero ottimale di cluster a 5
+optimal_clusters <- 6
+cat("Numero ottimale di cluster impostato a:", optimal_clusters, "\n")
+
+# ====================================================
+# Sezione 5: Clustering con K-means
+# ====================================================
+
+# Esegui K-means con il numero ottimale di cluster
+kmeans_nbclust <- kmeans(
+    som_values, 
+    centers = optimal_clusters, 
+    nstart = 20, 
+    iter.max = 1000
+)
+
+# ====================================================
+# Sezione 6: Valutazione della stabilità dei cluster
+# ====================================================
+
+# Valutazione della stabilità dei cluster utilizzando clusterboot
+clusterboot_result <- clusterboot(
+    data = som_values,            # Usa i valori SOM
+    B = 100,                       # Numero di campioni bootstrap
+    clustermethod = kmeansCBI,     # Metodo K-means tramite interfaccia kmeansCBI
+    bootmethod = "boot",           # Usa bootstrap non parametrico
+    dissolution = 0.5,             # Valore di dissoluzione per i cluster instabili
+    recover = 0.75,                # Valore di recupero per i cluster stabili
+    count = FALSE,                 # Non mostrare il progresso durante il bootstrap
+    k = optimal_clusters           # Usa il numero ottimale di cluster impostato
+)
+
+# Visualizza i risultati della valutazione della stabilità
+print(clusterboot_result)
+
+# ====================================================
+# Sezione 7: Creazione del raster classificato
+# ====================================================
+
+# Crea un raster vuoto con le stesse caratteristiche di img_84
+classified_raster_nbclust <- rast(img_84)
+values(classified_raster_nbclust) <- NA
+
+# Crea una maschera dai valori non NA del raster originale
+mask <- !is.na(values(img_84[[1]]))
+
+# Assegna i cluster di K-means ai pixel del raster classificato
+values(classified_raster_nbclust)[mask] <- kmeans_nbclust$cluster[som_model$unit.classif]
+
+# Seleziona solo la prima banda del raster per evitare messaggi di avvertimento
+classified_raster_nbclust_single <- classified_raster_nbclust[[1]]
+
+# ====================================================
+# Sezione 8: Preparazione della classificazione per la mappa (Senza Etichette)
+# ====================================================
+
+# Converti il raster in fattore
+classified_raster_nbclust_single <- as.factor(classified_raster_nbclust_single)
+
+# Definizione delle etichette delle classi iniziali come "Cluster 1", "Cluster 2", etc.
+class_labels_initial <- data.frame(
+    ID = 1:optimal_clusters,
+    Classe = paste("Cluster", 1:optimal_clusters)
+)
+
+# Assegna le etichette iniziali al raster
+levels(classified_raster_nbclust_single) <- class_labels_initial
+
+# Generazione della palette "turbo"
+n_classes <- optimal_clusters
+col_pal <- viridis::magma(n_classes)
+
+# Creazione della funzione di mappatura dei colori con NA trasparente
+color_pal <- colorNumeric(
+    palette = col_pal,
+    domain = 1:n_classes,
+    na.color = "transparent"  # Imposta i valori NA come trasparenti
+)
+
+# ====================================================
+# Sezione 9: Creazione della mappa Leaflet (Con Legenda Semplice)
+# ====================================================
+
+# Vettore delle etichette delle classi iniziali
+labels_vector_initial <- class_labels_initial$Classe
+
+# Creazione della mappatura tra ID e colori
+col_vector_initial <- setNames(col_pal, class_labels_initial$ID)
+
+# Creazione della mappa Leaflet con legenda semplice
+leaflet_map_initial <- leaflet() %>%
+    # Aggiungi i diversi layer di base con i relativi gruppi
+    addTiles(group = "OpenStreetMap") %>%  # Layer di base predefinito
+    addProviderTiles("Esri.WorldImagery", group = "Immagine Satellitare") %>%  # Layer di base Esri
+    addProviderTiles("CartoDB.Positron", group = "Mappa Chiara") %>%  # Layer di base CartoDB
+    
+    # Aggiungi il raster classificato come overlay
+    addRasterImage(
+        classified_raster_nbclust_single, 
+        colors = color_pal, 
+        opacity = 0.8,
+        project = TRUE,
+        group = "Raster Classificato"
+    ) %>%
+    
+    # Aggiungi la legenda semplice
+    addLegend(
+        position = "bottomright",
+        colors = col_pal, 
+        labels = labels_vector_initial, 
+        title = "Cluster",
+        opacity = 1
+    ) %>%
+    
+    # Aggiungi il controllo dei layer
+    addLayersControl(
+        baseGroups = c("OpenStreetMap", "Immagine Satellitare", "Mappa Chiara"),
+        overlayGroups = c("Raster Classificato"),
+        options = layersControlOptions(collapsed = FALSE),
+        position = "topright"
+    )
+
+# Visualizzazione della mappa iniziale con legenda semplice
+leaflet_map_initial
+
+# ====================================================
+# Sezione 10: Esame e Assegnazione Manuale delle Etichette delle Classi
+# ====================================================
+
+# Passo 1: Esamina i cluster
+# Visualizzazione semplice del raster (usando plot)
+plot(classified_raster_nbclust_single, main = "Raster Classificato con Cluster", col=magma(optimal_clusters))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Passo 2: Assegna manualmente le etichette delle classi
+# Definisci le etichette in base alla tua interpretazione dei cluster
+# Puoi utilizzare la console per inserire i nomi delle classi o definirle direttamente nel codice
+
+# Esempio: Supponiamo che tu abbia deciso le seguenti associazioni
+class_labels_manual <- data.frame(
+    ID = 1:optimal_clusters,
+    Classe = c(
+        "Latifoglie",  # Cluster 1
+        "Nudo/Urbano",      # Cluster 2
+        "Conifere",       # Cluster 3
+        "Vegetazione bassa",        # Cluster 4
+        "Acqua","Agricolo"         # Cluster 5
+    ),
+    stringsAsFactors = FALSE
+)
+
+# Verifica che il numero di etichette corrisponda al numero di cluster
+if (nrow(class_labels_manual) != optimal_clusters) {
+    stop("Il numero di etichette delle classi non corrisponde al numero di cluster.")
+}
+
+# Passo 3: Calcolo delle aree dei cluster e aggiornamento delle etichette
+# Calcola la frequenza di ogni valore di cluster
+cluster_areas <- freq(classified_raster_nbclust_single)
+
+# Aggiungi una colonna per l'area in km² (supponendo una risoluzione di 30x30 metri)
+cluster_areas$area_km2 <- cluster_areas$count * 30 * 30 / 1000000
+
+# Aggiorna le etichette delle classi con le aree in km²
+class_labels_manual$Classe <- paste(class_labels_manual$Classe, "(", round(cluster_areas$area_km2, 2), "km²)")
+
+# Passo 4: Assegna le etichette al raster
+levels(classified_raster_nbclust_single) <- class_labels_manual
+
+# Passo 5: Aggiorna la mappa con le etichette personalizzate
+
+# Vettore delle etichette delle classi personalizzate
+labels_vector_manual <- class_labels_manual$Classe
+
+# Creazione della mappatura tra ID e colori (puoi riutilizzare col_pal o crearne di nuovi se necessario)
+col_vector_manual <- setNames(col_pal, class_labels_manual$ID)
+
+# Creazione della funzione di mappatura dei colori con NA trasparente
+color_pal_manual <- colorNumeric(
+    palette = col_pal,
+    domain = class_labels_manual$ID,
+    na.color = "transparent"  # Imposta i valori NA come trasparenti
+)
+
+# Creazione della mappa Leaflet con le etichette personalizzate
+leaflet_map_manual <- leaflet() %>%
+    # Aggiungi i diversi layer di base con i relativi gruppi
+    addTiles(group = "OpenStreetMap") %>%  # Layer di base predefinito
+    addProviderTiles("Esri.WorldImagery", group = "Immagine Satellitare") %>%  # Layer di base Esri
+    addProviderTiles("CartoDB.Positron", group = "Mappa Chiara") %>%  # Layer di base CartoDB
+    
+    # Aggiungi il raster classificato come overlay
+    addRasterImage(
+        classified_raster_nbclust_single, 
+        colors = color_pal_manual, 
+        opacity = 0.8,
+        project = TRUE,
+        group = "Raster Classificato"
+    ) %>%
+    
+    # Aggiungi la legenda con le etichette personalizzate
+    addLegend(
+        position = "bottomright",
+        colors = col_pal, 
+        labels = labels_vector_manual, 
+        title = "Classi di Uso del Suolo",
+        opacity = 1
+    ) %>%
+    
+    # Aggiungi il controllo dei layer
+    addLayersControl(
+        baseGroups = c("OpenStreetMap", "Immagine Satellitare", "Mappa Chiara"),
+        overlayGroups = c("Raster Classificato"),
+        options = layersControlOptions(collapsed = FALSE),
+        position = "topright"
+    )
+
+# Visualizzazione della mappa con le etichette personalizzate
+leaflet_map_manual
+
+# ====================================================
+# Sezione 11: Salvataggio dei Risultati (Opzionale)
+# ====================================================
+
+# Salva il raster classificato con le etichette
+writeRaster(classified_raster_nbclust_single, "classified_raster_labeled.tif", overwrite = TRUE)
+
+# Salva i risultati di clusterboot
+saveRDS(clusterboot_result, "clusterboot_result.rds")
+
+# ====================================================
+# Sezione 12: Calcolo delle aree dei cluster
+# ====================================================
+
+# Visualizza le aree dei cluster
+print(cluster_areas)
