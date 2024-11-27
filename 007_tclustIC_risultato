@@ -269,7 +269,7 @@ result <- clusterboot(
         trim = 0                      # Nessun outlier
     )
 
-
+result
 
 
 
