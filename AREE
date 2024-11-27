@@ -837,3 +837,26 @@ saveWidget(leaflet_map_updated, file = "leaflet_map_with_areas.html", selfcontai
 
 cat("Visualizzazione completata con successo.\n")
 
+# Esegui tclustIC per trovare il numero ottimale di cluster
+tclustIC_result <- tclustIC(
+    x = som_values, 
+    kk = 2:10,                 # Numero di cluster da 2 a 10
+    cc = 128,                  # Fattore di restrizione fisso a 128
+    alpha = 0,                 # Nessun outlier, impostato a 0
+    whichIC = "ALL",           # Calcola tutti i criteri di informazione (MIXMIX, MIXCLA, CLACLA)
+    parallel = TRUE,           # Esegui in parallelo
+    n.cores = parallel::detectCores(),   # Utilizza tutti i core disponibili
+    trace = FALSE               # Stampa i risultati intermedi
+)
+
+
+# Visualizza i risultati per il criterio ICL (MIXCLA)
+plot(tclustIC_result, which = "MIXCLA")
+
+# Visualizza i risultati per il criterio BIC (MIXMIX)
+plot(tclustIC_result, which = "MIXMIX")
+
+# Visualizza i risultati per il criterio CLA (CLACLA)
+plot(tclustIC_result, which = "CLACLA")
+
+
