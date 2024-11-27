@@ -257,7 +257,17 @@ leaflet() %>%
 
 cat("Visualizzazione completata con successo.\n")
 
-
+result <- clusterboot(
+        data = som_values,            # Usa i valori SOM
+        B = 2,                      # Numero di campioni bootstrap
+        clustermethod = tclustCBI,    # Metodo tclust tramite interfaccia tclustCBI
+        bootmethod = "boot",          # Usa bootstrap non parametrico
+        dissolution = 0.5,            # Valore di dissoluzione per i cluster instabili
+        recover = 0.75,               # Valore di recupero per i cluster stabili
+        count = FALSE,                # Mostra il progresso durante il bootstrap
+        k = 5,                  # Numero di cluster da tclust
+        trim = 0                      # Nessun outlier
+    )
 
 
 
