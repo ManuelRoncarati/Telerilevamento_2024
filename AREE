@@ -615,3 +615,225 @@ saveRDS(clusterboot_result, "clusterboot_result.rds")
 # ====================================================
 # Fine dello Script
 # ====================================================
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# ====================================================
+# Sezione 1: Installazione e caricamento delle librerie
+# ====================================================
+
+check_and_install <- function(packages) {
+    installed <- packages %in% rownames(installed.packages())
+    if (any(!installed)) {
+        install.packages(packages[!installed], dependencies = TRUE)
+    }
+    invisible(lapply(packages, library, character.only = TRUE))
+}
+
+required_packages <- c(
+    "fpc", "terra", "dplyr", "kohonen",
+    "parallel", "leaflet", "ggplot2", "viridis", 
+    "mclust", "tclust", "viridisLite", "htmltools"
+)
+
+check_and_install(required_packages)
+
+# ====================================================
+# Sezione 2: Impostazioni iniziali
+# ====================================================
+
+# Imposta la working directory
+setwd("C:/composite")
+
+# Imposta il seme per la riproducibilità
+set.seed(123)  # Aggiungi questa riga per impostare il seme
+
+# ====================================================
+# Sezione 3: Caricamento e preparazione dei dati
+# ====================================================
+
+# Carica il raster multibanda
+img_84 <- rast("L5 Composite 1984-1990_masked.tif")
+
+# Seleziona le bande necessarie (B1, B2, B3, B4, B5, B7)
+selected_bands <- c(1, 2, 3, 4, 5, 7)  # Assicurati che l'indice della banda 7 sia corretto
+l1984 <- img_84[[selected_bands]]
+
+# Carica il modello SOM dal file
+som_model <- readRDS("som_model_20X20_84-90_1000_NO_PCA.rds")
+cat("Modello SOM caricato correttamente.\n")
+
+# Ottieni i codici della SOM (valori ridotti dimensionalmente)
+som_values <- som_model$codes[[1]]
+
+# ====================================================
+# Sezione 4: Impostazione del numero ottimale di cluster
+# ====================================================
+
+# Imposta il numero ottimale di cluster a 6
+optimal_clusters <- 6
+cat("Numero ottimale di cluster impostato a:", optimal_clusters, "\n")
+
+# ====================================================
+# Sezione 5: Clustering con tclustCBI
+# ====================================================
+
+# Esegui il clustering con tclustCBI
+fixmahal_result <- tclustCBI(som_values, 
+                             k = optimal_clusters, 
+                             trim = 0, 
+                             restr.fact = 256)
+cat("Clustering con tclustCBI completato.\n")
+
+# ====================================================
+# Sezione 6: Creazione del raster classificato
+# ====================================================
+
+# Crea un raster vuoto con le stesse caratteristiche di img_84
+classified_raster_mahal <- rast(img_84)
+values(classified_raster_mahal) <- NA
+
+# Crea una maschera dai valori non NA del raster originale
+mask <- !is.na(values(img_84[[1]]))
+
+# Accedi alle assegnazioni dei cluster corrette
+cluster_assignments <- fixmahal_result$partition[som_model$unit.classif]
+
+# Verifica che la lunghezza di cluster_assignments corrisponda al numero di pixel mascherati
+if (length(cluster_assignments) != sum(mask)) {
+    stop("La lunghezza di 'cluster_assignments' non corrisponde al numero di pixel mascherati.")
+}
+
+# Assegna i valori di cluster al raster
+values(classified_raster_mahal)[mask] <- cluster_assignments
+
+# Seleziona solo la prima banda del raster per evitare messaggi di avvertimento
+classified_raster_mahal_single <- classified_raster_mahal[[1]]
+
+# ====================================================
+# Sezione 7: Preparazione della classificazione per la mappa (Con Etichette "Cluster" e Aree)
+# ====================================================
+
+# Converti il raster in fattore
+classified_raster_mahal_single <- as.factor(classified_raster_mahal_single)
+
+# Calcola la frequenza di ogni valore di cluster
+cluster_areas <- freq(classified_raster_mahal_single)
+
+# Aggiungi una colonna per l'area in km² (supponendo una risoluzione di 30x30 metri)
+cluster_areas$area_km2 <- cluster_areas$count * 30 * 30 / 1000000
+
+# Definizione delle etichette delle classi come "Cluster 1 (X km²)", "Cluster 2 (Y km²)", etc.
+class_labels_updated <- data.frame(
+    ID = 1:optimal_clusters,
+    Classe = paste("Cluster", 1:optimal_clusters, 
+                   "(", round(cluster_areas$area_km2, 2), " km²)")
+)
+
+# Assegna le etichette aggiornate al raster
+levels(classified_raster_mahal_single) <- class_labels_updated
+
+# Generazione della palette "turbo"
+col_pal <- viridisLite::turbo(optimal_clusters)
+
+# Creazione della funzione di mappatura dei colori con NA trasparente
+color_pal <- colorNumeric(
+    palette = col_pal,
+    domain = 1:optimal_clusters,
+    na.color = "transparent"  # Imposta i valori NA come trasparenti
+)
+
+# ====================================================
+# Sezione 8: Creazione della mappa Leaflet (Con Legenda Aggiornata)
+# ====================================================
+
+# Vettore delle etichette delle classi aggiornate
+labels_vector_updated <- class_labels_updated$Classe
+
+# Creazione della mappatura tra ID e colori
+col_vector_updated <- setNames(col_pal, class_labels_updated$ID)
+
+# Creazione della mappa Leaflet con legenda aggiornata
+leaflet_map_updated <- leaflet() %>%
+    # Aggiungi i diversi layer di base con i relativi gruppi
+    addTiles(group = "OpenStreetMap") %>%  # Layer di base predefinito
+    addProviderTiles("Esri.WorldImagery", group = "Immagine Satellitare") %>%  # Layer di base Esri
+    addProviderTiles("CartoDB.Positron", group = "Mappa Chiara") %>%  # Layer di base CartoDB
+    
+    # Aggiungi il raster classificato come overlay
+    addRasterImage(
+        classified_raster_mahal_single, 
+        colors = color_pal, 
+        opacity = 0.8,
+        project = TRUE,
+        group = "Raster Classificato"
+    ) %>%
+    
+    # Aggiungi la legenda con le etichette aggiornate
+    addLegend(
+        position = "bottomright",
+        colors = col_pal, 
+        labels = labels_vector_updated, 
+        title = "Cluster",
+        opacity = 1
+    ) %>%
+    
+    # Aggiungi il controllo dei layer
+    addLayersControl(
+        baseGroups = c("OpenStreetMap", "Immagine Satellitare", "Mappa Chiara"),
+        overlayGroups = c("Raster Classificato"),
+        options = layersControlOptions(collapsed = FALSE),
+        position = "topright"
+    )
+
+# Visualizzazione della mappa aggiornata con le aree nei nomi dei cluster
+leaflet_map_updated
+
+# ====================================================
+# Sezione 9: Salvataggio dei Risultati (Opzionale)
+# ====================================================
+
+# Salva il raster classificato con le etichette aggiornate
+writeRaster(classified_raster_mahal_single, 
+            "classified_raster_labeled_with_areas.tif", 
+            overwrite = TRUE)
+
+# Salva i risultati di clusterboot
+saveRDS(fixmahal_result, "clusterboot_result.rds")
+
+# Opzionale: Salva la mappa Leaflet come file HTML
+library(htmlwidgets)
+saveWidget(leaflet_map_updated, file = "leaflet_map_with_areas.html", selfcontained = TRUE)
+
+cat("Visualizzazione completata con successo.\n")
+
