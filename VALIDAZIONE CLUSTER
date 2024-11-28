@@ -106,3 +106,19 @@ print("Prediction Strength per TCLUST:")
 print(ps_tclust$mean.pred)
 cat("Numero ottimale di cluster secondo prediction.strength (TCLUST):", ps_tclust$optimalk, "\n")
 
+
+
+
+
+
+
+
+library(clValid)
+validation <- clValid(som_values, nClust = 2:6, clMethods = "kmeans", validation = "stability", maxitems = nrow(som_values), verbose = FALSE)
+summary(validation)
+
+
+
+
+
+
