@@ -365,3 +365,71 @@ cat("Visualizzazione completata con successo (DIANA).\n")
     setView(lng = 16.5, lat = 39.0, zoom = 10)
 
 cat("Visualizzazione completata con successo.\n")
+
+
+
+
+
+
+
+#AGNES
+# Caricamento dei pacchetti necessari
+library(cluster)
+library(terra)
+library(leaflet)
+library(viridisLite)
+
+# Preparazione dei dati: som_values deve essere una matrice o un data frame
+set.seed(42)
+som_matrix <- as.matrix(som_values)
+
+# Clustering con AGNES
+agnes_result <- agnes(
+  x = som_matrix,         # Dati come matrice
+  diss = FALSE,           # Distanza calcolata internamente (FALSE)
+  metric = "euclidean",   # Distanza Euclidea
+  method = "ward"         # Metodo di legame (Ward)
+)
+
+# Determinazione del numero di cluster (k = 5)
+agnes_clusters <- cutree(as.hclust(agnes_result), k = 5)
+
+# Stampa dei risultati
+cat("Risultati del clustering AGNES:\n")
+cat("Cluster assegnati:\n")
+print(agnes_clusters)
+
+# Creazione di un raster classificato
+classified_raster_agnes <- rast(img_84)
+values(classified_raster_agnes) <- NA
+
+# Creazione della maschera per i valori non NA
+valid_mask <- !is.na(values(img_84[[1]]))
+
+# Mappare le assegnazioni di cluster
+values(classified_raster_agnes)[valid_mask] <- agnes_clusters[som_model$unit.classif]
+
+# Visualizzazione con Leaflet
+classified_raster_agnes_single <- classified_raster_agnes[[1]]
+agnes_palette <- viridisLite::turbo(5)
+
+leaflet() %>%
+  addTiles(group = "OpenStreetMap") %>%
+  addProviderTiles("Esri.WorldImagery", group = "Immagine Satellitare") %>%
+  addProviderTiles("CartoDB.Positron", group = "Mappa Chiara") %>%
+  addRasterImage(
+    classified_raster_agnes_single,
+    colors = agnes_palette,
+    opacity = 0.6,
+    group = "Classificato con AGNES"
+  ) %>%
+  addLayersControl(
+    baseGroups = c("OpenStreetMap", "Immagine Satellitare", "Mappa Chiara"),
+    overlayGroups = c("Classificato con AGNES"),
+    options = layersControlOptions(collapsed = FALSE)
+  ) %>%
+  addScaleBar(position = "bottomright", options = scaleBarOptions(imperial = FALSE)) %>%
+  setView(lng = 16.5, lat = 39.0, zoom = 10)
+
+cat("Visualizzazione completata con successo (AGNES).\n")
+
