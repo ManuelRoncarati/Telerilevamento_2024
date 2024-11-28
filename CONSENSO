@@ -265,3 +265,62 @@ leaflet() %>%
   setView(lng = 16.5, lat = 39.0, zoom = 10)
 
 cat("Visualizzazione completata con successo.\n")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Carica il modello SOM dal file
+som_model <- readRDS("som_model_20X20_500_84-90_NO_PCA_ritaglio.rds")
+cat("Modello SOM caricato correttamente.\n")
+som_values <- som_model$codes[[1]]
+
+# Carica le librerie necessarie
+library(ConsensusClusterPlus)
+library(mclust)
+
+# Prepara i tuoi dati
+som_values <- as.matrix(som_values)
+som_values <- t(som_values)
+som_values <- sweep(som_values, 1, apply(som_values, 1, median, na.rm = TRUE))
+
+if (any(is.na(som_values))) {
+    som_values <- na.omit(som_values)
+}
+
+# Definisci la funzione mclustHook
+mclustHook <- function(data, k) {
+    require(mclust)
+    mc <- Mclust(data, G = k, verbose = FALSE)
+    assignment <- mc$classification
+    return(assignment)
+}
+
+# Esegui il clustering di consenso utilizzando mclust
+results <- ConsensusClusterPlus(
+    som_values,
+    maxK = 9,
+    reps = 10,
+    pItem = 0.8,
+    pFeature = 1,
+    clusterAlg = "mclustHook",     # Passa il nome della funzione come stringa
+    distance = "none",             # Specifica che non deve essere calcolata alcuna distanza
+    title = "C:/composite_prove",  # Assicurati che questa directory esista
+    plot = "pdf",
+    verbose = TRUE
+)
+
+# Calcola e visualizza la stabilità dei cluster
+icl <- calcICL(results, title = "C:/composite_prove")
+print(icl$clusterConsensus)
