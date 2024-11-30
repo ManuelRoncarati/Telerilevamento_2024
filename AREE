@@ -961,7 +961,6 @@ som_grid <- somgrid(xdim = x_dim, ydim = y_dim, topo = "hexagonal")
 values_matrix <- as.matrix(values_stack_1984_scaled)
 
 # Esegui SuperSOM con parallelizzazione usando i dati originali
-set.seed(42)  # Per riproducibilità
 som_model <- supersom(
     list(values_matrix), 
     grid = som_grid, 
@@ -1009,7 +1008,6 @@ barplot(clusterboot_result$bootmean,
         col = "lightblue")
 
 # Esegui K-means con il numero di cluster impostato
-set.seed(42)  # Per riproducibilità
 kmeans_result <- kmeans(som_values, centers = optimal_clusters, nstart = 100, iter.max = 1000)
 
 # Crea un raster classificato usando i cluster di K-means
@@ -1030,23 +1028,23 @@ leaflet() %>%
     addTiles(group = "OpenStreetMap") %>%
     addProviderTiles("Esri.WorldImagery", group = "Immagine Satellitare") %>%
     addProviderTiles("CartoDB.Positron", group = "Mappa Chiara") %>%
-
+    
     # Aggiungi il raster classificato
     addRasterImage(classified_raster_single, 
                    colors = palette_turbo(optimal_clusters), 
                    opacity = 0.6, 
                    group = "Classificato con K-means") %>%
-
+    
     # Aggiungi i controlli per cambiare i layer di base e i gruppi di layer
     addLayersControl(
         baseGroups = c("OpenStreetMap", "Immagine Satellitare", "Mappa Chiara"),  # Layer di base
         overlayGroups = c("Classificato con K-means"),  # Layer classificati
         options = layersControlOptions(collapsed = FALSE)  # Espandi il menu dei layer di default
     ) %>%
-
+    
     # Aggiungi una barra di scala
     addScaleBar(position = "bottomright", options = scaleBarOptions(imperial = FALSE)) %>%
-
+    
     # Centra la mappa sul raster (modifica i valori per il tuo AOI)
     setView(lng = 16.5, lat = 39.0, zoom = 10)
 
@@ -1058,4 +1056,5 @@ end_time <- Sys.time()
 # Calcola il tempo di esecuzione
 execution_time <- end_time - start_time
 print(paste("Tempo totale di esecuzione:", execution_time))
+
 
