@@ -2,7 +2,7 @@ https://github.com/krishnakafle/gee-tutorials/blob/main/Part%20F%20-%20Fundament
 
 
 // Definisci l'AOI dal tuo shapefile
-var aoi = ee.FeatureCollection('projects/ee-manuelroncarati1/assets/shape_sila');
+var aoi = ee.FeatureCollection('projects/ee-roncaratimanuelciaooo/assets/shape_sila');
 
 // Centra la mappa sull'AOI
 Map.centerObject(aoi, 10);
