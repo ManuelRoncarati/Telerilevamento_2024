@@ -152,3 +152,109 @@ end_time <- Sys.time()
 # Calcola il tempo di esecuzione
 execution_time <- end_time - start_time
 print(paste("Tempo totale di esecuzione:", execution_time))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Inizia a misurare il tempo
+start_time <- Sys.time()
+
+# Carica le librerie necessarie
+check_and_install <- function(packages) {
+  installed <- packages %in% rownames(installed.packages())
+  if (any(!installed)) {
+    install.packages(packages[!installed])
+  }
+  invisible(lapply(packages, library, character.only = TRUE))
+}
+
+required_packages <- c("fpc", "terra", "dplyr", "kohonen", "parallel", "leaflet", "ggplot2", "viridisLite")
+check_and_install(required_packages)
+
+# Imposta la working directory
+setwd("C:/composite")
+
+# Carica il raster multibanda
+img_84 <- rast("L5 Composite 1984-1990_masked.tif")
+
+# Seleziona le bande necessarie (B1, B2, B3, B4, B5, B7)
+l1984 <- img_84[[c(1, 2, 3, 4, 5, 6)]]
+
+# Calcola gli indici NDVI, MNDWI e NDBI
+ndvi_1984 <- (l1984[[4]] - l1984[[3]]) / (l1984[[4]] + l1984[[3]])
+mndwi_1984 <- (l1984[[2]] - l1984[[5]]) / (l1984[[2]] + l1984[[5]])
+ndbi_1984 <- (l1984[[5]] - l1984[[4]]) / (l1984[[5]] + l1984[[4]])
+
+# Crea lo stack con bande e indici originali
+stack_1984 <- c(l1984, ndvi_1984, mndwi_1984, ndbi_1984)
+
+# Estrai i valori dal raster stack come dataframe e rimuovi i valori NA
+values_stack_1984 <- as.data.frame(values(stack_1984))
+values_stack_1984_non_na <- values_stack_1984[complete.cases(values_stack_1984), ]
+
+# Standardizza i dati
+values_stack_1984_scaled <- scale(values_stack_1984_non_na)
+
+# Conta il numero di osservazioni valide
+n <- nrow(values_stack_1984_scaled)
+print(paste("Numero di osservazioni valide:", n))
+
+# Calcola il numero totale di neuroni utilizzando la formula della mappa piccola
+neurons <- 10*(sqrt(n))
+print(paste("Numero suggerito di neuroni per la mappa piccola:", round(neurons)))
+
+# Suggerisci una configurazione di griglia approssimata
+x_dim <- round(sqrt(neurons))
+y_dim <- round(neurons / x_dim)
+print(paste("Dimensioni della griglia suggerite:", x_dim, "x", y_dim))
+
+# Definisci una griglia SOM con le dimensioni calcolate
+som_grid <- somgrid(xdim = x_dim, ydim = y_dim, topo = "hexagonal")
+
+# Converte il data frame in matrice numerica
+values_matrix <- as.matrix(values_stack_1984_scaled)
+
+# Esegui SuperSOM con parallelizzazione usando i dati originali
+som_model <- supersom(
+  list(values_matrix), 
+  grid = som_grid, 
+  rlen = 50, 
+  mode = "pbatch", 
+  cores = -1  # Usa tutti i core disponibili
+)
+
+# Visualizza i cambiamenti durante l'addestramento della SOM
+plot(som_model, type = "changes")
+
+
+
+# Termina la misurazione del tempo
+end_time <- Sys.time()
+
+# Calcola il tempo di esecuzione
+execution_time <- end_time - start_time
+print(paste("Tempo totale di esecuzione:", execution_time))
+
+
+# Calcola le metriche di qualità del SOM
+quality <- somQuality(som_model, values_matrix)
+
+# Stampa le metriche di qualità per valutare le performance del SOM
+cat("\nQualità della mappa SOM (griglia più grande):\n")
+cat("Quantization Error:", quality$err.quant, "\n")
+cat("Percentage of Explained Variance:", quality$err.varratio, "\n")
+cat("Topographic Error:", quality$err.topo, "\n")
