@@ -258,3 +258,185 @@ cat("\nQualità della mappa SOM (griglia più grande):\n")
 cat("Quantization Error:", quality$err.quant, "\n")
 cat("Percentage of Explained Variance:", quality$err.varratio, "\n")
 cat("Topographic Error:", quality$err.topo, "\n")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#AREE
+
+# ====================================================
+# Sezione 1: Installazione e caricamento delle librerie
+# ====================================================
+
+check_and_install <- function(packages) {
+    installed <- packages %in% rownames(installed.packages())
+    if (any(!installed)) {
+        install.packages(packages[!installed], dependencies = TRUE)
+    }
+    invisible(lapply(packages, library, character.only = TRUE))
+}
+
+required_packages <- c(
+    "fpc", "terra", "dplyr", "kohonen",
+    "parallel", "leaflet", "ggplot2", "viridis", 
+    "mclust", "tclust", "viridisLite", "htmltools"
+)
+
+check_and_install(required_packages)
+
+# ====================================================
+# Sezione 2: Impostazioni iniziali
+# ====================================================
+
+# Imposta la working directory
+setwd("C:/composite")
+
+# ====================================================
+# Sezione 3: Caricamento e preparazione dei dati
+# ====================================================
+
+# Carica il raster multibanda
+img_84 <- rast("L5 Composite 1984-1990_masked.tif")
+
+# Seleziona le bande necessarie (B1, B2, B3, B4, B5, B7)
+selected_bands <- c(1, 2, 3, 4, 5, 7)  # Assicurati che l'indice della banda 7 sia corretto
+l1984 <- img_84[[selected_bands]]
+
+# Carica il modello SOM dal file
+som_model <- readRDS("som_model_20X20_84-90_1000_NO_PCA.rds")
+cat("Modello SOM caricato correttamente.\n")
+
+# Ottieni i codici della SOM (valori ridotti dimensionalmente)
+som_values <- som_model$codes[[1]]
+
+# ====================================================
+# Sezione 4: Impostazione del numero ottimale di cluster
+# ====================================================
+
+# Imposta il numero ottimale di cluster a 6
+optimal_clusters <- 6
+cat("Numero ottimale di cluster impostato a:", optimal_clusters, "\n")
+
+# ====================================================
+# Sezione 5: Clustering con tclustCBI
+# ====================================================
+
+# Esegui il clustering con tclustCBI
+fixmahal_result <- tclustCBI(som_values, 
+                             k = optimal_clusters, 
+                             trim = 0, 
+                             restr.fact = 256)
+cat("Clustering con tclustCBI completato.\n")
+
+# ====================================================
+# Sezione 6: Creazione del raster classificato
+# ====================================================
+
+# Crea un raster vuoto con le stesse caratteristiche di img_84
+classified_raster_mahal <- rast(img_84)
+values(classified_raster_mahal) <- NA
+
+# Crea una maschera dai valori non NA del raster originale
+mask <- !is.na(values(img_84[[1]]))
+
+# Accedi alle assegnazioni dei cluster corrette
+cluster_assignments <- fixmahal_result$partition[som_model$unit.classif]
+
+# Verifica che la lunghezza di cluster_assignments corrisponda al numero di pixel mascherati
+if (length(cluster_assignments) != sum(mask)) {
+    stop("La lunghezza di 'cluster_assignments' non corrisponde al numero di pixel mascherati.")
+}
+
+# Assegna i valori di cluster al raster
+values(classified_raster_mahal)[mask] <- cluster_assignments
+
+# Seleziona solo la prima banda del raster per evitare messaggi di avvertimento
+classified_raster_mahal_single <- classified_raster_mahal[[1]]
+
+# ====================================================
+# Sezione 7: Calcolo delle aree dei cluster
+# ====================================================
+
+# Calcola l'area totale per ciascun valore di cluster usando expanse
+area_totale <- expanse(classified_raster_mahal_single, byValue = TRUE, unit = "km")
+
+# Sostituisci i valori alterati con gli indici corretti dei cluster
+area_totale$value <- 1:nrow(area_totale)  # Ripristina i valori come 1, 2, ..., n
+
+# Crea la tabella aggiornata delle etichette
+class_labels_updated <- data.frame(
+    value = area_totale$value,
+    Classe = paste("Cluster", area_totale$value, 
+                   "(", round(area_totale$area, 2), " km²)")
+)
+
+# Aggiorna i livelli del raster
+levels(classified_raster_mahal_single) <- class_labels_updated
+
+# Verifica i livelli aggiornati
+print(levels(classified_raster_mahal_single))
+
+# ====================================================
+# Sezione 8: Creazione della mappa Leaflet
+# ====================================================
+
+# Creazione della palette "turbo"
+col_pal <- viridisLite::turbo(length(class_labels_updated$value))
+
+# Creazione della funzione di mappatura dei colori con NA trasparente
+color_pal <- colorNumeric(
+    palette = col_pal,
+    domain = class_labels_updated$value,
+    na.color = "transparent"  # Imposta i valori NA come trasparenti
+)
+
+# Creazione della mappa Leaflet
+leaflet_map_updated <- leaflet() %>%
+    # Aggiungi i layer di base
+    addTiles(group = "OpenStreetMap") %>%
+    addProviderTiles("Esri.WorldImagery", group = "Immagine Satellitare") %>%
+    addProviderTiles("CartoDB.Positron", group = "Mappa Chiara") %>%
+    
+    # Aggiungi il raster classificato come overlay
+    addRasterImage(
+        classified_raster_mahal_single, 
+        colors = color_pal, 
+        opacity = 0.8,
+        project = TRUE,
+        group = "Raster Classificato"
+    ) %>%
+    
+    # Aggiungi la legenda con le etichette aggiornate
+    addLegend(
+        position = "bottomright",
+        colors = col_pal,
+        labels = class_labels_updated$Classe,
+        title = "Cluster",
+        opacity = 1
+    ) %>%
+    
+    # Aggiungi il controllo dei layer
+    addLayersControl(
+        baseGroups = c("OpenStreetMap", "Immagine Satellitare", "Mappa Chiara"),
+        overlayGroups = c("Raster Classificato"),
+        options = layersControlOptions(collapsed = FALSE),
+        position = "topright"
+    )
+
+# Visualizza la mappa
+leaflet_map_updated
+
