@@ -77,16 +77,16 @@ for (period in periods) {
     start_date <- period[1]
     end_date <- period[2]
     
-    # Collezione Landsat pre-filtrata per tempo e spazio
+    # Collezione Landsat pre-filtrata per tempo e spazio, partendo dal 100% di copertura nuvolosa
     if (as.Date(start_date) < as.Date('2012-06-15')) {
         landsat_base <- ee$ImageCollection('LANDSAT/LT05/C02/T1_L2')$
             filterBounds(aoi)$
-            filter(ee$Filter$calendarRange(6, 8, 'month'))$ # Mesi di giugno e luglio
+            filter(ee$Filter$calendarRange(6, 8, 'month'))$ # Mesi di giugno, luglio e agosto
             filterDate(start_date, end_date)
     } else {
         landsat_base <- ee$ImageCollection('LANDSAT/LC08/C02/T1_L2')$
             filterBounds(aoi)$
-            filter(ee$Filter$calendarRange(6, 8, 'month'))$ # Mesi di giugno e luglio
+            filter(ee$Filter$calendarRange(6, 8, 'month'))$ # Mesi di giugno, luglio e agosto
             filterDate(start_date, end_date)
     }
     
@@ -101,8 +101,8 @@ for (period in periods) {
     area_results <- list()
     size_results <- list()
     
-    # Calcola l'area e il numero di immagini per ogni valore di copertura nuvolosa
-    for (cloud_cover in seq(100, 1, by = -1)) {
+    # Calcola l'area e il numero di immagini per ogni valore di copertura nuvolosa, partendo dal 100% fino a 0%
+    for (cloud_cover in seq(100, 0, by = -1)) {
         tryCatch({
             result <- calculate_area_and_size(cloud_cover, landsat)
             area <- result$area
@@ -112,18 +112,18 @@ for (period in periods) {
             area_results[[as.character(cloud_cover)]] <- area
             size_results[[as.character(cloud_cover)]] <- size
             
-            # Se è la prima iterazione, salva l'area di riferimento (per cloud_cover = 50%)
-            if (cloud_cover == 50) {
+            # Se è la prima iterazione, salva l'area di riferimento (considerando il 100% di copertura nuvolosa come riferimento)
+            if (cloud_cover == 100) {
                 reference_area <- area
             }
             
             # Se l'area attuale è uguale a quella di riferimento, aggiorna il valore di copertura nuvolosa minimo
-            if (!is.na(area) && abs(area - reference_area) < 0.001) {
+            if (!is.na(area) && area == reference_area) {
                 min_cloud_cover_with_same_area <- cloud_cover
             }
             
-            # Se l'area non corrisponde più e abbiamo già trovato un valore minimo, fermiamo il ciclo
-            if (!is.na(min_cloud_cover_with_same_area) && abs(area - reference_area) >= 0.001) {
+            # Se l'area non corrisponde più e abbiamo già trovato un valore minimo, interrompiamo il ciclo per ottimizzare il calcolo
+            if (!is.na(min_cloud_cover_with_same_area) && area != reference_area) {
                 break
             }
             
@@ -145,7 +145,7 @@ for (period in periods) {
     # Aggiungi i risultati alla lista di tutti i periodi
     all_results[[paste(start_date, end_date)]] <- results_df
     
-    # Salva il valore minimo di copertura nuvolosa con la stessa area dell'N=50
+    # Salva il valore minimo di copertura nuvolosa con la stessa area dell'N=100
     if (!is.na(min_cloud_cover_with_same_area)) {
         cat(sprintf("Periodo: %s - Valore minimo di copertura nuvolosa: %d%%\n", paste(start_date, end_date), min_cloud_cover_with_same_area))
         min_cloud_cover_results[[paste(start_date, end_date)]] <- data.frame(
