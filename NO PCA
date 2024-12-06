@@ -391,3 +391,119 @@ leaflet_map <- leaflet() %>%
 # ====================================================
 
 leaflet_map
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#NO PCA SOM SU TUTTE IMMAGINI
+
+# Carica le librerie necessarie
+check_and_install <- function(packages) {
+    installed <- packages %in% rownames(installed.packages())
+    if (any(!installed)) {
+        install.packages(packages[!installed])
+    }
+    invisible(lapply(packages, library, character.only = TRUE))
+}
+
+required_packages <- c("dplyr", "fpc", "ggplot2", "kohonen", "leaflet", "NbClust", "parallel", "terra", "viridis")
+check_and_install(required_packages)
+
+# Imposta la working directory
+setwd("C:/composite")
+
+# Misura il tempo di esecuzione dell'intero script
+start_time <- Sys.time()
+
+# Funzione per elaborare una singola immagine
+process_image <- function(image_path) {
+    # Carica il raster multibanda
+    img <- rast(image_path)
+
+    # Calcola gli indici NDVI, MNDWI e NDBI
+    ndvi <- (img[[4]] - img[[3]]) / (img[[4]] + img[[3]])
+    mndwi <- (img[[2]] - img[[5]]) / (img[[2]] + img[[5]])
+    ndbi <- (img[[5]] - img[[4]]) / (img[[5]] + img[[4]])
+
+    # Crea lo stack con bande e indici
+    stacked_image <- c(img, ndvi, mndwi, ndbi)
+
+    # Estrai i valori dal raster stack come dataframe e rimuovi i valori NA
+    values_stack <- as.data.frame(values(stacked_image))
+    values_stack_non_na <- values_stack[complete.cases(values_stack), ]
+
+    # Standardizza i dati
+    values_stack_scaled <- scale(values_stack_non_na)
+
+    # Conta il numero di osservazioni valide
+    n <- nrow(values_stack_scaled)
+    print(paste("Numero di osservazioni valide:", n))
+
+    # Calcola il numero totale di neuroni suggerito dalla formula
+    neurons <- 20 * sqrt(n)
+    print(paste("Numero suggerito di neuroni:", round(neurons)))
+
+    # Suggerisci una configurazione di griglia approssimata
+    x_dim <- round(sqrt(neurons))
+    y_dim <- round(neurons / x_dim)
+    print(paste("Dimensioni della griglia suggerite:", x_dim, "x", y_dim))
+
+    # Definisci una griglia SOM con le dimensioni calcolate
+    som_grid <- somgrid(xdim = x_dim, ydim = y_dim, topo = "hexagonal")
+
+    # Converte il data frame in matrice numerica
+    values_matrix <- as.matrix(values_stack_scaled)
+
+    # Esegui SuperSOM con parallelizzazione usando i dati originali
+    som_model <- supersom(
+        list(values_matrix), 
+        grid = som_grid, 
+        rlen = 500, 
+        mode = "pbatch", 
+        cores = -1  # Usa tutti i core disponibili
+    )
+
+    # Visualizza i cambiamenti durante l'addestramento della SOM
+    plot(som_model, type = "changes")
+
+    # Ottieni i codici della SOM (valori ridotti dimensionalmente)
+    som_values <- som_model$codes[[1]]
+
+    # Salva il modello SOM nella cartella specificata
+    output_path <- file.path("C:/composite/results", paste0(basename(image_path), "_som_model.rds"))
+    saveRDS(som_model, output_path)
+    cat("SOM salvato in:", output_path, "
+")
+
+# Calcola e stampa il tempo totale di esecuzione
+total_time <- Sys.time() - start_time
+cat("Tempo totale di esecuzione:", total_time, "\n")
+
