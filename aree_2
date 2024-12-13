@@ -673,3 +673,171 @@ for (tif_path in tif_files) {
     cat("Elaborazione completata per:", tif_path, "\n")
 }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# ====================================================
+# Sezione 1: Installazione e caricamento delle librerie
+# ====================================================
+
+check_and_install <- function(packages) {
+    installed <- packages %in% rownames(installed.packages())
+    if (any(!installed)) {
+        install.packages(packages[!installed], dependencies = TRUE)
+    }
+    invisible(lapply(packages, library, character.only = TRUE))
+}
+
+required_packages <- c(
+    "fpc", "terra", "dplyr", "kohonen",
+    "parallel", "leaflet", "ggplot2", "viridis", 
+    "mclust", "tclust", "viridisLite", "htmltools"
+)
+
+check_and_install(required_packages)
+
+# ====================================================
+# Sezione 2: Impostazioni iniziali
+# ====================================================
+
+tif_dir <- "C:/composite_sila"
+rds_dir <- "C:/composite_sila/som_sila"
+
+# ====================================================
+# Sezione 3: Individuazione e loop sui file
+# ====================================================
+
+tif_files <- list.files(path = tif_dir, pattern = "\\.tif$", full.names = TRUE)
+
+for (tif_path in tif_files) {
+    rds_name <- paste0(basename(tif_path), "_som_model.rds")
+    rds_path <- file.path(rds_dir, rds_name)
+    
+    if (!file.exists(rds_path)) {
+        cat("File RDS corrispondente non trovato per:", tif_path, "\n")
+        next
+    }
+    
+    cat("\nProcesso il file:", tif_path, "con il modello:", rds_path, "\n")
+    
+    # Estrazione date dal nome del file tif
+    file_name <- basename(tif_path)
+    # Trova tutte le occorrenze di YYYY-MM-DD nel nome
+    dates <- regmatches(file_name, gregexpr("\\d{4}-\\d{2}-\\d{2}", file_name))[[1]]
+    
+    # Assumiamo che ci siano due date (inizio e fine periodo)
+    if (length(dates) == 2) {
+        start_date <- dates[1]
+        end_date <- dates[2]
+    } else {
+        start_date <- "Data_iniziale"
+        end_date <- "Data_finale"
+    }
+    
+    # Caricamento dati raster e modello SOM
+    img <- rast(tif_path)
+    som_model <- readRDS(rds_path)
+    cat("Modello SOM caricato correttamente.\n")
+    
+    som_values <- som_model$codes[[1]]
+    
+    # Numero ottimale di cluster
+    optimal_clusters <- 6
+    cat("Numero ottimale di cluster impostato a:", optimal_clusters, "\n")
+    
+    # Clustering con tclustCBI
+    fixmahal_result <- tclustCBI(som_values, 
+                                 k = optimal_clusters, 
+                                 trim = 0, 
+                                 restr.fact = 256)
+    cat("Clustering con tclustCBI completato.\n")
+    
+    # Creazione del raster classificato
+    classified_raster <- rast(img)
+    values(classified_raster) <- NA
+    mask <- !is.na(values(img[[1]]))
+    
+    cluster_assignments <- fixmahal_result$partition[som_model$unit.classif]
+    
+    if (length(cluster_assignments) != sum(mask)) {
+        stop("La lunghezza di 'cluster_assignments' non corrisponde al numero di pixel mascherati.")
+    }
+    
+    values(classified_raster)[mask] <- cluster_assignments
+    classified_raster_single <- classified_raster[[1]]
+    
+    # Calcolo delle aree dei cluster
+    area_totale <- expanse(classified_raster_single, byValue = TRUE, unit = "km")
+    # Ordiniamo per valore di cluster
+    area_totale <- area_totale[order(area_totale$value), ]
+    
+    # Crea la tabella aggiornata delle etichette
+    class_labels_updated <- data.frame(
+        value = area_totale$value,
+        Classe = paste("Cluster", area_totale$value, 
+                       "(", round(area_totale$area, 2), " km²)")
+    )
+    
+    # Aggiorna i livelli del raster
+    levels(classified_raster_single) <- class_labels_updated
+    print(levels(classified_raster_single))
+    
+    # Creazione della mappa Leaflet con date
+    col_pal <- viridisLite::turbo(length(class_labels_updated$value))
+    
+    color_pal <- colorNumeric(
+        palette = col_pal,
+        domain = class_labels_updated$value,
+        na.color = "transparent"
+    )
+    
+    legend_title <- paste0("Cluster (", start_date, " - ", end_date, ")")
+    
+    leaflet_map <- leaflet() %>%
+        addTiles(group = "OpenStreetMap") %>%
+        addProviderTiles("Esri.WorldImagery", group = "Immagine Satellitare") %>%
+        addProviderTiles("CartoDB.Positron", group = "Mappa Chiara") %>%
+        addRasterImage(
+            classified_raster_single, 
+            colors = color_pal, 
+            opacity = 0.8,
+            project = TRUE,
+            group = "Raster Classificato"
+        ) %>%
+        addLegend(
+            position = "bottomright",
+            colors = col_pal,
+            labels = class_labels_updated$Classe,
+            title = legend_title,
+            opacity = 1
+        ) %>%
+        addLayersControl(
+            baseGroups = c("OpenStreetMap", "Immagine Satellitare", "Mappa Chiara"),
+            overlayGroups = c("Raster Classificato"),
+            options = layersControlOptions(collapsed = FALSE),
+            position = "topright"
+        )
+    
+    print(leaflet_map)
+    
+    cat("Elaborazione completata per:", tif_path, "\n")
+}
