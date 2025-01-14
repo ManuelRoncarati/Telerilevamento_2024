@@ -85,33 +85,36 @@ Map.addLayer(landsat5compositeMasked, visParams, 'L5 composite masked');
 
 
 
-// stelvio, filled realizzata con copertura nuvolosa minima possibile che possa coprire tutta l'area del parco.  immagini landsat 5 e landsat 8
 
 
+
+
+
+
+
+// stelvio, filled realizzata con copertura nuvolosa minima possibile che possa coprire tutta l'area del parco.  immagini landsat 5 e landsat 8  NO banda termica
 
 // Definisci l'AOI dal tuo shapefile
 var aoi = ee.FeatureCollection('projects/ee-roncaratimanuelciaooo/assets/stelvio');
 
-// Lista dei periodi e valori di copertura nuvolosa minimi
+// Lista dei periodi con copertura nuvolosa fissa
 var periods = [
-  {start: '1984-06-15', end: '1988-08-15', cloudCover: 10, fillCloudCover: 20},
-  {start: '1988-06-15', end: '1992-08-15', cloudCover: 8, fillCloudCover: 18},
-  {start: '1992-06-15', end: '1996-08-15', cloudCover: 7, fillCloudCover: 15},
-  {start: '1996-06-15', end: '2000-08-15', cloudCover: 37, fillCloudCover: 50},
-  {start: '2000-06-15', end: '2004-08-15', cloudCover: 37, fillCloudCover: 50},
-  {start: '2004-06-15', end: '2008-08-15', cloudCover: 28, fillCloudCover: 40},
-  {start: '2008-06-15', end: '2012-08-15', cloudCover: 19, fillCloudCover: 30},
-  {start: '2012-06-15', end: '2016-08-15', cloudCover: 15, fillCloudCover: 25},
-  {start: '2016-06-15', end: '2020-08-15', cloudCover: 12, fillCloudCover: 20},
-  {start: '2020-06-15', end: '2024-08-15', cloudCover: 10, fillCloudCover: 15}
+  {start: '1984-06-15', end: '1988-08-15', cloudCover: 50, fillCloudCover: 40},
+  {start: '1988-06-15', end: '1992-08-15', cloudCover: 50, fillCloudCover: 40},
+  {start: '1992-06-15', end: '1996-08-15', cloudCover: 50, fillCloudCover: 40},
+  {start: '1996-06-15', end: '2000-08-15', cloudCover: 50, fillCloudCover: 40},
+  {start: '2000-06-15', end: '2004-08-15', cloudCover: 50, fillCloudCover: 40},
+  {start: '2004-06-15', end: '2008-08-15', cloudCover: 50, fillCloudCover: 40},
+  {start: '2008-06-15', end: '2012-08-15', cloudCover: 50, fillCloudCover: 40},
+  {start: '2012-06-15', end: '2016-08-15', cloudCover: 50, fillCloudCover: 40},
+  {start: '2016-06-15', end: '2020-08-15', cloudCover: 50, fillCloudCover: 40},
+  {start: '2020-06-15', end: '2024-08-15', cloudCover: 50, fillCloudCover: 40}
 ];
 
 // Funzione per applicare i fattori di scala
 function applyScaleFactors(image) {
   var opticalBands = image.select('SR_B.').multiply(0.0000275).add(-0.2);
-  var thermalBands = image.select('ST_B.*').multiply(0.00341802).add(149.0);
-  return image.addBands(opticalBands, null, true)
-      .addBands(thermalBands, null, true);
+  return image.addBands(opticalBands, null, true);
 }
 
 // Funzione di mascheratura delle nuvole
@@ -203,11 +206,15 @@ periods.forEach(function(period) {
 
 
 
+
+
+
+
+
+
+
 // stelvio, filled realizzata con copertura nuvolosa minima possibile che possa coprire tutta l'area del parco.  immagini landsat 5 e landsat 8
-// in aggiunta, conteggio immagini delle varie collezioni, composita masked filtrata, filtrata per data e basta e filled
-
-
-
+// in aggiunta, conteggio immagini delle varie collezioni, composita masked filtrata, filtrata per data e basta e filled NO BANDA TERMICA
 
 
 // Definisci l'AOI dal tuo shapefile
@@ -215,24 +222,22 @@ var aoi = ee.FeatureCollection('projects/ee-roncaratimanuelciaooo/assets/stelvio
 
 // Lista dei periodi e valori di copertura nuvolosa minimi
 var periods = [
-  {start: '1984-06-15', end: '1988-08-15', cloudCover: 10, fillCloudCover: 20},
-  {start: '1988-06-15', end: '1992-08-15', cloudCover: 8, fillCloudCover: 18},
-  {start: '1992-06-15', end: '1996-08-15', cloudCover: 7, fillCloudCover: 15},
-  {start: '1996-06-15', end: '2000-08-15', cloudCover: 37, fillCloudCover: 50},
-  {start: '2000-06-15', end: '2004-08-15', cloudCover: 37, fillCloudCover: 50},
-  {start: '2004-06-15', end: '2008-08-15', cloudCover: 28, fillCloudCover: 40},
-  {start: '2008-06-15', end: '2012-08-15', cloudCover: 19, fillCloudCover: 30},
-  {start: '2012-06-15', end: '2016-08-15', cloudCover: 15, fillCloudCover: 25},
-  {start: '2016-06-15', end: '2020-08-15', cloudCover: 12, fillCloudCover: 20},
-  {start: '2020-06-15', end: '2024-08-15', cloudCover: 10, fillCloudCover: 15}
+  {start: '1984-06-15', end: '1988-08-15', cloudCover: 50, fillCloudCover: 40},
+  {start: '1988-06-15', end: '1992-08-15', cloudCover: 50, fillCloudCover: 40},
+  {start: '1992-06-15', end: '1996-08-15', cloudCover: 50, fillCloudCover: 40},
+  {start: '1996-06-15', end: '2000-08-15', cloudCover: 50, fillCloudCover: 40},
+  {start: '2000-06-15', end: '2004-08-15', cloudCover: 50, fillCloudCover: 40},
+  {start: '2004-06-15', end: '2008-08-15', cloudCover: 50, fillCloudCover: 40},
+  {start: '2008-06-15', end: '2012-08-15', cloudCover: 50, fillCloudCover: 40},
+  {start: '2012-06-15', end: '2016-08-15', cloudCover: 50, fillCloudCover: 40},
+  {start: '2016-06-15', end: '2020-08-15', cloudCover: 50, fillCloudCover: 40},
+  {start: '2020-06-15', end: '2024-08-15', cloudCover: 50, fillCloudCover: 40}
 ];
 
 // Funzione per applicare i fattori di scala
 function applyScaleFactors(image) {
   var opticalBands = image.select('SR_B.').multiply(0.0000275).add(-0.2);
-  var thermalBands = image.select('ST_B.*').multiply(0.00341802).add(149.0);
-  return image.addBands(opticalBands, null, true)
-      .addBands(thermalBands, null, true);
+  return image.addBands(opticalBands, null, true);
 }
 
 // Funzione di mascheratura delle nuvole
@@ -324,4 +329,11 @@ periods.forEach(function(period) {
     maxPixels: 1e13
   });
 });
+
+
+
+
+
+
+
 
