@@ -220,6 +220,8 @@ periods.forEach(function(period) {
 
 // Definisci l'AOI dal tuo shapefile
 var aoi = ee.FeatureCollection('projects/ee-roncaratimanuelciaooo/assets/stelvio');
+// Centro la mappa sull'AOI, il secondo parametro è il livello di zoom
+Map.centerObject(aoi, 10);
 
 // Lista dei periodi e valori di copertura nuvolosa minimi
 var periods = [
