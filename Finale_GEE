@@ -338,3 +338,65 @@ periods.forEach(function(period) {
 
 
 
+// filtraggio manuale per valore intero dei pixel banda qa_pixel
+// Definisci l'AOI dal tuo shapefile
+var aoi = ee.FeatureCollection('projects/ee-roncaratimanuelciaooo/assets/stelvio');
+
+// Centra la mappa sull'AOI
+Map.centerObject(aoi, 10);
+
+// Definisci le variabili temporali
+var startDate = '1984-06-01';
+var endDate = '1988-07-31';
+
+// Carica e filtra la collezione Landsat 5
+var landsat5 = ee.ImageCollection('LANDSAT/LT05/C02/T1_L2')
+    .filterBounds(aoi)
+    .filter(ee.Filter.calendarRange(6, 7, 'month')) // Filtra solo i mesi di giugno e luglio
+    .filterDate(startDate, endDate);
+
+// Applica i fattori di scala alle bande ottiche
+function applyScaleFactors(image) {
+    var opticalBands = image.select('SR_B.').multiply(0.0000275).add(-0.2);
+    return image.addBands(opticalBands, null, true);
+}
+
+landsat5 = landsat5.map(applyScaleFactors);
+
+// Funzione per mascherare i pixel con determinati valori
+function maskBySpecificValues(image) {
+    // Elenco dei valori da escludere
+    var valuesToExclude = [5442,5506,5696,5760,5896, 7440,7696,7824, 7960, 8088];
+    
+    // Inizia con una maschera valida (tutti i pixel inclusi)
+    var mask = ee.Image(1);
+    
+    // Per ogni valore nella lista, aggiorna la maschera per escluderlo
+    valuesToExclude.forEach(function(value) {
+        mask = mask.and(image.select('QA_PIXEL').neq(value)); // Escludi i pixel con il valore specifico
+    });
+    
+    return image.updateMask(mask); // Applica la maschera finale
+}
+
+// Applica la funzione di mascheratura alla collezione
+var landsat5MaskedByValues = landsat5.map(maskBySpecificValues);
+
+// Crea un composite mediano dai pixel mascherati
+var compositeMasked = landsat5MaskedByValues.median().clip(aoi);
+
+// Parametri di visualizzazione
+var visParams = {
+    bands: ['SR_B3', 'SR_B2', 'SR_B1'], // Usa le bande corrispondenti per Landsat 5
+    min: 0,
+    max: 0.2
+};
+
+// Aggiungi il composito alla mappa
+Map.addLayer(compositeMasked, visParams, 'Composite masked by specific values');
+
+// Stampa la dimensione della collezione mascherata
+print('Dimensione collezione mascherata', landsat5MaskedByValues.size());
+
+
+
