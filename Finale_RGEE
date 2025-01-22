@@ -180,10 +180,10 @@ print(min_cloud_cover_df)
 # DA VERIFICARE, possibile correzione sulla questione dell'area della composita di riferimento, qui dovrebbe essere calcolata semmpre per ogni anno
 
 library(rgee)
-
+setwd("C:/abruzzo/prova")
 # Inizializza rgee
 ee_Initialize()
-setwd("C:/abruzzo/prova")
+
 
 # Definizione dell'AOI
 aoi <- ee$FeatureCollection('projects/ee-roncaratimanuelciaooo/assets/stelvio')
