@@ -130,6 +130,170 @@ print(results_summary)
 
 
 
+
+
+
+
+#tiene i primi due cluster per maggior frequenza escluso "2" come numero di cluster 
+
+# ====================================================
+# Sezione 1: Installazione e caricamento delle librerie
+# ====================================================
+
+check_and_install <- function(packages) {
+    installed <- packages %in% rownames(installed.packages())
+    if (any(!installed)) {
+        install.packages(packages[!installed], dependencies = TRUE)
+    }
+    invisible(lapply(packages, library, character.only = TRUE))
+}
+
+required_packages <- c("kohonen", "NbClust", "dplyr")
+check_and_install(required_packages)
+
+# ====================================================
+# Sezione 2: Impostazioni iniziali
+# ====================================================
+
+# Directory contenente i modelli SOM salvati come file RDS
+rds_dir <- "C:/Sila/som_sila"
+
+# Elenca tutti i file RDS nella cartella
+rds_files <- list.files(path = rds_dir, pattern = "\\.rds$", full.names = TRUE)
+
+# Variabile per salvare i risultati
+optimal_clusters_results <- list()
+
+# ====================================================
+# Sezione 3: Calcolo del numero ottimale di cluster per ogni SOM
+# ====================================================
+
+for (rds_path in rds_files) {
+    start_time <- Sys.time()  # Avvia il cronometro
+    
+    cat("\nProcesso il file SOM:", rds_path, "\n")
+    
+    # Carica il modello SOM
+    som_model <- readRDS(rds_path)
+    cat("Modello SOM caricato correttamente.\n")
+    
+    # Estrai i valori delle codebook
+    som_values <- som_model$codes[[1]]
+    
+    # Determinazione del numero ottimale di cluster con NbClust
+    cat("Determinazione del numero ottimale di cluster...\n")
+    nbclust_result <- NbClust(
+        data = som_values, 
+        diss = NULL, 
+        distance = "euclidean",  # Distanza euclidea
+        min.nc = 2,              # Numero minimo di cluster
+        max.nc = 10,             # Numero massimo di cluster
+        method = "kmeans",       # Metodo di clustering K-means
+        index = "all"            # Usa tutti i criteri di validazione
+    )
+    
+    # Calcola le frequenze dei numeri di cluster suggeriti
+    cluster_frequencies <- sort(table(nbclust_result$Best.nc[1, ]), decreasing = TRUE)
+    
+    # Rimuove il cluster con numero 2
+    cluster_frequencies <- cluster_frequencies[names(cluster_frequencies) != "2"]
+    
+    # Controlla se rimangono cluster disponibili
+    if (length(cluster_frequencies) > 0) {
+        # Estrai il cluster più rappresentato
+        primary_cluster <- as.numeric(names(cluster_frequencies)[1])
+        primary_support <- as.numeric(cluster_frequencies[1])
+        
+        # Estrai il secondo cluster più rappresentato (se esiste)
+        if (length(cluster_frequencies) > 1) {
+            secondary_cluster <- as.numeric(names(cluster_frequencies)[2])
+            secondary_support <- as.numeric(cluster_frequencies[2])
+        } else {
+            secondary_cluster <- NA
+            secondary_support <- NA
+        }
+    } else {
+        # Caso in cui non ci sono cluster disponibili dopo la rimozione
+        primary_cluster <- NA
+        primary_support <- NA
+        secondary_cluster <- NA
+        secondary_support <- NA
+    }
+    
+    # Estrai il range di anni dal nome del file
+    file_name <- basename(rds_path)
+    dates <- regmatches(file_name, gregexpr("\\d{4}", file_name))[[1]]
+    if (length(dates) == 2) {
+        year_range <- paste(dates[1], "-", dates[2])
+    } else {
+        year_range <- "range non trovato"
+    }
+    
+    # Stampa il risultato per il file attuale
+    cat("Cluster più rappresentato (escluso 2):", primary_cluster, 
+        "(supportato da", primary_support, "criteri)\n")
+    if (!is.na(secondary_cluster)) {
+        cat("Secondo cluster più rappresentato:", secondary_cluster, 
+            "(supportato da", secondary_support, "criteri)\n")
+    }
+    
+    # Salva il risultato
+    optimal_clusters_results[[basename(rds_path)]] <- list(
+        year_range = year_range,
+        primary_cluster = primary_cluster,
+        primary_support = primary_support,
+        secondary_cluster = secondary_cluster,
+        secondary_support = secondary_support,
+        nbclust_result = nbclust_result
+    )
+    
+    # Calcola il tempo di esecuzione per il file corrente
+    end_time <- Sys.time()
+    execution_time <- round(difftime(end_time, start_time, units = "secs"), 2)
+    cat("Tempo di esecuzione per", file_name, ":", execution_time, "secondi.\n")
+}
+
+# ====================================================
+# Sezione 4: Risultati finali
+# ====================================================
+
+cat("\nRisultati finali:\n")
+results_summary <- lapply(names(optimal_clusters_results), function(name) {
+    list(
+        File = name,
+        Year_Range = optimal_clusters_results[[name]]$year_range,
+        Primary_Cluster = optimal_clusters_results[[name]]$primary_cluster,
+        Primary_Support = optimal_clusters_results[[name]]$primary_support,
+        Secondary_Cluster = optimal_clusters_results[[name]]$secondary_cluster,
+        Secondary_Support = optimal_clusters_results[[name]]$secondary_support
+    )
+}) %>% bind_rows()
+
+print(results_summary)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #clusterboot su tutte le som con il numero di cluster ritenuto corretto
 
 # ====================================================
