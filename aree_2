@@ -1,4 +1,6 @@
 # determinazione n cluster iterato su tutte le som con nbclust
+
+
 # ====================================================
 # Sezione 1: Installazione e caricamento delle librerie
 # ====================================================
@@ -103,6 +105,157 @@ results_summary <- lapply(names(optimal_clusters_results), function(name) {
 }) %>% bind_rows()
 
 print(results_summary)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#clusterboot su tutte le som con il numero di cluster ritenuto corretto
+
+# ====================================================
+# Sezione 1: Installazione e caricamento delle librerie
+# ====================================================
+
+check_and_install <- function(packages) {
+    installed <- packages %in% rownames(installed.packages())
+    if (any(!installed)) {
+        install.packages(packages[!installed], dependencies = TRUE)
+    }
+    invisible(lapply(packages, library, character.only = TRUE))
+}
+
+required_packages <- c("kohonen", "NbClust", "dplyr", "fpc", "tibble", "openxlsx")
+check_and_install(required_packages)
+
+# ====================================================
+# Sezione 2: Impostazioni iniziali
+# ====================================================
+
+# Directory contenente i modelli SOM salvati come file RDS
+rds_dir <- "C:/Aspromonte/som_aspromonte"
+
+# Elenca tutti i file RDS nella cartella
+rds_files <- list.files(path = rds_dir, pattern = "\\.rds$", full.names = TRUE)
+
+# Variabile per salvare i risultati
+clusterboot_results <- list()
+
+# Imposta il numero di cluster ottimale (modificabile dall'utente)
+optimal_clusters <- 4
+
+# Avvia il cronometro globale
+global_start_time <- Sys.time()
+
+# ====================================================
+# Sezione 3: Esecuzione di Clusterboot per ogni SOM
+# ====================================================
+
+for (rds_path in rds_files) {
+    start_time <- Sys.time()  # Avvia il cronometro per il file corrente
+    
+    cat("\nProcesso il file SOM:", rds_path, "\n")
+    
+    # Carica il modello SOM
+    som_model <- readRDS(rds_path)
+    cat("Modello SOM caricato correttamente.\n")
+    
+    # Estrai i valori delle codebook
+    som_values <- som_model$codes[[1]]
+    
+    # Determinazione dei cluster tramite Clusterboot
+    cat("Esecuzione di Clusterboot con", optimal_clusters, "cluster...\n")
+    clusterboot_result <- clusterboot(
+        data = som_values,            # Usa i valori SOM
+        B = 500,                      # Numero di campioni bootstrap
+        clustermethod = kmeansCBI,    # Metodo K-means tramite interfaccia kmeansCBI
+        bootmethod = "boot",          # Usa bootstrap non parametrico
+        dissolution = 0.5,            # Valore di dissoluzione per i cluster instabili
+        recover = 0.75,               # Valore di recupero per i cluster stabili
+        count = FALSE,                # Mostra il progresso durante il bootstrap
+        k = optimal_clusters          # Usa il numero ottimale di cluster impostato
+    )
+    
+    # Estrai la stabilità dei cluster
+    cluster_stability <- clusterboot_result$bootmean
+    
+    # Estrai il range di anni dal nome del file
+    file_name <- basename(rds_path)
+    dates <- regmatches(file_name, gregexpr("\\d{4}", file_name))[[1]]
+    if (length(dates) == 2) {
+        year_range <- paste(dates[1], "-", dates[2])
+    } else {
+        year_range <- "range non trovato"
+    }
+    
+    # Salva il risultato in formato tabellare
+    clusterboot_results[[basename(rds_path)]] <- tibble(
+        File = file_name,
+        Year_Range = year_range,
+        Cluster_Stability = cluster_stability
+    )
+    
+    # Calcola il tempo di esecuzione per il file corrente
+    end_time <- Sys.time()
+    execution_time <- round(difftime(end_time, start_time, units = "secs"), 2)
+    cat("Tempo di esecuzione per", file_name, ":", execution_time, "secondi.\n")
+}
+
+# ====================================================
+# Sezione 4: Risultati finali
+# ====================================================
+
+# Combina tutti i risultati in un'unica tabella
+results_summary <- bind_rows(clusterboot_results)
+
+# Stampa un messaggio di separazione per ogni blocco di anni
+cat("\nRisultati finali con separazione per blocchi di anni:\n")
+for (year_range in unique(results_summary$Year_Range)) {
+    cat("\n=== Risultati per il periodo:", year_range, "===\n")
+    print.data.frame(filter(results_summary, Year_Range == year_range), row.names = FALSE)
+}
+
+# ====================================================
+# Sezione 5: Salvataggio dei risultati in Excel
+# ====================================================
+
+# Percorso del file Excel
+output_excel_path <- "C:/Aspromonte/clusterboot_results.xlsx"
+
+# Scrivi i risultati in Excel
+write.xlsx(results_summary, file = output_excel_path, rowNames = FALSE)
+
+cat("\nRisultati salvati in formato Excel:", output_excel_path, "\n")
+
+# ====================================================
+# Sezione 6: Tempo di esecuzione totale
+# ====================================================
+
+global_end_time <- Sys.time()
+global_execution_time <- round(difftime(global_end_time, global_start_time, units = "secs"), 2)
+
+cat("\nTempo di esecuzione totale:", global_execution_time, "secondi.\n")
+
+
 
 
 
