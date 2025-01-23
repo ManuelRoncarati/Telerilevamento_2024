@@ -1,3 +1,126 @@
+# determinazione n cluster iterato su tutte le som con nbclust
+# ====================================================
+# Sezione 1: Installazione e caricamento delle librerie
+# ====================================================
+
+check_and_install <- function(packages) {
+    installed <- packages %in% rownames(installed.packages())
+    if (any(!installed)) {
+        install.packages(packages[!installed], dependencies = TRUE)
+    }
+    invisible(lapply(packages, library, character.only = TRUE))
+}
+
+required_packages <- c("kohonen", "NbClust", "dplyr")
+check_and_install(required_packages)
+
+# ====================================================
+# Sezione 2: Impostazioni iniziali
+# ====================================================
+
+# Directory contenente i modelli SOM salvati come file RDS
+rds_dir <- "C:/Aspromonte/som_aspromonte"
+
+# Elenca tutti i file RDS nella cartella
+rds_files <- list.files(path = rds_dir, pattern = "\\.rds$", full.names = TRUE)
+
+# Variabile per salvare i risultati
+optimal_clusters_results <- list()
+
+# ====================================================
+# Sezione 3: Calcolo del numero ottimale di cluster per ogni SOM
+# ====================================================
+
+for (rds_path in rds_files) {
+    start_time <- Sys.time()  # Avvia il cronometro
+    
+    cat("\nProcesso il file SOM:", rds_path, "\n")
+    
+    # Carica il modello SOM
+    som_model <- readRDS(rds_path)
+    cat("Modello SOM caricato correttamente.\n")
+    
+    # Estrai i valori delle codebook
+    som_values <- som_model$codes[[1]]
+    
+    # Determinazione del numero ottimale di cluster con NbClust
+    cat("Determinazione del numero ottimale di cluster...\n")
+    nbclust_result <- NbClust(
+        data = som_values, 
+        diss = NULL, 
+        distance = "euclidean",  # Distanza euclidea
+        min.nc = 2,              # Numero minimo di cluster
+        max.nc = 10,             # Numero massimo di cluster
+        method = "kmeans",       # Metodo di clustering K-means
+        index = "all"            # Usa tutti i criteri di validazione
+    )
+    
+    # Trova il numero ottimale di cluster dalla moda
+    optimal_clusters <- as.numeric(names(which.max(table(nbclust_result$Best.nc[1, ]))))
+    
+    # Numero di criteri che supportano il numero ottimale di cluster
+    support_count <- max(table(nbclust_result$Best.nc[1, ]))
+    
+    # Estrai il range di anni dal nome del file
+    file_name <- basename(rds_path)
+    dates <- regmatches(file_name, gregexpr("\\d{4}", file_name))[[1]]
+    if (length(dates) == 2) {
+        year_range <- paste(dates[1], "-", dates[2])
+    } else {
+        year_range <- "range non trovato"
+    }
+    
+    # Stampa il risultato per il file attuale
+    cat("Numero ottimale di cluster per SOM", year_range, ":", optimal_clusters, 
+        "(supportato da", support_count, "criteri)\n")
+    
+    # Salva il risultato
+    optimal_clusters_results[[basename(rds_path)]] <- list(
+        year_range = year_range,
+        optimal_clusters = optimal_clusters,
+        support_count = support_count,
+        nbclust_result = nbclust_result
+    )
+    
+    # Calcola il tempo di esecuzione per il file corrente
+    end_time <- Sys.time()
+    execution_time <- round(difftime(end_time, start_time, units = "secs"), 2)
+    cat("Tempo di esecuzione per", file_name, ":", execution_time, "secondi.\n")
+}
+
+# ====================================================
+# Sezione 4: Risultati finali
+# ====================================================
+
+cat("\nRisultati finali:\n")
+results_summary <- lapply(names(optimal_clusters_results), function(name) {
+    list(
+        File = name,
+        Year_Range = optimal_clusters_results[[name]]$year_range,
+        Optimal_Clusters = optimal_clusters_results[[name]]$optimal_clusters,
+        Support_Count = optimal_clusters_results[[name]]$support_count
+    )
+}) %>% bind_rows()
+
+print(results_summary)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # ====================================================
 # Sezione 1: Installazione e caricamento delle librerie
 # ====================================================
