@@ -1,0 +1,59 @@
+# Carica le librerie necessarie
+library(terra)
+library(kohonen)
+library(parallel)
+
+# Misura il tempo di esecuzione dell'intero script
+start_time <- Sys.time()
+
+# Funzione per la normalizzazione Min-Max
+normalize <- function(x) {
+    (x - min(x, na.rm = TRUE)) / (max(x, na.rm = TRUE) - min(x, na.rm = TRUE))
+}
+
+# Funzione per elaborare una singola immagine
+process_image <- function(image_path) {
+    # Carica il raster multibanda e calcola gli indici
+    raster_image <- rast(image_path)
+    ndvi <- (raster_image[[4]] - raster_image[[3]]) / (raster_image[[4]] + raster_image[[3]])
+    mndwi <- (raster_image[[2]] - raster_image[[5]]) / (raster_image[[2]] + raster_image[[5]])
+    ndbi <- (raster_image[[5]] - raster_image[[4]]) / (raster_image[[5]] + raster_image[[4]])
+    
+    # Crea lo stack con bande e indici
+    stacked_raster <- c(raster_image, ndvi, mndwi, ndbi)
+    
+    # Estrai i valori come matrice, rimuovi NA e normalizza
+    matrix_values <- values(stacked_raster)
+    cleaned_matrix <- matrix_values[complete.cases(matrix_values), ]
+    normalized_matrix <- apply(cleaned_matrix, 2, normalize)
+    
+    # Calcola il numero totale di neuroni e definisci la griglia SOM
+    num_observations <- nrow(normalized_matrix)
+    total_neurons <- 5 * sqrt(num_observations)
+    grid_x <- round(sqrt(total_neurons))
+    grid_y <- round(total_neurons / grid_x)
+    som_grid <- somgrid(xdim = grid_x, ydim = grid_y, topo = "hexagonal")
+    
+    # Esegui SuperSOM con parallelizzazione
+    som_model <- supersom(
+        list(normalized_matrix), 
+        grid = som_grid, 
+        rlen = 10, 
+        mode = "pbatch", 
+        cores = -1
+    )
+    
+    # Salva il modello SOM
+    output_path <- file.path("C:/Sila/som_sila", paste0(basename(image_path), "_som_model.rds"))
+    saveRDS(som_model, output_path)
+}
+
+# Itera su diverse immagini
+image_paths <- list.files(path = "C:/Sila", pattern = "\\.tif$", full.names = TRUE)
+for (image_path in image_paths) {
+    process_image(image_path)
+}
+
+# Calcola e stampa il tempo totale di esecuzione
+total_time <- Sys.time() - start_time
+cat("Tempo totale di esecuzione:", total_time, "\n")
