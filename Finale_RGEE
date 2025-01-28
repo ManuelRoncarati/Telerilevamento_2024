@@ -370,13 +370,13 @@ library(rgee)
 library(openxlsx)
 
 # Imposta la directory di lavoro
-setwd('C:/Sila/cloud_cover')
+setwd("C:/Portofino/cloud_cover")
 
-# Inizializza rgee (accesso a Google Earth Engine)
+# Inizializza rgee
 ee_Initialize()
 
 # Definizione dell'AOI (Area of Interest)
-aoi <- ee$FeatureCollection('projects/ee-roncaratimanuelciaooo/assets/sila')
+aoi <- ee$FeatureCollection('projects/ee-roncaratimanuelciaooo/assets/porto')
 
 # Funzione per applicare i fattori di scala (correzione radiometrica)
 apply_scale_factors <- function(image) {
@@ -386,7 +386,6 @@ apply_scale_factors <- function(image) {
 
 # Funzione per calcolare l'area della composita filtrata e il numero di immagini
 calculate_area_and_size <- function(cloud_cover, landsat_collection) {
-    # Filtra la collezione in base alla copertura nuvolosa
     filtered <- landsat_collection$filter(ee$Filter$lt('CLOUD_COVER', cloud_cover))
     size <- filtered$size()$getInfo()
     
@@ -394,31 +393,43 @@ calculate_area_and_size <- function(cloud_cover, landsat_collection) {
         return(list(area = NA, size = 0))
     }
     
-    # Crea una composita mediana ritagliata sull'AOI
     composite <- filtered$median()$clip(aoi)
-    
-    # Calcola l'area dei pixel validi
     pixel_area <- ee$Image$pixelArea()
-    valid_area <- composite$gt(0)$multiply(pixel_area)$reduceRegion(
+    valid_area <- composite$select(0)$gt(0)$multiply(pixel_area)$reduceRegion(
         reducer = ee$Reducer$sum(),
         geometry = aoi$geometry(),
         scale = 30,
         maxPixels = 1e13
     )
-    
-    # Ottieni il risultato della riduzione
     area_result <- valid_area$getInfo()
     
     if (length(area_result) == 0) {
         return(list(area = NA, size = size))
     }
     
-    # Estrai il valore dell'area in km²
-    area_value <- sum(unlist(area_result)) / 1e6
+    area_value <- round(unlist(area_result)[1] / 1e6, 3)
     return(list(area = area_value, size = size))
 }
 
-# Elenco dei periodi quadriennali da analizzare
+# Funzione per calcolare l'area di riferimento (100% copertura nuvolosa)
+calculate_reference_area <- function(landsat_collection) {
+    composite <- landsat_collection$filter(ee$Filter$lt('CLOUD_COVER', 100))$median()$clip(aoi)
+    pixel_area <- ee$Image$pixelArea()
+    valid_area <- composite$select(0)$gt(0)$multiply(pixel_area)$reduceRegion(
+        reducer = ee$Reducer$sum(),
+        geometry = aoi$geometry(),
+        scale = 30,
+        maxPixels = 1e13
+    )
+    area_result <- valid_area$getInfo()
+    if (length(area_result) == 0) {
+        return(NA)
+    }
+    area_value <- round(unlist(area_result)[1] / 1e6, 3)
+    return(area_value)
+}
+
+# Sequenza di periodi di tempo da analizzare
 periods <- list(
     c('1984-06-15', '1988-08-15'),
     c('1988-06-15', '1992-08-15'),
@@ -436,12 +447,20 @@ periods <- list(
 all_results <- list()
 min_cloud_cover_results <- list()
 
+# Calcola il tempo di esecuzione totale
+start_time <- Sys.time()
+cat("Inizio elaborazione...\n")
+
 # Itera su ogni periodo di tempo
-for (period in periods) {
+for (i in seq_along(periods)) {
+    period <- periods[[i]]
     start_date <- period[1]
     end_date <- period[2]
     
-    # Seleziona la collezione Landsat appropriata in base alla data
+    cat(sprintf("\nElaborazione del periodo %d/%d: %s - %s\n", 
+                i, length(periods), start_date, end_date))
+    
+    # Collezione Landsat pre-filtrata per tempo e spazio
     if (as.Date(start_date) < as.Date('2012-06-15')) {
         landsat_base <- ee$ImageCollection('LANDSAT/LT05/C02/T1_L2')$
             filterBounds(aoi)$
@@ -454,18 +473,24 @@ for (period in periods) {
             filterDate(start_date, end_date)
     }
     
-    # Applica i fattori di scala (correzione radiometrica)
     landsat <- landsat_base$map(apply_scale_factors)
     
-    # Variabile per salvare la minima copertura nuvolosa con area ~uguale e almeno 20 immagini (o 40, a seconda del caso)
+    reference_area <- calculate_reference_area(landsat_base)
+    if (is.na(reference_area)) {
+        cat("  Attenzione: area di riferimento non calcolata.\n")
+    } else {
+        cat(sprintf("  Area di riferimento: %.3f km²\n", reference_area))
+    }
+    
     min_cloud_cover_with_same_area <- NA
     
-    # Liste per salvare i risultati parziali
     area_results <- list()
     size_results <- list()
     
-    # Calcola l'area e il numero di immagini per ogni valore di copertura nuvolosa
+    # Itera sulla copertura nuvolosa da 100 a 1
     for (cloud_cover in seq(100, 1, by = -1)) {
+        cat(sprintf("    Copertura nuvolosa: %d%%\n", cloud_cover))
+        
         tryCatch({
             result <- calculate_area_and_size(cloud_cover, landsat)
             area <- result$area
@@ -474,23 +499,23 @@ for (period in periods) {
             area_results[[as.character(cloud_cover)]] <- area
             size_results[[as.character(cloud_cover)]] <- size
             
-            # Se è la prima iterazione (cloud_cover == 100), salva l'area di riferimento
-            if (cloud_cover == 100) {
-                reference_area <- area
-            }
+            cat(sprintf("      Area: %s km², Numero di immagini: %d\n", 
+                        ifelse(is.na(area), "NA", area), size))
             
-            # Controlla se la nuova area si discosta meno di 5 km² dalla reference e se il numero di immagini supera la soglia
-            if (!is.na(area) && !is.na(reference_area) && abs(area - reference_area) <= 5 && size >= 50) {
+            if (!is.na(area) && !is.na(reference_area) && abs(area - reference_area) <= 1 && size >= 1) {
                 min_cloud_cover_with_same_area <- cloud_cover
+                cat("      Condizione soddisfatta per la copertura nuvolosa minima.\n")
+                # Se vuoi interrompere il ciclo interno una volta trovata la copertura minima
+                # break
             }
         }, error = function(e) {
-            # In caso di errore, si imposta NA
             area_results[[as.character(cloud_cover)]] <- NA
             size_results[[as.character(cloud_cover)]] <- NA
+            cat(sprintf("      Errore durante il calcolo per copertura %d%%: %s\n", 
+                        cloud_cover, e$message))
         })
     }
     
-    # Crea un dataframe con i risultati
     results_df <- data.frame(
         Cloud_Cover = as.numeric(names(area_results)),
         Area_km2 = unlist(area_results),
@@ -499,21 +524,24 @@ for (period in periods) {
     )
     results_df <- results_df[order(-results_df$Cloud_Cover), ]
     
-    # Aggiungi i risultati alla lista generale
     all_results[[paste(start_date, end_date)]] <- results_df
     
-    # Se è stata trovata una minima copertura nuvolosa valida, stampa e memorizza i risultati
     if (!is.na(min_cloud_cover_with_same_area)) {
-        cat(sprintf("Periodo: %s - Valore minimo di copertura nuvolosa con area entro ±5 km² e almeno 20 immagini: %d%%\n", 
-                    paste(start_date, end_date), min_cloud_cover_with_same_area))
+        min_area <- area_results[[as.character(min_cloud_cover_with_same_area)]]
         min_cloud_cover_results[[paste(start_date, end_date)]] <- data.frame(
             Periodo = paste(start_date, end_date, sep = " - "),
             Min_Cloud_Cover = min_cloud_cover_with_same_area,
-            Area_km2 = area_results[[as.character(min_cloud_cover_with_same_area)]],
+            Area_km2 = min_area,
             Numero_Immagini = size_results[[as.character(min_cloud_cover_with_same_area)]]
         )
+    } else {
+        cat("  Nessuna copertura nuvolosa soddisfa la condizione per questo periodo.\n")
     }
 }
+
+end_time <- Sys.time()
+total_time <- end_time - start_time
+cat(sprintf("\nTempo totale di esecuzione: %s\n", total_time))
 
 # ====================================================
 # Salva i risultati in un file Excel
@@ -528,6 +556,7 @@ addWorksheet(wb, "All Results")
 addWorksheet(wb, "Min Cloud Cover Results")
 
 # Scrivi i dati nei fogli
+cat("Salvataggio dei risultati nel file Excel...\n")
 writeData(wb, "All Results", do.call(rbind, all_results))
 writeData(wb, "Min Cloud Cover Results", do.call(rbind, min_cloud_cover_results))
 
@@ -535,3 +564,10 @@ writeData(wb, "Min Cloud Cover Results", do.call(rbind, min_cloud_cover_results)
 saveWorkbook(wb, output_excel_path, overwrite = TRUE)
 
 cat("\nRisultati salvati in formato Excel:", output_excel_path, "\n")
+
+# Visualizza i risultati finali
+final_results_df <- do.call(rbind, all_results)
+min_cloud_cover_df <- do.call(rbind, min_cloud_cover_results)
+
+print(final_results_df)
+print(min_cloud_cover_df)
