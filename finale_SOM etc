@@ -95,7 +95,7 @@ results <- lapply(rds_files, function(rds_path) {
     som_values <- som_model$codes[[1]]  # Estrai le codebook
 
     # Calcola il numero ottimale di cluster
-    nbclust_result <- NbClust(data = som_values, distance = "euclidean", min.nc = 2, max.nc = 10, method = "kmeans", index = "all")
+    nbclust_result <- NbClust(data = som_values, distance = "euclidean", min.nc = 3, max.nc = 15, method = "kmeans", index = "all")
     optimal_clusters <- as.numeric(names(which.max(table(nbclust_result$Best.nc[1, ]))))
     support_count <- max(table(nbclust_result$Best.nc[1, ]))
 
