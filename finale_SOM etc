@@ -57,3 +57,59 @@ for (image_path in image_paths) {
 # Calcola e stampa il tempo totale di esecuzione
 total_time <- Sys.time() - start_time
 cat("Tempo totale di esecuzione:", total_time, "\n")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#nblcust itereato sempplice
+# ====================================================
+# Sezione 1: Caricamento delle librerie
+# ====================================================
+library(kohonen)   # Per leggere i modelli SOM
+library(NbClust)   # Per determinare il numero ottimale di cluster
+library(dplyr)     # Per organizzare i risultati
+
+# ====================================================
+# Sezione 2: Impostazioni iniziali
+# ====================================================
+rds_dir <- "C:/Aspromonte/som_aspromonte"  # Directory dei file SOM
+rds_files <- list.files(path = rds_dir, pattern = "\\.rds$", full.names = TRUE)  # Trova i file RDS
+
+# ====================================================
+# Sezione 3: Calcolo del numero ottimale di cluster
+# ====================================================
+results <- lapply(rds_files, function(rds_path) {
+    cat("\nProcesso il file:", basename(rds_path), "\n")
+    som_model <- readRDS(rds_path)  # Carica il modello SOM
+    som_values <- som_model$codes[[1]]  # Estrai le codebook
+
+    # Calcola il numero ottimale di cluster
+    nbclust_result <- NbClust(data = som_values, distance = "euclidean", min.nc = 2, max.nc = 10, method = "kmeans", index = "all")
+    optimal_clusters <- as.numeric(names(which.max(table(nbclust_result$Best.nc[1, ]))))
+    support_count <- max(table(nbclust_result$Best.nc[1, ]))
+
+    # Estrai il range di anni dal nome del file
+    dates <- regmatches(basename(rds_path), gregexpr("\\d{4}", basename(rds_path)))[[1]]
+    year_range <- if (length(dates) == 2) paste(dates[1], "-", dates[2]) else "range non trovato"
+
+    # Restituisci i risultati
+    list(File = basename(rds_path), Year_Range = year_range, Optimal_Clusters = optimal_clusters, Support_Count = support_count)
+})
+
+# ====================================================
+# Sezione 4: Risultati finali
+# ====================================================
+results_summary <- bind_rows(results)
+print(results_summary)
+
