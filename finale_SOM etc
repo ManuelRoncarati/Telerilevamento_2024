@@ -72,14 +72,12 @@ cat("Tempo totale di esecuzione:", total_time, "\n")
 
 
 
-#nblcust itereato sempplice
 # ====================================================
 # Sezione 1: Caricamento delle librerie
 # ====================================================
 library(kohonen)   # Per leggere i modelli SOM
 library(NbClust)   # Per determinare il numero ottimale di cluster
 library(dplyr)     # Per organizzare i risultati
-library(tidyr)     # Per riorganizzare i conteggi in formato tabellare
 library(openxlsx)  # Per salvare i risultati in Excel
 
 # ====================================================
@@ -99,10 +97,8 @@ results <- lapply(rds_files, function(rds_path) {
     # Calcola il numero ottimale di cluster
     nbclust_result <- NbClust(data = som_values, distance = "euclidean", min.nc = 3, max.nc = 15, method = "kmeans", index = "all")
     
-    # Calcola la distribuzione dei cluster suggeriti
+    # Trova il numero ottimale di cluster e il supporto massimo
     cluster_counts <- table(nbclust_result$Best.nc[1, ])
-    
-    # Numero ottimale di cluster e supporto massimo
     optimal_clusters <- as.numeric(names(which.max(cluster_counts)))
     support_count <- max(cluster_counts)
 
@@ -110,16 +106,12 @@ results <- lapply(rds_files, function(rds_path) {
     dates <- regmatches(basename(rds_path), gregexpr("\\d{4}", basename(rds_path)))[[1]]
     year_range <- if (length(dates) == 2) paste(dates[1], "-", dates[2]) else "range non trovato"
 
-    # Salva i conteggi dei cluster come stringa per output
-    cluster_distribution <- paste(names(cluster_counts), cluster_counts, sep = ":", collapse = "; ")
-
-    # Ritorna i risultati
+    # Ritorna i risultati principali
     tibble(
         File = basename(rds_path),
         Year_Range = year_range,
         Optimal_Clusters = optimal_clusters,
-        Support_Count = support_count,
-        Cluster_Distribution = cluster_distribution
+        Support_Count = support_count
     )
 })
 
@@ -132,10 +124,9 @@ print(results_summary)
 # ====================================================
 # Sezione 5: Salvataggio in formato Excel
 # ====================================================
-output_excel_path <- "C:/Aspromonte/nbclust_full_results.xlsx"
-write.xlsx(results_summary, file 
-
-
+output_excel_path <- "C:/Aspromonte/nbclust_best_results.xlsx"
+write.xlsx(results_summary, file = output_excel_path, rowNames = FALSE)
+cat("\nRisultati salvati in formato Excel:", output_excel_path, "\n")
 
 
 
