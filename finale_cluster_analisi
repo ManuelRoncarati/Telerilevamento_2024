@@ -211,3 +211,148 @@ cat("\nRisultati salvati in:", output_excel_path, "\n")
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+#cluserizzaizone kmeasn reiterata con aree e salvataggio aree xls
+
+# Caricamento delle librerie necessarie
+library(terra)
+library(kohonen)
+library(cluster)
+library(leaflet)
+library(viridisLite)
+library(openxlsx)
+
+# Definizione delle cartelle
+tif_dir <- "C:/PN_Sila/"
+rds_dir <- "C:/PN_Sila/som_Sila/"
+output_dir <- "C:/PN_Sila/output_raster/"
+excel_file <- "C:/PN_Sila/cluster_areas.xlsx"  # Nome file Excel
+
+# Creazione della cartella di output se non esiste
+if (!dir.exists(output_dir)) {
+    dir.create(output_dir)
+}
+
+# Lista per memorizzare i risultati delle aree dei cluster
+results_list <- list()
+
+# Trova tutti i file .tif nella cartella
+tif_files <- list.files(path = tif_dir, pattern = "\\.tif$", full.names = TRUE)
+
+# Itera su tutti i file .tif trovati
+for (tif_path in tif_files) {
+    
+    # Costruisce il percorso del file RDS corrispondente
+    rds_name <- paste0(basename(tif_path), "_som_model.rds")
+    rds_path <- file.path(rds_dir, rds_name)
+    
+    # Controlla se il file RDS esiste
+    if (!file.exists(rds_path)) {
+        cat("File RDS corrispondente non trovato per:", tif_path, "\n")
+        next
+    }
+    
+    cat("\nProcesso il file:", tif_path, "con il modello:", rds_path, "\n")
+    
+    # Estrazione delle date dal nome del file
+    dates <- regmatches(basename(tif_path), gregexpr("\\d{4}-\\d{2}-\\d{2}", basename(tif_path)))[[1]]
+    start_date <- ifelse(length(dates) >= 1, dates[1], "Data_iniziale")
+    end_date <- ifelse(length(dates) >= 2, dates[2], "Data_finale")
+    date_label <- paste(start_date, "-", end_date)  # Etichetta semplificata
+    
+    # Caricamento del raster e del modello SOM
+    img <- rast(tif_path)  # Carica il raster
+    som_model <- readRDS(rds_path)  # Carica il modello SOM
+    som_values <- som_model$codes[[1]]  # Estrai i codici SOM
+    
+    # Clustering con K-means
+    optimal_clusters <- 5  # Numero di cluster
+    kmeans_result <- kmeans(som_values, centers = optimal_clusters, nstart = 100, iter.max = 500)
+    cat("Clustering completato con", optimal_clusters, "cluster.\n")
+    
+    # Creazione del raster classificato
+    classified_raster <- rast(img)  # Copia il raster originale per la classificazione
+    values(classified_raster) <- NA  # Imposta tutti i valori a NA
+    mask <- !is.na(values(img[[1]]))  # Maschera per i pixel validi
+    values(classified_raster)[mask] <- kmeans_result$cluster[som_model$unit.classif]  # Assegna i cluster
+    classified_raster <- classified_raster[[1]]  # Considera solo il primo layer
+    
+    # Calcolo delle aree dei cluster
+    area_totale <- expanse(classified_raster, byValue = TRUE, unit = "km")
+    area_totale <- area_totale[order(area_totale$value), ]
+    
+    # Creazione di una tabella con i dati formattati per l'Excel
+    cluster_info <- data.frame(
+        Date = date_label,
+        Cluster = paste("Cluster", area_totale$value,
+                        "(", round(area_totale$area, 2), "km²)")
+    )
+    
+    # Aggiunta della tabella alla lista dei risultati
+    results_list[[date_label]] <- cluster_info
+    
+    # Salvataggio del raster classificato
+    output_file <- file.path(output_dir, paste0(basename(tif_path), "_classified.tif"))
+    writeRaster(classified_raster, filename = output_file, overwrite = TRUE)
+    cat("Raster classificato salvato in:", output_file, "\n")
+    
+    # Creazione della mappa Leaflet con legenda formattata
+    col_pal <- viridisLite::turbo(length(area_totale$value))
+    
+    color_pal <- colorNumeric(
+        palette = col_pal,
+        domain = area_totale$value,
+        na.color = "transparent"
+    )
+    
+    legend_title <- paste0("Cluster (", date_label, ")")
+    
+    leaflet_map <- leaflet() %>%
+        addTiles(group = "OpenStreetMap") %>%
+        addProviderTiles("Esri.WorldImagery", group = "Immagine Satellitare") %>%
+        addProviderTiles("CartoDB.Positron", group = "Mappa Chiara") %>%
+        addRasterImage(
+            classified_raster, 
+            colors = color_pal, 
+            opacity = 0.8,
+            project = TRUE,
+            group = "Raster Classificato"
+        ) %>%
+        addLegend(
+            position = "bottomright",
+            colors = col_pal,
+            labels = paste("Cluster", area_totale$value,
+                           "(", round(area_totale$area, 2), "km²)"),
+            title = legend_title,
+            opacity = 1
+        ) %>%
+        addLayersControl(
+            baseGroups = c("OpenStreetMap", "Immagine Satellitare", "Mappa Chiara"),
+            overlayGroups = c("Raster Classificato"),
+            options = layersControlOptions(collapsed = FALSE),
+            position = "topright"
+        )
+    
+    # Visualizzazione della mappa con Leaflet
+    print(leaflet_map)
+    cat("Elaborazione completata per:", tif_path, "\n")
+}
+
+# Unione di tutti i risultati in un unico data frame
+final_results <- do.call(rbind, results_list)
+
+# Salvataggio del file Excel con openxlsx
+write.xlsx(final_results, file = excel_file, rowNames = FALSE)
+cat("File Excel salvato in:", excel_file, "\n")
+
