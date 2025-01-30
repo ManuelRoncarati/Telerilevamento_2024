@@ -276,6 +276,9 @@ for (tif_path in tif_files) {
     som_model <- readRDS(rds_path)  # Carica il modello SOM
     som_values <- som_model$codes[[1]]  # Estrai i codici SOM
     
+    # Set.seed per garantire risultati riproducibili
+    set.seed(1234)  
+    
     # Clustering con K-means
     optimal_clusters <- 5  # Numero di cluster
     kmeans_result <- kmeans(som_values, centers = optimal_clusters, nstart = 100, iter.max = 500)
@@ -295,8 +298,9 @@ for (tif_path in tif_files) {
     # Creazione di una tabella con i dati formattati per l'Excel
     cluster_info <- data.frame(
         Date = date_label,
-        Cluster = paste("Cluster", area_totale$value,
-                        "(", round(area_totale$area, 2), "km²)")
+        Cluster = paste("Cluster", area_totale$value),  # Solo identificatore
+        Area_km2 = round(area_totale$area, 2),  # Colonna separata con area numerica
+        LULCC = NA  # Colonna vuota da compilare manualmente
     )
     
     # Aggiunta della tabella alla lista dei risultati
@@ -355,4 +359,3 @@ final_results <- do.call(rbind, results_list)
 # Salvataggio del file Excel con openxlsx
 write.xlsx(final_results, file = excel_file, rowNames = FALSE)
 cat("File Excel salvato in:", excel_file, "\n")
-
