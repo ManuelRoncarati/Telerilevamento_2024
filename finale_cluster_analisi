@@ -30,3 +30,44 @@ fviz_pca_ind(prcomp(random_df),
              title = "PCA - Random Data",
              geom = "point", 
              ggtheme = theme_classic())
+
+
+
+
+
+
+
+
+
+# dati fortemente clusterizzati
+
+# Caricamento delle librerie necessarie
+library(kohonen)    # Per la Self-Organizing Map
+library(factoextra) # Per visualizzare la matrice di dissimilarità
+library(hopkins)    # Per il calcolo della statistica di Hopkins
+
+# Caricamento del modello SOM
+som_model <- readRDS("C:/PN_Sila/som_Sila/Composite_Filled_PN_Sila1984-06-15_1988-08-15.tif_som_model.rds")
+
+# Estrazione dei codici della SOM (matrice dei centroidi)
+som_values <- som_model$codes[[1]]  
+
+# Calcolo della statistica di Hopkins per i dati SOM, considerando tutti i punti
+hopkins_som <- hopkins(som_values)
+print(paste("Hopkins statistic for SOM data:", hopkins_som))
+
+# Generazione di un dataset casuale con la stessa distribuzione dei dati SOM
+random_df <- apply(som_values, 2, function(x) runif(length(x), min(x), max(x)))
+random_df <- as.data.frame(random_df)
+
+# Calcolo della statistica di Hopkins per il dataset casuale
+hopkins_random <- hopkins(random_df)
+print(paste("Hopkins statistic for Random data:", hopkins_random))
+
+# Visualizzazione della matrice di dissimilarità per i dati della SOM
+fviz_dist(dist(som_values), show_labels = FALSE) +
+  labs(title = "Dissimilarity Matrix - SOM Data")
+
+# Visualizzazione della matrice di dissimilarità per i dati casuali
+fviz_dist(dist(random_df), show_labels = FALSE) +
+  labs(title = "Dissimilarity Matrix - Random Data")
