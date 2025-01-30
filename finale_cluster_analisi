@@ -86,7 +86,7 @@ fviz_dist(dist(random_df), show_labels = FALSE) +
 
 
 
-#siluette reiterata elbow reiterato clus_gap reiterato con stampe tutti
+#siluette reiterata elbow reiterato clus_gap reiterato con stampe tutti AGGIUNGE ITER.MAX E NSTART A TUTTI, aggiungere k.max per limitare, magari k.max=6
 
 # Caricamento delle librerie necessarie
 library(kohonen)    # Per la Self-Organizing Map
@@ -127,4 +127,12 @@ for (som_file in som_files) {
     labs(title = paste("Gap Statistic Method -", basename(som_file)),
          subtitle = "Determining optimal clusters"))
 }
+
+
+
+
+
+
+
+
 
