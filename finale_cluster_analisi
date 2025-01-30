@@ -136,3 +136,78 @@ for (som_file in som_files) {
 
 
 
+
+
+
+
+#NBCLUST ITERATOOO
+
+# Caricamento delle librerie necessarie
+library(kohonen)    # Per leggere i modelli SOM
+library(NbClust)    # Per determinare il numero ottimale di cluster
+library(dplyr)      # Per organizzare i risultati
+library(openxlsx)   # Per salvare i risultati in Excel
+
+# Definizione della directory contenente i modelli SOM
+rds_dir <- "C:/PN_Sila/som_Sila/"
+
+# Recupero di tutti i file .rds presenti nella cartella
+rds_files <- list.files(path = rds_dir, pattern = "\\.rds$", full.names = TRUE)
+
+# Analisi del numero ottimale di cluster per ogni file SOM
+results <- lapply(rds_files, function(rds_path) {
+    
+    # Stampa del nome del file in analisi
+    cat("\nAnalizzando il file:", basename(rds_path), "\n")
+    
+    # Caricamento del modello SOM
+    som_model <- readRDS(rds_path)
+    
+    # Estrazione dei codici della SOM (matrice dei centroidi)
+    som_values <- som_model$codes[[1]]
+    
+    # Calcolo del numero ottimale di cluster con NbClust
+    nbclust_result <- NbClust(
+        data = som_values, 
+        distance = "euclidean", 
+        min.nc = 3, 
+        max.nc = 15, 
+        method = "kmeans", 
+        index = "all"
+    )
+    
+    # Identificazione del numero ottimale di cluster con il maggior supporto tra gli indici
+    cluster_counts <- table(nbclust_result$Best.nc[1, ])
+    optimal_clusters <- as.numeric(names(which.max(cluster_counts)))
+    support_count <- max(cluster_counts)
+
+    # Estrazione del range di anni dal nome del file
+    dates <- regmatches(basename(rds_path), gregexpr("\\d{4}", basename(rds_path)))[[1]]
+    year_range <- if (length(dates) == 2) paste(dates[1], "-", dates[2]) else "Range non trovato"
+
+    # Restituzione dei risultati principali in formato tabellare
+    tibble(
+        File = basename(rds_path),
+        Year_Range = year_range,
+        Optimal_Clusters = optimal_clusters,
+        Support_Count = support_count
+    )
+})
+
+# Creazione di un dataframe unificato con tutti i risultati
+results_summary <- bind_rows(results)
+
+# Visualizzazione della tabella dei risultati
+print(results_summary)
+
+# Salvataggio dei risultati in formato Excel
+output_excel_path <- "C:/PN_Sila/nbclust_best_results.xlsx"
+write.xlsx(results_summary, file = output_excel_path, rowNames = FALSE)
+
+# Conferma del salvataggio
+cat("\nRisultati salvati in:", output_excel_path, "\n")
+
+
+
+
+
