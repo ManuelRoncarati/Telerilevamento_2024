@@ -39,6 +39,9 @@ fviz_pca_ind(prcomp(random_df),
 
 
 
+
+
+
 # dati fortemente clusterizzati
 
 # Caricamento delle librerie necessarie
@@ -71,3 +74,57 @@ fviz_dist(dist(som_values), show_labels = FALSE) +
 # Visualizzazione della matrice di dissimilarità per i dati casuali
 fviz_dist(dist(random_df), show_labels = FALSE) +
   labs(title = "Dissimilarity Matrix - Random Data")
+
+
+
+
+
+
+
+
+
+
+
+
+#siluette reiterata elbow reiterato clus_gap reiterato con stampe tutti
+
+# Caricamento delle librerie necessarie
+library(kohonen)    # Per la Self-Organizing Map
+library(factoextra) # Per la visualizzazione dei metodi di selezione del numero ottimale di cluster
+library(cluster)    # Per metriche di clustering
+
+# Definizione della cartella contenente i modelli SOM
+som_folder <- "C:/PN_Sila/som_Sila/"
+
+# Ottieni tutti i file .rds presenti nella cartella
+som_files <- list.files(som_folder, pattern = "\\.rds$", full.names = TRUE)
+
+# Itera su tutti i file SOM presenti nella cartella
+for (som_file in som_files) {
+  
+  # Stampa il nome del file in analisi
+  cat("\nAnalizzando il file:", som_file, "\n")
+  
+  # Caricamento del modello SOM
+  som_model <- readRDS(som_file)
+  
+  # Estrazione dei codici della SOM (matrice dei centroidi)
+  som_values <- som_model$codes[[1]]
+  
+  # Metodo del gomito (Elbow method) senza linea di intercetta
+  print(fviz_nbclust(som_values, kmeans, method = "wss") +
+    labs(title = paste("Elbow Method -", basename(som_file)),
+         subtitle = "Determining optimal clusters"))
+  
+  # Metodo della silhouette
+  print(fviz_nbclust(som_values, kmeans, method = "silhouette") +
+    labs(title = paste("Silhouette Method -", basename(som_file)),
+         subtitle = "Evaluating cluster cohesion"))
+  
+  # Metodo della statistica Gap
+  # Nota: b = 5 è usato per velocizzare i test, ma il valore raccomandato è 500 per una maggiore robustezza
+  print(fviz_nbclust(som_values, kmeans, method = "gap_stat", nboot = 5) +
+    labs(title = paste("Gap Statistic Method -", basename(som_file)),
+         subtitle = "Determining optimal clusters"))
+}
+
