@@ -1,0 +1,32 @@
+#questa cosa ci permette di vedere se la distrubuzione dei dati addestrati dalla som è casuale o meno
+
+# Caricamento delle librerie necessarie
+library(kohonen)    # Libreria per le Self-Organizing Maps
+library(factoextra) # Libreria per la visualizzazione dei risultati della PCA
+
+# Caricamento del modello SOM
+# Il modello SOM è stato precedentemente addestrato e salvato in un file .rds
+# Il file viene caricato per estrarre i codici, che rappresentano i pesi dei neuroni della mappa
+som_model <- readRDS("C:/PN_Sila/som_Sila/Composite_Filled_PN_Sila1984-06-15_1988-08-15.tif_som_model.rds")
+
+# Estrazione dei codici della SOM, che corrispondono ai centroidi dei cluster
+som_values <- som_model$codes[[1]]  
+
+# Applicazione dell'analisi delle componenti principali ai dati della SOM
+# Questo permette di ridurre la dimensionalità e visualizzare le strutture nei dati
+fviz_pca_ind(prcomp(som_values), 
+             title = "PCA - SOM Data",
+             geom = "point", 
+             ggtheme = theme_classic())
+
+# Generazione di un dataset casuale con la stessa struttura dei dati della SOM
+# Ogni colonna viene riempita con valori casuali estratti da una distribuzione uniforme
+# con minimi e massimi corrispondenti a quelli della colonna originale
+random_df <- apply(som_values, 2, function(x) runif(length(x), min(x), max(x)))
+random_df <- as.data.frame(random_df)  
+
+# Applicazione dell'analisi delle componenti principali ai dati casuali
+fviz_pca_ind(prcomp(random_df), 
+             title = "PCA - Random Data",
+             geom = "point", 
+             ggtheme = theme_classic())
