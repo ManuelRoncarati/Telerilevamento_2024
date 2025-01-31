@@ -1,69 +1,58 @@
 # grafico a barre del cazzo per leggere file exel sulle aree dei cluster
 
-# 📌 Caricare i pacchetti necessari
+# grafico a barre del cazzo per leggere file exel sulle aree dei cluster
+
 library(readxl)
 library(ggplot2)
 library(dplyr)
 library(viridis)
-library(stringr)  # Per lavorare con le stringhe
 
-# 📌 Impostare la working directory (MODIFICA con il tuo percorso)
-setwd("C:/PN_Sila")  # Cambia con il percorso corretto del tuo file
+# Impostare la finestra grafica più larga
+options(repr.plot.width = 16, repr.plot.height = 8)
 
-# 📌 Caricare il file Excel (MODIFICA con il nome corretto)
-df <- read_excel("cluster_areas_Sila.xlsx")  # Assicurati che il nome sia corretto
-
-# 📌 Estrarre entrambi gli anni dalla colonna Date
-df$Date <- str_extract_all(df$Date, "\\d{4}")  # Estrai tutti gli anni (restituisce una lista)
-df$Date <- sapply(df$Date, function(x) paste(x, collapse = "-"))  # Combina gli anni in "YYYY-YYYY"
-
-# 📌 Convertire Date in factor per renderla DISCRETA
-df$Date <- as.factor(df$Date)
-
-# 📌 Creazione del grafico a barre
+# Creazione del grafico con barre distanziate e allineamento corretto delle etichette
 ggplot(df, aes(x = LULCC, y = Area_km2, fill = Date)) +
     geom_bar(stat = "identity",
-             position = position_dodge(width = 0.9),  # Spazio tra le barre nei gruppi
-             width = 0.8) +  # Barre larghe per occupare tutto lo spazio disponibile
-
-    # 📌 Etichette sopra le barre con posizione allineata
+             position = position_dodge(width = 0.95),  # Riempie tutto lo spazio disponibile
+             width = 0.85) +  # Barre larghe per occupare l'area al meglio
+    
+    # Etichette sopra le barre con posizione allineata
     geom_text(aes(label = sprintf("%.1f", Area_km2)),
-              position = position_dodge(width = 0.9),  # Stessa posizione delle barre
-              vjust = -0.5,  # Leggero spostamento in alto
-              size = 3,
+              position = position_dodge(width = 0.95),  # Stessa posizione delle barre
+              vjust = -0.7,  # Leggero spostamento in alto
+              size = 2.7,
               fontface = "bold") +  
-
-    scale_fill_viridis_d(option = "viridis", direction = -1) +  # Adesso funziona correttamente
-
-    theme_minimal() +  # Stile minimalista senza bordi inutili
+    
+    scale_fill_viridis_d(option = "viridis", direction = -1) +
+    
+    theme_minimal() +  # Lasciamo il font di default
     theme(
         plot.title = element_text(size = 18, face = "bold", hjust = 0.5, margin = margin(b = 15)),
         axis.title.x = element_text(size = 14, margin = margin(t = 10)),
         axis.title.y = element_text(size = 14, margin = margin(r = 10)),
         axis.text = element_text(size = 12),
-
-        # 📌 Etichette dell'asse X centrate sotto i gruppi e parallele all'asse
+        
+        # Etichette dell'asse X centrate sotto i gruppi e parallele all'asse
         axis.text.x = element_text(angle = 0, hjust = 0.5, vjust = 0.5),  
-
+        
         legend.position = "right",
         legend.title = element_text(size = 13, face = "bold"), 
         legend.text = element_text(size = 12),
-
+        
         panel.grid.major.y = element_line(color = "gray85"),
         panel.grid.major.x = element_blank(),
         panel.grid.minor = element_blank(),
-
+        
         plot.margin = margin(t = 5, r = 5, b = 5, l = 5)  # Ottimizza lo spazio
     ) +
-
+    
     labs(title = "Distribuzione dell'area per uso del suolo e periodo",
          x = "Uso del suolo",
          y = expression(paste("Area (", km^2, ")")),
          fill = "Periodo") +
-
-    # 📌 Rimuoviamo margini inutili per far occupare tutto lo spazio all'asse X
+    
+    # Rimuoviamo margini inutili per far occupare tutto lo spazio all'asse X
     scale_x_discrete(expand = c(0, 0)) +  
-
-    # 📌 Eliminazione spazio extra sopra e sotto
+    
+    # Eliminazione spazio extra sopra e sotto
     scale_y_continuous(expand = c(0, 0), limits = c(0, 400))
-
