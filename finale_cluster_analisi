@@ -359,3 +359,83 @@ final_results <- do.call(rbind, results_list)
 # Salvataggio del file Excel con openxlsx
 write.xlsx(final_results, file = excel_file, rowNames = FALSE)
 cat("File Excel salvato in:", excel_file, "\n")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#nselectboot
+#clusterboot semplice semplice
+# ====================================================
+# Sezione 1: Caricamento delle librerie
+# ====================================================
+library(kohonen)    # Per leggere i modelli SOM
+library(fpc)        # Per selezione del numero di cluster con bootstrap
+library(tibble)     # Per organizzare i risultati
+library(openxlsx)   # Per salvare i risultati in Excel
+library(dplyr)      # Per bind_rows
+
+# ====================================================
+# Sezione 2: Impostazioni iniziali
+# ====================================================
+rds_dir <- "C:/Aspromonte/som_aspromonte"  # Directory dei file SOM
+rds_files <- list.files(path = rds_dir, pattern = "\\.rds$", full.names = TRUE)  # Trova i file RDS
+
+# ====================================================
+# Sezione 3: Selezione del numero di cluster per ogni SOM
+# ====================================================
+results <- lapply(rds_files, function(rds_path) {
+    cat("\nProcesso il file:", basename(rds_path), "\n")
+    som_model <- readRDS(rds_path)  # Carica il modello SOM
+    som_values <- som_model$codes[[1]]  # Estrai le codebook
+    
+    # Converte som_values in matrice se necessario
+    som_matrix <- as.matrix(som_values)
+    
+    # Esegui il bootstrap per la selezione del numero di cluster con K-means
+    result_som_kmeans <- nselectboot(
+        data = som_matrix,                  # Matrice dei valori SOM
+        B = 50,                             # Numero di campioni bootstrap
+        clustermethod = kmeansCBI,          # Metodo di clustering K-means
+        classification = "centroid",        # Metodo di classificazione
+        krange = 2:10,                      # Numero di cluster da testare (da 2 a 10)
+        count = FALSE                        # Stampa i numeri di cluster e le esecuzioni bootstrap
+    )
+    
+    # Estrai il numero ottimale di cluster
+    optimal_clusters <- result_som_kmeans$kopt
+    
+    # Estrai il range di anni dal nome del file
+    dates <- regmatches(basename(rds_path), gregexpr("\\d{4}", basename(rds_path)))[[1]]
+    year_range <- if (length(dates) == 2) paste(dates[1], "-", dates[2]) else "range non trovato"
+    
+    # Ritorna il risultato
+    tibble(File = basename(rds_path), Year_Range = year_range, Optimal_Clusters = optimal_clusters)
+})
+
+# ====================================================
+# Sezione 4: Risultati finali
+# ====================================================
+results_summary <- bind_rows(results)  # Combina i risultati in un'unica tabella
+print(results_summary)
+
+# ====================================================
+# Sezione 5: Salvataggio in Excel
+# ====================================================
+output_excel_path <- "C:/Aspromonte/cluster_selection_results.xlsx"
+write.xlsx(results_summary, file = output_excel_path, rowNames = FALSE)
+cat("\nRisultati salvati in formato Excel:", output_excel_path, "\n")
