@@ -218,7 +218,7 @@ for(som_file in som_files){
     
     # --- Clustering gerarchico (hclust) con diversi metodi di distanza, utilizzando sempre ward.D2 ---
     # Definizione dei metodi di distanza da testare (i metodi disponibili in dist() base)
-    hc_distances <- c("euclidean", "manhattan", "maximum", "canberra", "binary")
+    hc_distances <- c("euclidean", "manhattan", "maximum", "canberra")
     
     for(hc_dist in hc_distances){
         # Calcola la matrice delle distanze per il metodo corrente
