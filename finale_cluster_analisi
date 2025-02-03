@@ -536,3 +536,142 @@ cat("\nRisultati salvati in formato Excel:", output_excel_path, "\n")
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+#clusgap reiterato con grafico finale delle sovrapposizioni per i vari anni
+
+# Caricamento delle librerie necessarie
+library(kohonen)    # Per la Self-Organizing Map
+library(factoextra) # Per la visualizzazione dei metodi di selezione del numero ottimale di cluster
+library(cluster)    # Per metriche di clustering
+library(ggplot2)    # Per la composizione dei grafici finali
+
+# Definizione della cartella contenente i modelli SOM
+som_folder <- "C:/PN_Sila/som_Sila/"
+
+# Ottieni tutti i file .rds presenti nella cartella
+som_files <- list.files(som_folder, pattern = "\\.rds$", full.names = TRUE)
+
+# Inizializza le liste per raccogliere i dati dei vari metodi
+elbow_data_list <- list()
+sil_data_list   <- list()
+gap_data_list   <- list()
+
+# Parametri aggiuntivi per kmeans
+kmax      <- 6    # Limite massimo di cluster
+iter_max  <- 100  # Numero massimo di iterazioni
+nstart    <- 10   # Numero di inizializzazioni casuali
+
+# Ciclo su tutti i file SOM presenti nella cartella
+for (som_file in som_files) {
+    
+    # Stampa il nome del file in analisi
+    cat("\nAnalizzando il file:", som_file, "\n")
+    
+    # Caricamento del modello SOM
+    som_model <- readRDS(som_file)
+    
+    # Estrazione dei codici della SOM (matrice dei centroidi)
+    som_values <- som_model$codes[[1]]
+    
+    ### Metodo del gomito (Elbow method)
+    elbow_plot <- fviz_nbclust(
+        som_values, 
+        kmeans, 
+        method  = "wss", 
+        k.max   = kmax, 
+        iter.max= iter_max, 
+        nstart  = nstart
+    ) +
+        labs(title    = paste("Elbow Method -", basename(som_file)),
+             subtitle = "Determining optimal clusters")
+    
+    # Estrai i dati (solitamente in colonne "clusters" e "y") e aggiungi una colonna per identificare il file
+    elbow_df <- elbow_plot$data
+    elbow_df$File <- basename(som_file)
+    elbow_data_list[[basename(som_file)]] <- elbow_df
+    
+    ### Metodo della silhouette
+    sil_plot <- fviz_nbclust(
+        som_values, 
+        kmeans, 
+        method  = "silhouette", 
+        k.max   = kmax, 
+        iter.max= iter_max, 
+        nstart  = nstart
+    ) +
+        labs(title    = paste("Silhouette Method -", basename(som_file)),
+             subtitle = "Evaluating cluster cohesion")
+    
+    sil_df <- sil_plot$data
+    sil_df$File <- basename(som_file)
+    sil_data_list[[basename(som_file)]] <- sil_df
+    
+    ### Metodo della statistica Gap
+    # Nota: nboot rimane 5 per velocizzare i test (il valore raccomandato è 500 per robustezza)
+    gap_plot <- fviz_nbclust(
+        som_values, 
+        kmeans, 
+        method   = "gap_stat", 
+        k.max    = kmax,
+        nboot    = 500, 
+        iter.max = iter_max, 
+        nstart   = nstart
+    ) +
+        labs(title    = paste("Gap Statistic Method -", basename(som_file)),
+             subtitle = "Determining optimal clusters")
+    
+    gap_df <- gap_plot$data
+    gap_df$File <- basename(som_file)
+    gap_data_list[[basename(som_file)]] <- gap_df
+}
+
+# Combina i dati raccolti in un unico data frame per ciascun metodo
+elbow_data <- do.call(rbind, elbow_data_list)
+sil_data   <- do.call(rbind, sil_data_list)
+gap_data   <- do.call(rbind, gap_data_list)
+
+# Creazione del grafico finale combinato per il metodo del gomito
+p_elbow <- ggplot(elbow_data, aes(x = clusters, y = y, group = File, color = File)) +
+    geom_line() +
+    geom_point() +
+    labs(title = "Elbow Method - Combinato",
+         x     = "Numero di cluster",
+         y     = "Total within-clusters sum of squares") +
+    theme_minimal()
+
+# Creazione del grafico finale combinato per il metodo della silhouette
+p_sil <- ggplot(sil_data, aes(x = clusters, y = y, group = File, color = File)) +
+    geom_line() +
+    geom_point() +
+    labs(title = "Silhouette Method - Combinato",
+         x     = "Numero di cluster",
+         y     = "Average silhouette width") +
+    theme_minimal()
+
+# Creazione del grafico finale combinato per il metodo della statistica Gap
+# Nota: qui usiamo y = gap, in quanto il data frame di gap_stat contiene tale colonna
+p_gap <- ggplot(gap_data, aes(x = clusters, y = gap, group = File, color = File)) +
+    geom_line() +
+    geom_point() +
+    labs(title = "Gap Statistic Method - Combinato",
+         x     = "Numero di cluster",
+         y     = "Gap statistic") +
+    theme_minimal()
+
+# Visualizzazione dei tre grafici finali
+print(p_elbow)
+print(p_sil)
+print(p_gap)
+
+
+
