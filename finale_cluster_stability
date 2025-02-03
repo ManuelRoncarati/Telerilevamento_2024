@@ -162,11 +162,19 @@ for(som_file in som_files) {
 
 
 
-#grafico kmeans hclust diverse distanze: # Caricamento delle librerie necessarie con linee in corrispondenza 4 e 5
+#hclust con vari metodi # Caricamento delle librerie necessarie
 library(kohonen)    # Per la Self-Organizing Map
 library(cluster)    # Per silhouette() e funzioni di clustering
 library(ggplot2)    # Per la creazione dei grafici
 library(dplyr)      # Per operazioni sui data frame
+
+setwd("C:/PN_Sila")
+
+# Creazione della cartella per salvare i grafici (se non esiste)
+out_folder <- file.path(getwd(), "output_plots")
+if(!dir.exists(out_folder)){
+  dir.create(out_folder)
+}
 
 # Definizione della cartella contenente i modelli SOM
 som_folder <- "C:/PN_Sila/som_Sila/"
@@ -182,15 +190,8 @@ k_max    <- 10   # Numero massimo di cluster (da 2 a 10)
 iter_max <- 100  # Numero massimo di iterazioni per kmeans
 nstart   <- 50   # Numero di partizioni iniziali per kmeans
 
-# Definiamo le funzioni per le metriche di dissimilarità per hclust
-distance_methods <- list(
-    euclidean  = function(x) dist(x, method = "euclidean"),
-    maximum    = function(x) dist(x, method = "maximum"),
-    manhattan  = function(x) dist(x, method = "manhattan"),
-    canberra   = function(x) dist(x, method = "canberra"),
-    binary     = function(x) dist(x, method = "binary"),
-    minkowski  = function(x) dist(x, method = "minkowski", p = 3)
-)
+# Vettore dei metodi per il clustering gerarchico
+hc_methods <- c("ward.D", "ward.D2", "single", "complete", "average")
 
 # Itera su tutti i file nella cartella
 for(som_file in som_files){
@@ -201,8 +202,8 @@ for(som_file in som_files){
     som_model <- readRDS(som_file)
     som_values <- som_model$codes[[1]]
     
-    # Data frame per salvare i risultati: k, algoritmo, metrica di dissimilarità e ASW
-    results <- data.frame(k = integer(), algorithm = character(), distance = character(), ASW = numeric(), 
+    # Data frame per salvare i risultati: k, algoritmo, metodo di clustering e ASW
+    results <- data.frame(k = integer(), algorithm = character(), method = character(), ASW = numeric(), 
                           stringsAsFactors = FALSE)
     
     # --- K-means (usa la distanza Euclidea) ---
@@ -213,32 +214,33 @@ for(som_file in som_files){
         km_sil <- silhouette(km_fit$cluster, dist_mat)
         km_asw <- mean(km_sil[, "sil_width"])
         
-        results <- rbind(results, data.frame(k = k, algorithm = "kmeans", distance = "euclidean", ASW = km_asw,
+        results <- rbind(results, data.frame(k = k, algorithm = "kmeans", method = "Euclidean", ASW = km_asw,
                                              stringsAsFactors = FALSE))
     }
     
-    # --- Clustering gerarchico (hclust) per ciascuna metrica ---
-    for(method_name in names(distance_methods)){
-        dist_fun <- distance_methods[[method_name]]
-        dist_mat <- dist_fun(som_values)
+    # --- Clustering gerarchico (hclust) con distanza Euclidea e diversi metodi ---
+    # Calcola la matrice delle distanze Euclidea una volta sola
+    dist_mat <- dist(som_values, method = "euclidean")
+    
+    for(hc_method in hc_methods){
         for(k in 2:k_max){
-            hc_fit <- hclust(dist_mat, method = "ward.D2")
+            hc_fit <- hclust(dist_mat, method = hc_method)
             hc_clusters <- cutree(hc_fit, k = k)
             hc_sil <- silhouette(hc_clusters, dist_mat)
             hc_asw <- mean(hc_sil[, "sil_width"])
             
-            results <- rbind(results, data.frame(k = k, algorithm = "hclust", distance = method_name, ASW = hc_asw,
+            results <- rbind(results, data.frame(k = k, algorithm = "hclust", method = hc_method, ASW = hc_asw,
                                                  stringsAsFactors = FALSE))
         }
     }
     
-    # Aggiungiamo una colonna "method" per semplificare il grafico:
-    results$method <- ifelse(results$algorithm == "kmeans", 
-                             "kmeans (Euclidean)", 
-                             paste("hclust (", results$distance, ")", sep = ""))
+    # Aggiungiamo una colonna "label" per semplificare il grafico
+    results$label <- ifelse(results$algorithm == "kmeans", 
+                            "kmeans (Euclidean)", 
+                            paste("hclust (", results$method, ")", sep = ""))
     
     # Costruiamo il grafico: ASW in funzione di k, con linee separate per ciascun metodo
-    p <- ggplot(results, aes(x = k, y = ASW, color = method, group = method)) +
+    p <- ggplot(results, aes(x = k, y = ASW, color = label, group = label)) +
         geom_line(size = 1.2) +
         geom_point(size = 3) +
         # Aggiungiamo due linee verticali tratteggiate in corrispondenza di x=4 e x=5
@@ -247,10 +249,16 @@ for(som_file in som_files){
         scale_x_continuous(breaks = 2:k_max) +
         labs(title = paste("Average Silhouette Width -", basename(som_file)),
              x = "Numero di Cluster (k)",
-             y = "Average Silhouette Width (ASW)") +
+             y = "Average Silhouette Width (ASW)",
+             color = "Metodo") +
         theme_minimal() +
         theme(plot.title = element_text(hjust = 0.5))
     
     print(p)
+    
+    # Salva il grafico in formato PNG
+    # Rimuovo l'estensione .rds per ottenere un nome file più pulito
+    file_base <- sub("\\.rds$", "", basename(som_file))
+    plot_filename <- file.path(out_folder, paste0("plot_", file_base, ".png"))
+    ggsave(filename = plot_filename, plot = p, width = 10, height = 6, dpi = 300)
 }
-
