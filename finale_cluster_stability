@@ -161,8 +161,8 @@ for(som_file in som_files) {
 
 
 
-
-#hclust con vari metodi # Caricamento delle librerie necessarie
+#hclust con ward.d2 e kmeans sovrapposizione average silhouette, ward.d2 testato con diverse distanze. kmeasn euclidea
+# Caricamento delle librerie necessarie
 library(kohonen)    # Per la Self-Organizing Map
 library(cluster)    # Per silhouette() e funzioni di clustering
 library(ggplot2)    # Per la creazione dei grafici
@@ -173,7 +173,7 @@ setwd("C:/PN_Sila")
 # Creazione della cartella per salvare i grafici (se non esiste)
 out_folder <- file.path(getwd(), "output_plots")
 if(!dir.exists(out_folder)){
-  dir.create(out_folder)
+    dir.create(out_folder)
 }
 
 # Definizione della cartella contenente i modelli SOM
@@ -190,10 +190,8 @@ k_max    <- 10   # Numero massimo di cluster (da 2 a 10)
 iter_max <- 100  # Numero massimo di iterazioni per kmeans
 nstart   <- 50   # Numero di partizioni iniziali per kmeans
 
-# Vettore dei metodi per il clustering gerarchico
-hc_methods <- c("ward.D", "ward.D2", "single", "complete", "average")
-
-# Itera su tutti i file nella cartella
+# --- Inizialmente: clustering con k-means (usa la distanza Euclidea) ---
+# Questa sezione rimane invariata
 for(som_file in som_files){
     
     cat("Analizzando il file:", som_file, "\n")
@@ -202,7 +200,7 @@ for(som_file in som_files){
     som_model <- readRDS(som_file)
     som_values <- som_model$codes[[1]]
     
-    # Data frame per salvare i risultati: k, algoritmo, metodo di clustering e ASW
+    # Data frame per salvare i risultati: k, algoritmo, metodo (o metrica) e ASW
     results <- data.frame(k = integer(), algorithm = character(), method = character(), ASW = numeric(), 
                           stringsAsFactors = FALSE)
     
@@ -218,18 +216,24 @@ for(som_file in som_files){
                                              stringsAsFactors = FALSE))
     }
     
-    # --- Clustering gerarchico (hclust) con distanza Euclidea e diversi metodi ---
-    # Calcola la matrice delle distanze Euclidea una volta sola
-    dist_mat <- dist(som_values, method = "euclidean")
+    # --- Clustering gerarchico (hclust) con diversi metodi di distanza, utilizzando sempre ward.D2 ---
+    # Definizione dei metodi di distanza da testare (i metodi disponibili in dist() base)
+    hc_distances <- c("euclidean", "manhattan", "maximum", "canberra", "binary")
     
-    for(hc_method in hc_methods){
+    for(hc_dist in hc_distances){
+        # Calcola la matrice delle distanze per il metodo corrente
+        dist_mat <- dist(som_values, method = hc_dist)
         for(k in 2:k_max){
-            hc_fit <- hclust(dist_mat, method = hc_method)
+            hc_fit <- hclust(dist_mat, method = "ward.D2")
             hc_clusters <- cutree(hc_fit, k = k)
             hc_sil <- silhouette(hc_clusters, dist_mat)
             hc_asw <- mean(hc_sil[, "sil_width"])
             
-            results <- rbind(results, data.frame(k = k, algorithm = "hclust", method = hc_method, ASW = hc_asw,
+            # Salviamo nei risultati una descrizione che indichi il linkage e la metrica usata
+            results <- rbind(results, data.frame(k = k, 
+                                                 algorithm = "hclust", 
+                                                 method = paste("ward.D2 (", hc_dist, ")", sep = ""),
+                                                 ASW = hc_asw,
                                                  stringsAsFactors = FALSE))
         }
     }
