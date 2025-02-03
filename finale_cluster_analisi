@@ -675,3 +675,74 @@ print(p_gap)
 
 
 
+
+
+
+
+
+
+
+
+
+#indice di dunn tra 3 e 6 reiterato con sovrapposizione grafici
+# Caricamento delle librerie necessarie
+library(kohonen)    # Per la Self-Organizing Map
+library(cluster)    # Per metriche di clustering
+library(clValid)    # Per il calcolo dell'indice di Dunn
+library(ggplot2)    # Per la composizione dei grafici finali
+
+# Definizione della cartella contenente i modelli SOM
+som_folder <- "C:/PN_Sila/som_Sila/"
+
+# Ottieni tutti i file .rds presenti nella cartella
+som_files <- list.files(som_folder, pattern = "\\.rds$", full.names = TRUE)
+
+# Inizializza la lista per raccogliere i dati dell'indice di Dunn
+dunn_data_list <- list()
+
+# Parametri aggiuntivi per kmeans
+kmax      <- 6  # Limite massimo di cluster
+iter_max  <- 100  # Numero massimo di iterazioni
+nstart    <- 25   # Numero di inizializzazioni casuali
+
+# Ciclo su tutti i file SOM presenti nella cartella
+for (som_file in som_files) {
+    
+    # Stampa il nome del file in analisi
+    cat("\nAnalizzando il file:", som_file, "\n")
+    
+    # Caricamento del modello SOM
+    som_model <- readRDS(som_file)
+    
+    # Estrazione dei codici della SOM (matrice dei centroidi)
+    som_values <- som_model$codes[[1]]
+    
+    # Creazione di un data frame per memorizzare i valori di Dunn
+    dunn_results <- data.frame(clusters = integer(), dunn_index = numeric())
+    
+    for (k in 3:kmax) {
+        set.seed(123)  # Per risultati riproducibili
+        kmeans_result <- kmeans(som_values, centers = k, iter.max = iter_max, nstart = nstart)
+        dunn_index <- dunn(dist(som_values), kmeans_result$cluster)
+        dunn_results <- rbind(dunn_results, data.frame(clusters = k, dunn_index = dunn_index))
+    }
+    
+    dunn_results$File <- basename(som_file)
+    dunn_data_list[[basename(som_file)]] <- dunn_results
+}
+
+# Combina i dati raccolti in un unico data frame
+dunn_data <- do.call(rbind, dunn_data_list)
+
+# Creazione del grafico finale combinato per l'indice di Dunn
+p_dunn <- ggplot(dunn_data, aes(x = clusters, y = dunn_index, group = File, color = File)) +
+    geom_line() +
+    geom_point() +
+    labs(title = "Dunn Index - Combinato",
+         x     = "Numero di cluster",
+         y     = "Dunn Index Value") +
+    theme_minimal()
+
+# Visualizzazione del grafico
+print(p_dunn)
+
