@@ -32,7 +32,79 @@ fviz_pca_ind(prcomp(random_df),
              ggtheme = theme_classic())
 
 
+#STESSA COSA MA SENZA SOM
+# Carica le librerie necessarie
+library(terra)
+library(factoextra)  # Per la visualizzazione della PCA
+library(ggplot2)     # Per salvare i plot
 
+# Cartella in cui salvare i plot PCA (modifica il percorso se necessario)
+plot_output_folder <- "C:/PN_Gennargentu/pca_plots"
+if (!dir.exists(plot_output_folder)) {
+    dir.create(plot_output_folder, recursive = TRUE)
+}
+
+# Misura il tempo di esecuzione dell'intero script
+start_time <- Sys.time()
+
+# Funzione per la normalizzazione Min-Max
+normalize <- function(x) {
+    (x - min(x, na.rm = TRUE)) / (max(x, na.rm = TRUE) - min(x, na.rm = TRUE))
+}
+
+# Funzione per elaborare una singola immagine e eseguire le verifiche PCA
+process_image <- function(image_path) {
+    # Carica il raster multibanda e calcola gli indici
+    raster_image <- rast(image_path)
+    ndvi  <- (raster_image[[4]] - raster_image[[3]]) / (raster_image[[4]] + raster_image[[3]])
+    mndwi <- (raster_image[[2]] - raster_image[[5]]) / (raster_image[[2]] + raster_image[[5]])
+    ndbi  <- (raster_image[[5]] - raster_image[[4]]) / (raster_image[[5]] + raster_image[[4]])
+    
+    # Crea lo stack con bande e indici
+    stacked_raster <- c(raster_image, ndvi, mndwi, ndbi)
+    
+    # Estrai i valori come matrice, rimuovi NA e normalizza
+    matrix_values <- values(stacked_raster)
+    cleaned_matrix <- matrix_values[complete.cases(matrix_values), ]
+    normalized_matrix <- apply(cleaned_matrix, 2, normalize)
+    
+    ## --- VERIFICHE SUI DATI ---
+    # 1. PCA sui dati normalizzati
+    pca_data <- prcomp(normalized_matrix)
+    p1 <- fviz_pca_ind(pca_data, 
+                       title = paste("PCA - Dati per", basename(image_path)),
+                       geom = "point", 
+                       ggtheme = theme_classic())
+    
+    # Salva il plot PCA sui dati originali
+    plot_file_data <- file.path(plot_output_folder, paste0(basename(image_path), "_pca_data.png"))
+    ggsave(plot_file_data, plot = p1, width = 7, height = 5)
+    
+    # 2. Genera un dataset casuale con la stessa struttura dei dati originali
+    random_df <- as.data.frame(apply(normalized_matrix, 2, function(x) runif(length(x), min(x), max(x))))
+    pca_random <- prcomp(random_df)
+    p2 <- fviz_pca_ind(pca_random, 
+                       title = paste("PCA - Dati Casuali per", basename(image_path)),
+                       geom = "point", 
+                       ggtheme = theme_classic())
+    
+    # Salva il plot PCA sui dati casuali
+    plot_file_random <- file.path(plot_output_folder, paste0(basename(image_path), "_pca_random.png"))
+    ggsave(plot_file_random, plot = p2, width = 7, height = 5)
+    ## --- FINE VERIFICHE SUI DATI ---
+}
+
+# Ottieni il percorso della prima immagine nella cartella
+image_paths <- list.files(path = "C:/PN_Gennargentu", pattern = "\\.tif$", full.names = TRUE)
+if (length(image_paths) > 0) {
+    process_image(image_paths[1])
+} else {
+    cat("Nessuna immagine trovata nella cartella.\n")
+}
+
+# Calcola e stampa il tempo totale di esecuzione
+total_time <- Sys.time() - start_time
+cat("Tempo totale di esecuzione:", total_time, "\n")
 
 
 
