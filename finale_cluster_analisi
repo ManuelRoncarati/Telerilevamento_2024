@@ -32,6 +32,11 @@ fviz_pca_ind(prcomp(random_df),
              ggtheme = theme_classic())
 
 
+
+
+
+
+
 #STESSA COSA MA SENZA SOM
 # Carica le librerie necessarie
 library(terra)
@@ -147,6 +152,61 @@ fviz_dist(dist(som_values), show_labels = FALSE) +
 fviz_dist(dist(random_df), show_labels = FALSE) +
   labs(title = "Dissimilarity Matrix - Random Data")
 
+
+
+
+
+
+
+#STESSA COSA MA CON L'IMMAGINE SENZA SOM
+# Carica le librerie necessarie
+library(terra)
+library(hopkins)
+
+# Specifica il percorso del file immagine (modifica il percorso se necessario)
+image_path <- "C:/PN_Sila/Composite_Filled_PN_Sila1984-06-15_1988-08-15.tif"
+
+# Carica il raster multibanda
+raster_image <- rast(image_path)
+
+# Calcola gli indici: NDVI, MNDWI e NDBI
+ndvi  <- (raster_image[[4]] - raster_image[[3]]) / (raster_image[[4]] + raster_image[[3]])
+mndwi <- (raster_image[[2]] - raster_image[[5]]) / (raster_image[[2]] + raster_image[[5]])
+ndbi  <- (raster_image[[5]] - raster_image[[4]]) / (raster_image[[5]] + raster_image[[4]])
+
+# Crea lo stack contenente le bande originali e gli indici
+stacked_raster <- c(raster_image, ndvi, mndwi, ndbi)
+
+# Estrai i valori come matrice e rimuovi le righe contenenti NA
+matrix_values  <- values(stacked_raster)
+cleaned_matrix <- matrix_values[complete.cases(matrix_values), ]
+
+# Funzione per la normalizzazione Min-Max
+normalize <- function(x) {
+  (x - min(x, na.rm = TRUE)) / (max(x, na.rm = TRUE) - min(x, na.rm = TRUE))
+}
+
+# Normalizza i dati colonna per colonna
+normalized_matrix <- apply(cleaned_matrix, 2, normalize)
+
+# Stampa a video il numero totale di dati (righe) disponibili dopo la pulizia e normalizzazione
+cat("Numero totale di dati (righe) dopo pulizia e normalizzazione:", nrow(normalized_matrix), "\n")
+
+# Campionamento dei dati per evitare problemi di overflow/memoria
+n_sample <- min(1000, nrow(normalized_matrix))  # Utilizza 1000 righe oppure meno se non disponibili
+sampled_data <- normalized_matrix[sample(nrow(normalized_matrix), n_sample), ]
+
+# Calcolo della statistica di Hopkins per i dati originali campionati
+hopkins_data <- hopkins(sampled_data)
+cat("Hopkins statistic for original data:", hopkins_data, "\n")
+
+# Genera un dataset casuale con la stessa struttura dei dati originali:
+random_df <- as.data.frame(apply(normalized_matrix, 2, function(x) runif(length(x), min(x), max(x))))
+sampled_random <- random_df[sample(nrow(random_df), n_sample), ]
+
+# Calcola la statistica di Hopkins per il dataset casuale campionato
+hopkins_random <- hopkins(sampled_random)
+cat("Hopkins statistic for random data:", hopkins_random, "\n")
 
 
 
