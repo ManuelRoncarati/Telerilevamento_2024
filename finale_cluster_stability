@@ -128,7 +128,16 @@ final_hc_plot
 
 
 
-#grafico kmeans hclust diverse distanze: # Caricamento delle librerie necessarie
+
+
+
+
+
+
+
+
+
+#grafico kmeans hclust diverse distanze: # Caricamento delle librerie necessarie con linee in corrispondenza 4 e 5
 library(kohonen)    # Per la Self-Organizing Map
 library(cluster)    # Per silhouette() e funzioni di clustering
 library(ggplot2)    # Per la creazione dei grafici
