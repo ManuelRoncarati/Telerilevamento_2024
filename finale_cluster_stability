@@ -1,4 +1,4 @@
-#PER OGNI ANNATA, STACK DELLA SIHOUETTE. KMEASN E HCLUST MODIFICABILE
+#PER OGNI ANNATA, STACK DELLA SIHOUETTE. KMEASN E HCLUST MODIFICABILE, grafici completi della media silhouette per cluster tra 3 e 6, kmeans euclidea, hclust ward.d2 euclidea
 
 # Caricamento delle librerie necessarie
 library(kohonen)      # Per la Self-Organizing Map
