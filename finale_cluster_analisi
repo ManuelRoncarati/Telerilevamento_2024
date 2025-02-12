@@ -1,3 +1,163 @@
+#Codice per i Dati SOM (senza campionamento, iterato su tutti i modelli)
+# Carica le librerie necessarie
+library(kohonen)    # Per la gestione della Self-Organizing Map
+library(factoextra) # (Opzionale, per eventuali visualizzazioni)
+library(hopkins)    # Per il calcolo della statistica di Hopkins
+
+# Specifica la cartella contenente i modelli SOM
+som_folder <- "C:/PN_Sila/som_Sila"
+
+# Elenca tutti i file con estensione "_som_model.rds" nella cartella
+som_files <- list.files(path = som_folder, pattern = "_som_model\\.rds$", full.names = TRUE)
+
+# Crea un data frame per salvare i risultati
+results_som <- data.frame(
+  File = character(0),
+  Hopkins_SOM = numeric(0),
+  Hopkins_Random = numeric(0),
+  stringsAsFactors = FALSE
+)
+
+# Itera su tutti i modelli SOM
+for (file in som_files) {
+  # Carica il modello SOM
+  som_model <- readRDS(file)
+  
+  # Estrai i dati elaborati dalla SOM (ad esempio, i codebook vectors)
+  som_values <- som_model$codes[[1]]
+  
+  # Calcola la statistica di Hopkins sull'intero dataset SOM
+  hopkins_som <- hopkins(som_values)
+  
+  # Genera un dataset casuale con la stessa distribuzione per ogni colonna
+  random_df <- as.data.frame(apply(som_values, 2, function(x) {
+    runif(length(x), min = min(x), max = max(x))
+  }))
+  
+  # Calcola la statistica di Hopkins sul dataset casuale
+  hopkins_random <- hopkins(random_df)
+  
+  # Stampa i risultati per il file corrente
+  cat("File:", basename(file), "\n")
+  cat("  Hopkins statistic for SOM data:    ", hopkins_som, "\n")
+  cat("  Hopkins statistic for Random data: ", hopkins_random, "\n\n")
+  
+  # Aggiunge i risultati al data frame
+  results_som <- rbind(results_som, data.frame(
+    File = basename(file),
+    Hopkins_SOM = hopkins_som,
+    Hopkins_Random = hopkins_random,
+    stringsAsFactors = FALSE
+  ))
+}
+
+# Stampa il riepilogo dei risultati per i modelli SOM
+print(results_som)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#Codice per i Dati Grezzi (Raw) con Campionamento a 10.000 osservazioni
+# Carica le librerie necessarie
+library(terra)
+library(hopkins)
+
+# Specifica la cartella contenente le immagini .tif
+image_dir <- "C:/PN_Sila"
+image_files <- list.files(path = image_dir, pattern = "\\.tif$", full.names = TRUE)
+
+# Crea un data frame per salvare i risultati
+results_raw <- data.frame(
+  File = character(0),
+  Hopkins_Data = numeric(0),
+  Hopkins_Random = numeric(0),
+  stringsAsFactors = FALSE
+)
+
+# Itera su tutte le immagini nella cartella
+for (file in image_files) {
+  # Carica il raster multibanda
+  raster_image <- rast(file)
+  
+  # Calcola gli indici:
+  # NDVI = (NIR - Red) / (NIR + Red) (assumendo banda 4 = NIR, banda 3 = Red)
+  ndvi <- (raster_image[[4]] - raster_image[[3]]) / (raster_image[[4]] + raster_image[[3]])
+  
+  # MNDWI = (Green - SWIR) / (Green + SWIR) (assumendo banda 2 = Green, banda 5 = SWIR)
+  mndwi <- (raster_image[[2]] - raster_image[[5]]) / (raster_image[[2]] + raster_image[[5]])
+  
+  # NDBI = (SWIR - NIR) / (SWIR + NIR) (assumendo banda 5 = SWIR, banda 4 = NIR)
+  ndbi <- (raster_image[[5]] - raster_image[[4]]) / (raster_image[[5]] + raster_image[[4]])
+  
+  # Crea uno stack contenente le bande originali ed i nuovi indici
+  stacked_raster <- c(raster_image, ndvi, mndwi, ndbi)
+  
+  # Estrai i valori come matrice, rimuovi le righe contenenti NA
+  matrix_values <- values(stacked_raster)
+  cleaned_matrix <- matrix_values[complete.cases(matrix_values), ]
+  
+  # Normalizza ogni colonna (Min-Max normalization)
+  normalized_matrix <- apply(cleaned_matrix, 2, function(x) {
+    (x - min(x, na.rm = TRUE)) / (max(x, na.rm = TRUE) - min(x, na.rm = TRUE))
+  })
+  
+  # Campiona 10.000 righe (oppure usa tutti i dati se inferiori a 10.000)
+  sample_size <- min(10000, nrow(normalized_matrix))
+  sampled_matrix <- normalized_matrix[sample(nrow(normalized_matrix), sample_size), ]
+  
+  # Calcola la statistica di Hopkins sul campione dei dati grezzi
+  hopkins_data <- hopkins(sampled_matrix)
+  
+  # Genera un dataset casuale con la stessa distribuzione per ogni colonna del campione
+  random_df <- as.data.frame(apply(sampled_matrix, 2, function(x) {
+    runif(length(x), min = min(x), max = max(x))
+  }))
+  
+  # Calcola la statistica di Hopkins sul dataset casuale
+  hopkins_random <- hopkins(random_df)
+  
+  # Stampa i risultati per il file corrente
+  cat("File:", basename(file), "\n")
+  cat("  Hopkins statistic for raw data:    ", hopkins_data, "\n")
+  cat("  Hopkins statistic for Random data: ", hopkins_random, "\n\n")
+  
+  # Aggiunge i risultati al data frame
+  results_raw <- rbind(results_raw, data.frame(
+    File = basename(file),
+    Hopkins_Data = hopkins_data,
+    Hopkins_Random = hopkins_random,
+    stringsAsFactors = FALSE
+  ))
+}
+
+# Stampa il riepilogo dei risultati per i dati grezzi
+print(results_raw)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #questa cosa ci permette di vedere se la distrubuzione dei dati addestrati dalla som è casuale o meno
 
 # Caricamento delle librerie necessarie
