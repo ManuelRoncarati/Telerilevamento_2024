@@ -1,8 +1,8 @@
-PCA per i Dati Grezzi (Pre-SOM)
+# PCA sui Dati Grezzi (Pre‑SOM)
 # Carica le librerie necessarie
 library(terra)
 library(factoextra)
-library(ggplot2)  # Per eventuali visualizzazioni
+library(ggplot2)
 
 # Specifica la cartella contenente le immagini .tif
 image_dir <- "C:/PN_Sila"
@@ -19,18 +19,16 @@ raster_image <- rast(first_image)
 
 # Calcola gli indici:
 # NDVI = (NIR - Red) / (NIR + Red) (assumendo banda 4 = NIR, banda 3 = Red)
-ndvi <- (raster_image[[4]] - raster_image[[3]]) / (raster_image[[4]] + raster_image[[3]])
-
+ndvi  <- (raster_image[[4]] - raster_image[[3]]) / (raster_image[[4]] + raster_image[[3]])
 # MNDWI = (Green - SWIR) / (Green + SWIR) (assumendo banda 2 = Green, banda 5 = SWIR)
 mndwi <- (raster_image[[2]] - raster_image[[5]]) / (raster_image[[2]] + raster_image[[5]])
-
 # NDBI = (SWIR - NIR) / (SWIR + NIR) (assumendo banda 5 = SWIR, banda 4 = NIR)
-ndbi <- (raster_image[[5]] - raster_image[[4]]) / (raster_image[[5]] + raster_image[[4]])
+ndbi  <- (raster_image[[5]] - raster_image[[4]]) / (raster_image[[5]] + raster_image[[4]])
 
 # Crea uno stack con le bande originali ed i nuovi indici
 stacked_raster <- c(raster_image, ndvi, mndwi, ndbi)
 
-# Estrai i valori come matrice e rimuovi le righe con NA
+# Estrai i valori come matrice e rimuovi le righe contenenti NA
 matrix_values <- values(stacked_raster)
 cleaned_matrix <- matrix_values[complete.cases(matrix_values), ]
 
@@ -39,29 +37,41 @@ normalize <- function(x) {
   (x - min(x, na.rm = TRUE)) / (max(x, na.rm = TRUE) - min(x, na.rm = TRUE))
 }
 
-# Normalizza ogni colonna della matrice
+# Normalizza ogni colonna dell'intero dataset
 normalized_matrix <- apply(cleaned_matrix, 2, normalize)
 
-# Campiona 10.000 osservazioni (o tutte se inferiori a 10.000)
-sample_size <- min(10000, nrow(normalized_matrix))
-sampled_matrix <- normalized_matrix[sample(nrow(normalized_matrix), sample_size), ]
+# Esegue la PCA sull'intero set di dati normalizzati
+pca_raw <- prcomp(normalized_matrix)
 
-# Esegue la PCA sui dati grezzi (Pre-SOM)
-pca_raw <- prcomp(sampled_matrix)
-fviz_pca_ind(pca_raw, 
+# Visualizza il plot PCA sui dati reali (Pre-SOM) con il tema personalizzato
+p1 <- fviz_pca_ind(pca_raw, 
              title = "PCA - Raw Data",
              geom = "point", 
-             ggtheme = theme_classic())
+             ggtheme = theme_classic()) +
+    theme(
+        plot.title = element_text(size = 25, face = "bold"),
+        axis.title = element_text(size = 25),
+        axis.text = element_text(size = 25)
+    )
+print(p1)
 
-# Genera un dataset casuale con la stessa struttura (per confronto)
-random_df <- as.data.frame(apply(sampled_matrix, 2, function(x) {
+# Genera un dataset casuale con la stessa struttura dei dati reali
+random_df <- as.data.frame(apply(normalized_matrix, 2, function(x) {
   runif(length(x), min = min(x), max = max(x))
 }))
 pca_random <- prcomp(random_df)
-fviz_pca_ind(pca_random, 
+
+# Visualizza il plot PCA sul dataset casuale (Pre-SOM) con il tema personalizzato
+p2 <- fviz_pca_ind(pca_random, 
              title = "PCA - Random Data (Raw)",
              geom = "point", 
-             ggtheme = theme_classic())
+             ggtheme = theme_classic()) +
+    theme(
+        plot.title = element_text(size = 25, face = "bold"),
+        axis.title = element_text(size = 25),
+        axis.text = element_text(size = 25)
+    )
+print(p2)
 
 
 
@@ -73,10 +83,11 @@ fviz_pca_ind(pca_random,
 
 
 
-PCA per i Dati SOM (Post-SOM)
-# Carica le librerie necessarie
-library(kohonen)    # Per le Self-Organizing Maps
+
+## Carica le librerie necessarie
+library(kohonen)    # Per la gestione delle Self-Organizing Maps
 library(factoextra) # Per la visualizzazione dei risultati della PCA
+library(ggplot2)
 
 # Specifica la cartella contenente i modelli SOM
 som_folder <- "C:/PN_Sila/som_Sila"
@@ -91,25 +102,46 @@ first_som_file <- som_files[1]
 # Carica il modello SOM
 som_model <- readRDS(first_som_file)
 
-# Estrai i dati elaborati dalla SOM
+# Estrai i vettori del codebook (i pesi appresi dalla rete)
 som_values <- som_model$codes[[1]]
 
-# Esegue la PCA sui dati SOM (Post-SOM)
+# Esegue la PCA sull'intero set di dati della SOM
 pca_som <- prcomp(som_values)
-fviz_pca_ind(pca_som, 
+
+# Visualizza il plot PCA sui dati elaborati tramite SOM con il tema personalizzato
+p3 <- fviz_pca_ind(pca_som, 
              title = "PCA - SOM Data",
              geom = "point", 
-             ggtheme = theme_classic())
+             ggtheme = theme_classic()) +
+    theme(
+        plot.title = element_text(size = 25, face = "bold"),
+        axis.title = element_text(size = 25),
+        axis.text = element_text(size = 25)
+    )
+print(p3)
 
-# Genera un dataset casuale con la stessa struttura dei dati SOM
-random_df <- as.data.frame(apply(som_values, 2, function(x) {
+# Genera un dataset casuale con la stessa struttura dei dati della SOM
+random_df_som <- as.data.frame(apply(som_values, 2, function(x) {
   runif(length(x), min = min(x), max = max(x))
 }))
-pca_random <- prcomp(random_df)
-fviz_pca_ind(pca_random, 
+pca_random_som <- prcomp(random_df_som)
+
+# Visualizza il plot PCA sul dataset casuale (SOM) con il tema personalizzato
+p4 <- fviz_pca_ind(pca_random_som, 
              title = "PCA - Random Data (SOM)",
              geom = "point", 
-             ggtheme = theme_classic())
+             ggtheme = theme_classic()) +
+    theme(
+        plot.title = element_text(size = 25, face = "bold"),
+        axis.title = element_text(size = 25),
+        axis.text = element_text(size = 25)
+    )
+print(p4)
+
+
+
+
+
 
 
 
