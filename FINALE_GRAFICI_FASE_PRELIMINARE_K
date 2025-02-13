@@ -1,0 +1,625 @@
+# LE AWS KMEASN E HCUT CON DIVERSE DISTANZE
+
+# Caricamento delle librerie necessarie
+library(kohonen)    # Per la Self-Organizing Map
+library(cluster)    # Per silhouette() e funzioni di clustering
+library(ggplot2)    # Per la creazione dei grafici
+library(dplyr)      # Per operazioni sui data frame
+library(viridis)    # Per la palette viridis
+set.seed(123)
+
+
+# Definizione della cartella contenente i modelli SOM
+som_folder <- "C:/PN_Aspromonte/som_Aspromonte/"
+
+# Ottieni tutti i file .rds presenti nella cartella
+som_files <- list.files(som_folder, pattern = "\\.rds$", full.names = TRUE)
+if (length(som_files) == 0) {
+    stop("Nessun file .rds trovato nella cartella!")
+}
+
+# Parametri per il clustering
+k_max    <- 10   # Numero massimo di cluster (da 2 a 10)
+iter_max <- 100  # Numero massimo di iterazioni per kmeans
+
+# Tema personalizzato per uniformare stile e dimensioni del testo
+my_theme <- theme_minimal() +
+    theme(
+        plot.title    = element_text(size = 25, face = "bold"),
+        axis.title    = element_text(size = 25),
+        axis.text     = element_text(size = 25),
+        legend.title  = element_text(size = 25),
+        legend.text   = element_text(size = 25)
+    )
+
+# Loop su ogni file .rds (modello SOM)
+for (som_file in som_files) {
+    
+    cat("Analizzando il file:", som_file, "\n")
+    
+    # Carica il modello SOM ed estrae i centroidi
+    som_model  <- readRDS(som_file)
+    som_values <- som_model$codes[[1]]
+    
+    # Data frame per salvare i risultati: k, algoritmo, metrica e ASW
+    results <- data.frame(
+        k         = integer(), 
+        algorithm = character(), 
+        method    = character(), 
+        ASW       = numeric(),
+        stringsAsFactors = FALSE
+    )
+    
+    # --- K-means (usa la distanza Euclidea) ---
+    for (k in 2:k_max) {
+        km_fit   <- kmeans(som_values, centers = k, iter.max = iter_max)
+        dist_mat <- dist(som_values, method = "euclidean")
+        km_sil   <- silhouette(km_fit$cluster, dist_mat)
+        km_asw   <- mean(km_sil[, "sil_width"])
+        
+        results <- rbind(
+            results,
+            data.frame(
+                k         = k, 
+                algorithm = "kmeans", 
+                method    = "Euclidean", 
+                ASW       = km_asw,
+                stringsAsFactors = FALSE
+            )
+        )
+    }
+    
+    # --- Clustering gerarchico (hclust) con ward.D2 e diverse metriche di distanza ---
+    hc_distances <- c("euclidean", "manhattan", "maximum", "canberra")
+    
+    for (hc_dist in hc_distances) {
+        dist_mat <- dist(som_values, method = hc_dist)
+        hc_fit   <- hclust(dist_mat, method = "ward.D2")
+        
+        for (k in 2:k_max) {
+            hc_clusters <- cutree(hc_fit, k = k)
+            hc_sil      <- silhouette(hc_clusters, dist_mat)
+            hc_asw      <- mean(hc_sil[, "sil_width"])
+            
+            results <- rbind(
+                results,
+                data.frame(
+                    k         = k, 
+                    algorithm = "hclust",
+                    method    = paste0("ward.D2 (", hc_dist, ")"),
+                    ASW       = hc_asw,
+                    stringsAsFactors = FALSE
+                )
+            )
+        }
+    }
+    
+    # Aggiungiamo una colonna label per semplificare il grafico
+    results$label <- ifelse(
+        results$algorithm == "kmeans",
+        "kmeans (Euclidean)",
+        paste("hclust (", results$method, ")", sep = "")
+    )
+    
+    # Creazione del grafico: ASW in funzione di k, con linee separate per ciascun metodo
+    p <- ggplot(results, aes(x = k, y = ASW, color = label, group = label)) +
+        geom_line(linewidth = 1.2) +  # Al posto di size = 1.2
+        geom_point(size = 3) +
+        geom_vline(xintercept = 4, linetype = "dashed", color = "gray") +
+        geom_vline(xintercept = 5, linetype = "dashed", color = "gray") +
+        scale_x_continuous(breaks = 2:k_max) +
+        labs(
+            title = paste("Average Silhouette Width -", basename(som_file)),
+            x     = "Numero di Cluster (k)",
+            y     = "Average Silhouette Width (ASW)",
+            color = "Metodo"
+        ) +
+        # Palette viridis
+        scale_color_viridis_d(option = "viridis") +
+        # Applica il tema personalizzato
+        my_theme
+    
+    # Visualizza il grafico
+    print(p)
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#Script 1: KMEANS – Elbow e Silhouette
+# Imposta il seed per la riproducibilità
+set.seed(123)
+
+# Carica le librerie necessarie
+library(kohonen)    # Gestione dei modelli SOM
+library(factoextra) # Selezione del numero ottimale di cluster
+library(cluster)    # Metriche di clustering
+library(ggplot2)    # Composizione dei grafici
+library(stringr)    # Estrazione dei pattern nei nomi dei file
+library(viridis)    # Palette di colori viridis
+
+# Funzione per estrarre un nome abbreviato dal file SOM
+short_name_som <- function(filepath) {
+  fname <- basename(filepath)
+  parco <- str_extract(fname, "(?<=PN_)[A-Za-z]+")
+  if (is.na(parco)) { parco <- "Unknown" }
+  years <- str_extract_all(fname, "\\d{4}")[[1]]
+  if (length(years) >= 2) {
+    year1 <- years[1]
+    year2 <- years[2]
+  } else {
+    year1 <- "Unknown"
+    year2 <- "Unknown"
+  }
+  return(paste(parco, year1, year2, "SOM", sep = "_"))
+}
+
+# Definisci la cartella contenente i modelli SOM
+som_folder <- "C:/PN_Aspromonte/som_Aspromonte/"
+som_files <- list.files(som_folder, pattern = "\\.rds$", full.names = TRUE)
+
+# Inizializza le liste per raccogliere i dati dei metodi Elbow e Silhouette
+elbow_data_list <- list()
+sil_data_list   <- list()
+
+# Parametri per kmeans
+kmax     <- 6    # Numero massimo di cluster
+iter_max <- 100  # Numero massimo di iterazioni
+
+# Cicla su tutti i file SOM
+for (som_file in som_files) {
+    
+    # Estrai il nome abbreviato
+    short_label <- short_name_som(som_file)
+    cat("\nProcessing file:", short_label, "\n")
+    
+    # Carica il modello SOM ed estrai i vettori del codebook
+    som_model <- readRDS(som_file)
+    som_values <- som_model$codes[[1]]
+    
+    ### Metodo del gomito (Elbow) con kmeans
+    elbow_plot <- fviz_nbclust(
+        som_values, 
+        kmeans, 
+        method   = "wss", 
+        k.max    = kmax, 
+        iter.max = iter_max
+    ) +
+    labs(title    = paste("Elbow (Kmeans) -", short_label),
+         subtitle = "Determining optimal clusters") +
+    theme(
+        plot.title  = element_text(size = 25, face = "bold"),
+        axis.title  = element_text(size = 25),
+        axis.text   = element_text(size = 25),
+        legend.title = element_text(size = 25),
+        legend.text  = element_text(size = 25)
+    )
+    elbow_df <- elbow_plot$data
+    elbow_df$File <- short_label
+    elbow_data_list[[short_label]] <- elbow_df
+    
+    ### Metodo della silhouette con kmeans
+    sil_plot <- fviz_nbclust(
+        som_values, 
+        kmeans, 
+        method   = "silhouette", 
+        k.max    = kmax, 
+        iter.max = iter_max
+    ) +
+    labs(title    = paste("Silhouette (Kmeans) -", short_label),
+         subtitle = "Evaluating cluster cohesion") +
+    theme(
+        plot.title  = element_text(size = 25, face = "bold"),
+        axis.title  = element_text(size = 25),
+        axis.text   = element_text(size = 25),
+        legend.title = element_text(size = 25),
+        legend.text  = element_text(size = 25)
+    )
+    sil_df <- sil_plot$data
+    sil_df$File <- short_label
+    sil_data_list[[short_label]] <- sil_df
+}
+
+# Combina i dati in data frame
+elbow_data <- do.call(rbind, elbow_data_list)
+sil_data   <- do.call(rbind, sil_data_list)
+
+# Grafico combinato per il metodo Elbow (kmeans)
+p_elbow_km <- ggplot(elbow_data, aes(x = clusters, y = y, group = File, color = File)) +
+  geom_line(size = 1.2) +
+  geom_point(size = 1.2) +
+  labs(title = "Elbow (Kmeans) - Combined",
+       x = "Number of clusters",
+       y = "Total within-clusters sum of squares") +
+  theme_minimal() +
+  theme(
+    plot.title  = element_text(size = 25, face = "bold"),
+    axis.title  = element_text(size = 25),
+    axis.text   = element_text(size = 25),
+    legend.title = element_text(size = 25),
+    legend.text  = element_text(size = 25)
+  ) +
+  scale_color_viridis_d(option = "viridis")
+
+# Grafico combinato per il metodo Silhouette (kmeans)
+p_sil_km <- ggplot(sil_data, aes(x = clusters, y = y, group = File, color = File)) +
+  geom_line(size = 1.2) +
+  geom_point(size = 1.2) +
+  labs(title = "Silhouette (Kmeans) - Combined",
+       x = "Number of clusters",
+       y = "Average silhouette width") +
+  theme_minimal() +
+  theme(
+    plot.title  = element_text(size = 25, face = "bold"),
+    axis.title  = element_text(size = 25),
+    axis.text   = element_text(size = 25),
+    legend.title = element_text(size = 25),
+    legend.text  = element_text(size = 25)
+  ) +
+  scale_color_viridis_d(option = "viridis")
+
+print(p_elbow_km)
+print(p_sil_km)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#Script 2: KMEANS – Gap Statistic
+# Imposta il seed per la riproducibilità
+set.seed(123)
+
+library(kohonen)
+library(factoextra)
+library(cluster)
+library(ggplot2)
+library(stringr)
+library(viridis)
+
+short_name_som <- function(filepath) {
+  fname <- basename(filepath)
+  parco <- str_extract(fname, "(?<=PN_)[A-Za-z]+")
+  if (is.na(parco)) { parco <- "Unknown" }
+  years <- str_extract_all(fname, "\\d{4}")[[1]]
+  if (length(years) >= 2) {
+    year1 <- years[1]
+    year2 <- years[2]
+  } else {
+    year1 <- "Unknown"
+    year2 <- "Unknown"
+  }
+  return(paste(parco, year1, year2, "SOM", sep = "_"))
+}
+
+som_folder <- "C:/PN_Aspromonte/som_Aspromonte/"
+som_files <- list.files(som_folder, pattern = "\\.rds$", full.names = TRUE)
+
+gap_data_list_km <- list()
+
+kmax <- 6
+iter_max <- 100
+
+for (som_file in som_files) {
+  short_label <- short_name_som(som_file)
+  cat("\nProcessing file:", short_label, "\n")
+  som_model <- readRDS(som_file)
+  som_values <- som_model$codes[[1]]
+  
+  gap_plot <- fviz_nbclust(
+    som_values,
+    kmeans,
+    method = "gap_stat",
+    k.max = kmax,
+    nboot = 500,
+    iter.max = iter_max
+  ) +
+    labs(title = paste("Gap (Kmeans) -", short_label),
+         subtitle = "Determining optimal clusters") +
+    theme(
+      plot.title = element_text(size = 25, face = "bold"),
+      axis.title = element_text(size = 25),
+      axis.text = element_text(size = 25),
+      legend.title = element_text(size = 25),
+      legend.text = element_text(size = 25)
+    )
+  
+  gap_df <- gap_plot$data
+  gap_df$File <- short_label
+  gap_data_list_km[[short_label]] <- gap_df
+}
+
+gap_data_km <- do.call(rbind, gap_data_list_km)
+
+p_gap_km <- ggplot(gap_data_km, aes(x = clusters, y = gap, group = File, color = File)) +
+  geom_line(size = 1.2) +
+  geom_point(size = 1.2) +
+  labs(title = "Gap (Kmeans) - Combined",
+       x = "Number of clusters",
+       y = "Gap statistic") +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 25, face = "bold"),
+    axis.title = element_text(size = 25),
+    axis.text = element_text(size = 25),
+    legend.title = element_text(size = 25),
+    legend.text = element_text(size = 25)
+  ) +
+  scale_color_viridis_d(option = "viridis")
+
+print(p_gap_km)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#Script 3: HCUT (Ward.D2 Euclidean) – Elbow e Silhouette
+# Imposta il seed per la riproducibilità
+set.seed(123)
+
+library(kohonen)
+library(factoextra)
+library(cluster)
+library(ggplot2)
+library(stringr)
+library(viridis)
+
+short_name_som <- function(filepath) {
+  fname <- basename(filepath)
+  parco <- str_extract(fname, "(?<=PN_)[A-Za-z]+")
+  if (is.na(parco)) { parco <- "Unknown" }
+  years <- str_extract_all(fname, "\\d{4}")[[1]]
+  if (length(years) >= 2) {
+    year1 <- years[1]
+    year2 <- years[2]
+  } else {
+    year1 <- "Unknown"
+    year2 <- "Unknown"
+  }
+  return(paste(parco, year1, year2, "SOM", sep = "_"))
+}
+
+som_folder <- "C:/PN_Aspromonte/som_Aspromonte/"
+som_files <- list.files(som_folder, pattern = "\\.rds$", full.names = TRUE)
+
+elbow_data_list_hcut <- list()
+sil_data_list_hcut   <- list()
+
+# Parametri per hcut
+kmax_hcut <- 10  # Numero massimo di cluster (per hcut spesso si usa un valore maggiore)
+# Cicla su tutti i file SOM
+for (som_file in som_files) {
+  short_label <- short_name_som(som_file)
+  cat("\nProcessing file:", short_label, "\n")
+  som_model <- readRDS(som_file)
+  som_values <- som_model$codes[[1]]
+  
+  ### Metodo del gomito (Elbow) con hcut
+  elbow_plot <- fviz_nbclust(
+    som_values,
+    hcut,
+    method = "wss",
+    k.max = kmax_hcut,
+    hc_method = "ward.D2", 
+    hc_metric = "euclidean"
+  ) +
+    labs(title = paste("Elbow (hcut: Ward.D2/Euc) -", short_label),
+         subtitle = "Determining optimal clusters") +
+    theme(
+      plot.title = element_text(size = 25, face = "bold"),
+      axis.title = element_text(size = 25),
+      axis.text = element_text(size = 25),
+      legend.title = element_text(size = 25),
+      legend.text = element_text(size = 25)
+    )
+  
+  elbow_df <- elbow_plot$data
+  elbow_df$File <- short_label
+  elbow_data_list_hcut[[short_label]] <- elbow_df
+  
+  ### Metodo della silhouette con hcut
+  sil_plot <- fviz_nbclust(
+    som_values,
+    hcut,
+    method = "silhouette",
+    k.max = kmax_hcut,
+    hc_method = "ward.D2", 
+    hc_metric = "euclidean"
+  ) +
+    labs(title = paste("Silhouette (hcut: Ward.D2/Euc) -", short_label),
+         subtitle = "Evaluating cluster cohesion") +
+    theme(
+      plot.title = element_text(size = 25, face = "bold"),
+      axis.title = element_text(size = 25),
+      axis.text = element_text(size = 25),
+      legend.title = element_text(size = 25),
+      legend.text = element_text(size = 25)
+    )
+  
+  sil_df <- sil_plot$data
+  sil_df$File <- short_label
+  sil_data_list_hcut[[short_label]] <- sil_df
+}
+
+elbow_data_hcut <- do.call(rbind, elbow_data_list_hcut)
+sil_data_hcut <- do.call(rbind, sil_data_list_hcut)
+
+p_elbow_hcut <- ggplot(elbow_data_hcut, aes(x = clusters, y = y, group = File, color = File)) +
+  geom_line(size = 1.2) +
+  geom_point(size = 1.2) +
+  labs(title = "Elbow (hcut: Ward.D2/Euc) - Combined",
+       x = "Number of clusters",
+       y = "Total within-clusters sum of squares") +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 25, face = "bold"),
+    axis.title = element_text(size = 25),
+    axis.text = element_text(size = 25),
+    legend.title = element_text(size = 25),
+    legend.text = element_text(size = 25)
+  ) +
+  scale_color_viridis_d(option = "viridis")
+
+p_sil_hcut <- ggplot(sil_data_hcut, aes(x = clusters, y = y, group = File, color = File)) +
+  geom_line(size = 1.2) +
+  geom_point(size = 1.2) +
+  labs(title = "Silhouette (hcut: Ward.D2/Euc) - Combined",
+       x = "Number of clusters",
+       y = "Average silhouette width") +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 25, face = "bold"),
+    axis.title = element_text(size = 25),
+    axis.text = element_text(size = 25),
+    legend.title = element_text(size = 25),
+    legend.text = element_text(size = 25)
+  ) +
+  scale_color_viridis_d(option = "viridis")
+
+print(p_elbow_hcut)
+print(p_sil_hcut)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#Script 4: HCUT (Ward.D2 Euclidean) – Gap Statistic
+# Imposta il seed per la riproducibilità
+set.seed(123)
+
+library(kohonen)
+library(factoextra)
+library(cluster)
+library(ggplot2)
+library(stringr)
+library(viridis)
+
+short_name_som <- function(filepath) {
+  fname <- basename(filepath)
+  parco <- str_extract(fname, "(?<=PN_)[A-Za-z]+")
+  if (is.na(parco)) { parco <- "Unknown" }
+  years <- str_extract_all(fname, "\\d{4}")[[1]]
+  if (length(years) >= 2) {
+    year1 <- years[1]
+    year2 <- years[2]
+  } else {
+    year1 <- "Unknown"
+    year2 <- "Unknown"
+  }
+  return(paste(parco, year1, year2, "SOM", sep = "_"))
+}
+
+som_folder <- "C:/PN_Aspromonte/som_Aspromonte/"
+som_files <- list.files(som_folder, pattern = "\\.rds$", full.names = TRUE)
+
+gap_data_list_hcut <- list()
+
+kmax_hcut <- 10  # Numero massimo di cluster per hcut
+# Cicla su tutti i file SOM
+for (som_file in som_files) {
+  short_label <- short_name_som(som_file)
+  cat("\nProcessing file:", short_label, "\n")
+  som_model <- readRDS(som_file)
+  som_values <- som_model$codes[[1]]
+  
+  gap_plot_hcut <- fviz_nbclust(
+    som_values,
+    hcut,
+    method = "gap_stat",
+    k.max = kmax_hcut,
+    nboot = 500,
+    hc_method = "ward.D2",
+    hc_metric = "euclidean"
+  ) +
+    labs(title = paste("Gap (hcut: Ward.D2/Euc) -", short_label),
+         subtitle = "Determining optimal clusters") +
+    theme(
+      plot.title = element_text(size = 25, face = "bold"),
+      axis.title = element_text(size = 25),
+      axis.text = element_text(size = 25),
+      legend.title = element_text(size = 25),
+      legend.text = element_text(size = 25)
+    )
+  
+  gap_df_hcut <- gap_plot_hcut$data
+  gap_df_hcut$File <- short_label
+  gap_data_list_hcut[[short_label]] <- gap_df_hcut
+}
+
+gap_data_hcut <- do.call(rbind, gap_data_list_hcut)
+
+p_gap_hcut <- ggplot(gap_data_hcut, aes(x = clusters, y = gap, group = File, color = File)) +
+  geom_line(size = 1.2) +
+  geom_point(size = 1.2) +
+  labs(title = "Gap (hcut: Ward.D2/Euc) - Combined",
+       x = "Number of clusters",
+       y = "Gap statistic") +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 25, face = "bold"),
+    axis.title = element_text(size = 25),
+    axis.text = element_text(size = 25),
+    legend.title = element_text(size = 25),
+    legend.text = element_text(size = 25)
+  ) +
+  scale_color_viridis_d(option = "viridis")
+
+print(p_gap_hcut)
