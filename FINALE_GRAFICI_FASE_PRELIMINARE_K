@@ -6,8 +6,26 @@ library(cluster)    # Per silhouette() e funzioni di clustering
 library(ggplot2)    # Per la creazione dei grafici
 library(dplyr)      # Per operazioni sui data frame
 library(viridis)    # Per la palette viridis
-set.seed(123)
+library(stringr)    # Per l'estrazione di parti di stringhe
 
+# Funzione per estrarre il titolo breve dal nome del file
+short_name_som <- function(filepath) {
+    fname <- basename(filepath)
+    parco <- str_extract(fname, "(?<=PN_)[A-Za-z]+")
+    if (is.na(parco)) { parco <- "Unknown" }
+    years <- str_extract_all(fname, "\\d{4}")[[1]]
+    if (length(years) >= 2) {
+        year1 <- years[1]
+        year2 <- years[2]
+    } else {
+        year1 <- "Unknown"
+        year2 <- "Unknown"
+    }
+    return(paste(parco, year1, year2, "SOM", sep = "_"))
+}
+
+# Imposta la working directory (regola il percorso secondo le tue necessità)
+setwd("C:/PN_Sila")
 
 # Definizione della cartella contenente i modelli SOM
 som_folder <- "C:/PN_Aspromonte/som_Aspromonte/"
@@ -105,11 +123,11 @@ for (som_file in som_files) {
     p <- ggplot(results, aes(x = k, y = ASW, color = label, group = label)) +
         geom_line(linewidth = 1.2) +  # Al posto di size = 1.2
         geom_point(size = 3) +
-        geom_vline(xintercept = 4, linetype = "dashed", color = "gray") +
-        geom_vline(xintercept = 5, linetype = "dashed", color = "gray") +
+        #geom_vline(xintercept = 4, linetype = "dashed", color = "gray") +
+        #geom_vline(xintercept = 5, linetype = "dashed", color = "gray") +
         scale_x_continuous(breaks = 2:k_max) +
         labs(
-            title = paste("Average Silhouette Width -", basename(som_file)),
+            title = paste("ASW -", short_name_som(som_file)),
             x     = "Numero di Cluster (k)",
             y     = "Average Silhouette Width (ASW)",
             color = "Metodo"
@@ -122,8 +140,6 @@ for (som_file in som_files) {
     # Visualizza il grafico
     print(p)
 }
-
-
 
 
 
