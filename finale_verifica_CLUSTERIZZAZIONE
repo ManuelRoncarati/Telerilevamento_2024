@@ -1,8 +1,28 @@
-# PCA sui Dati Grezzi (Pre‑SOM)
+# ================================================
+# Codice 1: PCA sui Dati Grezzi (Pre‑SOM)
+# ================================================
+
 # Carica le librerie necessarie
 library(terra)
 library(factoextra)
 library(ggplot2)
+library(stringr)
+
+# Funzione per estrarre il titolo breve dal nome del file
+short_name_som <- function(filepath) {
+  fname <- basename(filepath)
+  parco <- str_extract(fname, "(?<=PN_)[A-Za-z]+")
+  if (is.na(parco)) { parco <- "Unknown" }
+  years <- str_extract_all(fname, "\\d{4}")[[1]]
+  if (length(years) >= 2) {
+    year1 <- years[1]
+    year2 <- years[2]
+  } else {
+    year1 <- "Unknown"
+    year2 <- "Unknown"
+  }
+  return(paste(parco, year1, year2, "SOM", sep = "_"))
+}
 
 # Specifica la cartella contenente le immagini .tif
 image_dir <- "C:/PN_Sila"
@@ -10,7 +30,7 @@ image_files <- list.files(path = image_dir, pattern = "\\.tif$", full.names = TR
 
 # Seleziona il primo file .tif trovato
 if (length(image_files) == 0) {
-  stop("Nessuna immagine .tif trovata nella cartella.")
+    stop("Nessuna immagine .tif trovata nella cartella.")
 }
 first_image <- image_files[1]
 
@@ -34,7 +54,7 @@ cleaned_matrix <- matrix_values[complete.cases(matrix_values), ]
 
 # Funzione per la normalizzazione Min-Max
 normalize <- function(x) {
-  (x - min(x, na.rm = TRUE)) / (max(x, na.rm = TRUE) - min(x, na.rm = TRUE))
+    (x - min(x, na.rm = TRUE)) / (max(x, na.rm = TRUE) - min(x, na.rm = TRUE))
 }
 
 # Normalizza ogni colonna dell'intero dataset
@@ -43,51 +63,45 @@ normalized_matrix <- apply(cleaned_matrix, 2, normalize)
 # Esegue la PCA sull'intero set di dati normalizzati
 pca_raw <- prcomp(normalized_matrix)
 
-# Visualizza il plot PCA sui dati reali (Pre-SOM) con il tema personalizzato
-p1 <- fviz_pca_ind(pca_raw, 
-             title = "PCA - Raw Data",
-             geom = "point", 
-             ggtheme = theme_classic()) +
+# Tema personalizzato per i grafici
+my_theme <- theme_classic() +
     theme(
-        plot.title = element_text(size = 25, face = "bold"),
-        axis.title = element_text(size = 25),
-        axis.text = element_text(size = 25)
+        plot.title = element_text(size = 35, face = "bold"),
+        axis.title = element_text(size = 35),
+        axis.text  = element_text(size = 35)
     )
+
+# Visualizza il plot PCA sui dati reali (Pre‑SOM)
+p1 <- fviz_pca_ind(pca_raw, 
+                   title = paste("PCA - Raw Data -", short_name_som(first_image)),
+                   geom = "point", 
+                   ggtheme = my_theme)
 print(p1)
 
 # Genera un dataset casuale con la stessa struttura dei dati reali
 random_df <- as.data.frame(apply(normalized_matrix, 2, function(x) {
-  runif(length(x), min = min(x), max = max(x))
+    runif(length(x), min = min(x), max = max(x))
 }))
 pca_random <- prcomp(random_df)
 
-# Visualizza il plot PCA sul dataset casuale (Pre-SOM) con il tema personalizzato
+# Visualizza il plot PCA sul dataset casuale (Pre‑SOM)
 p2 <- fviz_pca_ind(pca_random, 
-             title = "PCA - Random Data (Raw)",
-             geom = "point", 
-             ggtheme = theme_classic()) +
-    theme(
-        plot.title = element_text(size = 25, face = "bold"),
-        axis.title = element_text(size = 25),
-        axis.text = element_text(size = 25)
-    )
+                   title = paste("PCA - Random Data (Raw) -", short_name_som(first_image)),
+                   geom = "point", 
+                   ggtheme = my_theme)
 print(p2)
 
+# ================================================
+# Codice 2: PCA sui Dati Elaborati tramite SOM
+# ================================================
 
-
-
-
-
-
-
-
-
-
-
-## Carica le librerie necessarie
+# Carica le librerie necessarie
 library(kohonen)    # Per la gestione delle Self-Organizing Maps
 library(factoextra) # Per la visualizzazione dei risultati della PCA
 library(ggplot2)
+library(stringr)
+
+# La funzione short_name_som() è già definita sopra
 
 # Specifica la cartella contenente i modelli SOM
 som_folder <- "C:/PN_Sila/som_Sila"
@@ -95,7 +109,7 @@ som_files <- list.files(path = som_folder, pattern = "_som_model\\.rds$", full.n
 
 # Seleziona il primo file di modello SOM trovato
 if (length(som_files) == 0) {
-  stop("Nessun file di modello SOM trovato nella cartella.")
+    stop("Nessun file di modello SOM trovato nella cartella.")
 }
 first_som_file <- som_files[1]
 
@@ -108,34 +122,32 @@ som_values <- som_model$codes[[1]]
 # Esegue la PCA sull'intero set di dati della SOM
 pca_som <- prcomp(som_values)
 
-# Visualizza il plot PCA sui dati elaborati tramite SOM con il tema personalizzato
-p3 <- fviz_pca_ind(pca_som, 
-             title = "PCA - SOM Data",
-             geom = "point", 
-             ggtheme = theme_classic()) +
+# Tema personalizzato per i grafici (lo stesso usato in precedenza)
+my_theme <- theme_classic() +
     theme(
-        plot.title = element_text(size = 25, face = "bold"),
-        axis.title = element_text(size = 25),
-        axis.text = element_text(size = 25)
+        plot.title = element_text(size = 35, face = "bold"),
+        axis.title = element_text(size = 35),
+        axis.text  = element_text(size = 35)
     )
+
+# Visualizza il plot PCA sui dati elaborati tramite SOM
+p3 <- fviz_pca_ind(pca_som, 
+                   title = paste("PCA - SOM Data -", short_name_som(first_som_file)),
+                   geom = "point", 
+                   ggtheme = my_theme)
 print(p3)
 
 # Genera un dataset casuale con la stessa struttura dei dati della SOM
 random_df_som <- as.data.frame(apply(som_values, 2, function(x) {
-  runif(length(x), min = min(x), max = max(x))
+    runif(length(x), min = min(x), max = max(x))
 }))
 pca_random_som <- prcomp(random_df_som)
 
-# Visualizza il plot PCA sul dataset casuale (SOM) con il tema personalizzato
+# Visualizza il plot PCA sul dataset casuale (SOM)
 p4 <- fviz_pca_ind(pca_random_som, 
-             title = "PCA - Random Data (SOM)",
-             geom = "point", 
-             ggtheme = theme_classic()) +
-    theme(
-        plot.title = element_text(size = 25, face = "bold"),
-        axis.title = element_text(size = 25),
-        axis.text = element_text(size = 25)
-    )
+                   title = paste("PCA - Random Data (SOM) -", short_name_som(first_som_file)),
+                   geom = "point", 
+                   ggtheme = my_theme)
 print(p4)
 
 
