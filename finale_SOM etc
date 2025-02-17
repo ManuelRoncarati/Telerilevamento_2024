@@ -237,12 +237,14 @@ cat("\nRisultati salvati in formato Excel:", output_excel_path, "\n")
 
 
 #clusterboot semplice semplice
+#clusterboot semplice semplice
 # ====================================================
 # Sezione 1: Caricamento delle librerie
 # ====================================================
 library(kohonen)    # Per leggere i modelli SOM
 library(fpc)        # Per Clusterboot
 library(tibble)     # Per organizzare i risultati
+library(dplyr)      # Per bind_rows
 library(openxlsx)   # Per salvare i risultati in Excel
 
 # ====================================================
@@ -279,7 +281,11 @@ results <- lapply(rds_files, function(rds_path) {
     year_range <- if (length(dates) == 2) paste(dates[1], "-", dates[2]) else "range non trovato"
 
     # Ritorna il risultato
-    tibble(File = basename(rds_path), Year_Range = year_range, Cluster_Stability = cluster_stability)
+    tibble(
+      File = basename(rds_path), 
+      Year_Range = year_range, 
+      Cluster_Stability = cluster_stability
+    )
 })
 
 # ====================================================
@@ -294,4 +300,3 @@ print(results_summary)
 output_excel_path <- "C:/Aspromonte/clusterboot_results.xlsx"
 write.xlsx(results_summary, file = output_excel_path, rowNames = FALSE)
 cat("\nRisultati salvati in formato Excel:", output_excel_path, "\n")
-
