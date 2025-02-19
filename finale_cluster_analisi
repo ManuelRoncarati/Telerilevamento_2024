@@ -569,7 +569,7 @@ for (tif_path in tif_files) {
     som_values <- som_model$codes[[1]]  # Estrai i codici SOM
     
     # Set.seed per garantire risultati riproducibili
-    set.seed(1234)  
+    set.seed(123)  
     
     # Clustering con K-means
     optimal_clusters <- 5  # Numero di cluster
@@ -604,7 +604,7 @@ for (tif_path in tif_files) {
     cat("Raster classificato salvato in:", output_file, "\n")
     
     # Creazione della mappa Leaflet con legenda formattata
-    col_pal <- viridisLite::turbo(length(area_totale$value))
+    col_pal <- viridisLite::viridis(length(area_totale$value))
     
     color_pal <- colorNumeric(
         palette = col_pal,
