@@ -191,3 +191,108 @@ final_table_aws <- aws_wide %>%
 # Salva il risultato in un file Excel
 write.xlsx(final_table_aws, file = "AWS_Combined.xlsx")
 cat("I risultati dell'indice AWS sono stati salvati in 'AWS_Combined.xlsx'\n")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#DUNN PER K TRA 3 E 6
+# Caricamento delle librerie necessarie
+library(kohonen)    # Per la Self-Organizing Map
+library(cluster)    # Per metriche di clustering
+library(clValid)    # Per il calcolo dell'indice di Dunn
+library(ggplot2)    # Per la composizione dei grafici finali
+library(stringr)    # Per l'estrazione di pattern dalle stringhe
+
+# Funzione per generare un nome breve a partire dal filepath
+short_name_som <- function(filepath) {
+    fname <- basename(filepath)
+    parco <- str_extract(fname, "(?<=PN_)[A-Za-z]+")
+    if (is.na(parco)) { parco <- "Unknown" }
+    years <- str_extract_all(fname, "\\d{4}")[[1]]
+    if (length(years) >= 2) {
+        year1 <- years[1]
+        year2 <- years[2]
+    } else {
+        year1 <- "Unknown"
+        year2 <- "Unknown"
+    }
+    return(paste(parco, year1, year2, "SOM", sep = "_"))
+}
+
+# Definizione della cartella contenente i modelli SOM
+som_folder <- "C:/PN_Aspromonte/som_Aspromonte/"
+
+# Ottieni tutti i file .rds presenti nella cartella
+som_files <- list.files(som_folder, pattern = "\\.rds$", full.names = TRUE)
+
+# Inizializza la lista per raccogliere i dati dell'indice di Dunn
+dunn_data_list <- list()
+
+# Parametri aggiuntivi per kmeans
+kmax     <- 6   # Limite massimo di cluster
+iter_max <- 100 # Numero massimo di iterazioni
+
+# Ciclo su tutti i file SOM presenti nella cartella
+for (som_file in som_files) {
+    
+    # Stampa il nome del file in analisi
+    cat("\nAnalizzando il file:", som_file, "\n")
+    
+    # Caricamento del modello SOM
+    som_model <- readRDS(som_file)
+    
+    # Estrazione dei codici della SOM (matrice dei centroidi)
+    som_values <- som_model$codes[[1]]
+    
+    # Creazione di un data frame per memorizzare i valori di Dunn
+    dunn_results <- data.frame(clusters = integer(), dunn_index = numeric())
+    
+    for (k in 3:kmax) {
+        set.seed(123)  # Per risultati riproducibili
+        kmeans_result <- kmeans(som_values, centers = k, iter.max = iter_max)
+        dunn_index <- dunn(dist(som_values), kmeans_result$cluster)
+        dunn_results <- rbind(dunn_results, data.frame(clusters = k, dunn_index = dunn_index))
+    }
+    
+    # Assegna il nome breve usando la funzione short_name_som()
+    dunn_results$File <- short_name_som(som_file)
+    
+    # Salva i risultati nella lista (utilizzando il nome breve come chiave)
+    dunn_data_list[[short_name_som(som_file)]] <- dunn_results
+}
+
+# Combina i dati raccolti in un unico data frame
+dunn_data <- do.call(rbind, dunn_data_list)
+
+# Creazione del grafico finale combinato per l'indice di Dunn con i parametri richiesti
+p_dunn <- ggplot(dunn_data, aes(x = clusters, y = dunn_index, group = File, color = File)) +
+    geom_line(size = 1.5) +
+    geom_point(size = 5) +
+    labs(title = "Dunn Index - Combinato",
+         x     = "Numero di cluster",
+         y     = "Dunn Index Value") +
+    theme_minimal() +
+    theme(
+        plot.title   = element_text(size = 35, face = "bold"),
+        axis.title   = element_text(size = 35),
+        axis.text    = element_text(size = 35),
+        legend.title = element_text(size = 35),
+        legend.text  = element_text(size = 35)
+    ) +
+    scale_color_viridis_d(option = "viridis")
+
+# Visualizzazione del grafico
+print(p_dunn)
+
