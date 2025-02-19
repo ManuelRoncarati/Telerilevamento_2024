@@ -296,3 +296,158 @@ p_dunn <- ggplot(dunn_data, aes(x = clusters, y = dunn_index, group = File, colo
 # Visualizzazione del grafico
 print(p_dunn)
 
+
+
+
+
+
+
+
+
+#AWS PER OGNI CLUSTER E AWS TOTALE SILE 3 E 5
+# Caricamento delle librerie necessarie
+library(kohonen)      # Per la Self-Organizing Map
+library(cluster)      # Per kmeans(), silhouette(), hclust(), cutree()
+library(factoextra)   # Per fviz_silhouette()
+library(ggplot2)      # Per ggtheme() e ggplot
+library(gridExtra)    # Per grid.arrange() e tableGrob()
+library(dplyr)        # Per operazioni sui data frame
+library(tools)        # Per file_path_sans_ext()
+library(grid)         # Per grid.draw()
+
+# Imposta la working directory
+setwd("C:/PN_Sila")
+
+# Imposta la cartella contenente i modelli SOM (Sila)
+som_folder <- "C:/PN_Sila/som_Sila/"
+
+# Crea le cartelle di output nella working directory se non esistono
+output_dir_km <- file.path("kmeans_plots")
+if (!dir.exists(output_dir_km)) {
+  dir.create(output_dir_km, recursive = TRUE)
+}
+
+output_dir_hc <- file.path("hclust_plots")
+if (!dir.exists(output_dir_hc)) {
+  dir.create(output_dir_hc, recursive = TRUE)
+}
+
+# Ottieni tutti i file .rds presenti nella cartella dei modelli SOM
+som_files <- list.files(som_folder, pattern = "\\.rds$", full.names = TRUE)
+if (length(som_files) == 0) {
+  stop("Nessun file .rds trovato nella cartella!")
+}
+
+# Valori di K da testare: solo 3 e 5
+ks <- c(3, 5)
+
+###############################
+## FUNZIONE AUSILIARIA per creare la tabella delle informazioni di silhouette
+## La tabella include una colonna "Overall" e poi una colonna per ogni cluster.
+## Le righe riportano "Avg Silhouette" e "Cluster Size".
+###############################
+creaTabellaSilinfo <- function(silinfo, cluster_sizes) {
+  clusters <- names(silinfo$clus.avg.widths)
+  overall_avg <- round(silinfo$avg.width, 3)
+  total_size <- sum(cluster_sizes)
+  
+  df_info <- data.frame(
+    Metric = c("Avg Silhouette", "Cluster Size"),
+    Overall = c(overall_avg, total_size),
+    stringsAsFactors = FALSE
+  )
+  
+  for(cl in clusters) {
+    avg_sil <- round(silinfo$clus.avg.widths[cl], 3)
+    size_val <- cluster_sizes[as.numeric(cl)]
+    df_info[[cl]] <- c(avg_sil, size_val)
+  }
+  rownames(df_info) <- df_info$Metric
+  df_info$Metric <- NULL
+  tableGrob(df_info, rows = rownames(df_info))
+}
+
+###############################
+## Elaborazione dei modelli SOM per Sila
+###############################
+for(som_file in som_files) {
+  
+  cat("Processando il file:", som_file, "\n")
+  
+  # Carica il modello SOM ed estrai i codici (centroidi)
+  som_model <- readRDS(som_file)
+  som_values <- som_model$codes[[1]]
+  
+  # Calcola la matrice delle distanze Euclidea (usata in entrambi gli algoritmi)
+  dist_euclidean <- dist(som_values, method = "euclidean")
+  
+  ###############################
+  ## 1. K-MEANS (distanza Euclidea)
+  ###############################
+  km_composite_list <- list()
+  for (k in ks) {
+    km.res <- kmeans(som_values, centers = k, iter.max = 100, nstart = 20)
+    km.sil <- silhouette(km.res$cluster, dist_euclidean)
+    
+    p <- fviz_silhouette(km.sil, palette = "jco", 
+                         ggtheme = theme_classic(), 
+                         print.summary = FALSE) +
+      ggtitle(paste("K-means (K =", k, ")"))
+    
+    silinfo <- list(
+      avg.width = mean(km.sil[, "sil_width"]),
+      clus.avg.widths = tapply(km.sil[, "sil_width"], km.res$cluster, mean)
+    )
+    
+    tbl <- creaTabellaSilinfo(silinfo, km.res$size)
+    
+    composite <- grid.arrange(p, tbl, ncol = 1, heights = c(3, 1))
+    km_composite_list[[paste0("K=", k)]] <- composite
+  }
+  
+  final_km_plot <- grid.arrange(grobs = km_composite_list, ncol = 2,
+                                top = paste("K-means: Silhouette Plots e Informazioni (K = 3 e K = 5)\n", basename(som_file)))
+  
+  ###############################
+  ## 2. CLUSTERING GERARCHICO (Ward.D2)
+  ###############################
+  hc.res <- hclust(dist_euclidean, method = "ward.D2")
+  hc_composite_list <- list()
+  for (k in ks) {
+    hc.clusters <- cutree(hc.res, k = k)
+    hc.sil <- silhouette(hc.clusters, dist_euclidean)
+    
+    p <- fviz_silhouette(hc.sil, palette = "jco", 
+                         ggtheme = theme_classic(), 
+                         print.summary = FALSE) +
+      ggtitle(paste("HClust (Ward.D2, K =", k, ")"))
+    
+    avg_width <- mean(hc.sil[, "sil_width"])
+    clus_avg <- tapply(hc.sil[, "sil_width"], hc.clusters, mean)
+    cluster_sizes <- as.numeric(table(hc.clusters))
+    
+    silinfo <- list(avg.width = avg_width, clus.avg.widths = clus_avg)
+    
+    tbl <- creaTabellaSilinfo(silinfo, cluster_sizes)
+    
+    composite <- grid.arrange(p, tbl, ncol = 1, heights = c(3, 1))
+    hc_composite_list[[paste0("K=", k)]] <- composite
+  }
+  
+  final_hc_plot <- grid.arrange(grobs = hc_composite_list, ncol = 2,
+                                top = paste("HClust (Ward.D2): Silhouette Plots e Informazioni (K = 3 e K = 5)\n", basename(som_file)))
+  
+  ###############################
+  ## Visualizzazione dei grafici finali
+  ###############################
+  # Visualizza il plot K-means
+  grid::grid.newpage()
+  grid::grid.draw(final_km_plot)
+  
+  # Visualizza il plot HClust
+  grid::grid.newpage()
+  grid::grid.draw(final_hc_plot)
+  
+  cat("Plot K-means e HClust visualizzati per il file:", som_file, "\n")
+}
+
