@@ -219,3 +219,88 @@ grafico <- ggplot(df, aes(x = LULCC, y = Area_km2, fill = Date)) +
 # 📌 Mostrare il grafico
 print(grafico)
 
+
+
+
+
+
+
+#STACKED AREA CORRETTO PER SILA
+#stacked area
+
+# Caricare le librerie necessarie
+library(ggplot2)
+library(dplyr)
+library(viridis)
+library(readxl)
+library(lubridate)
+library(stringr)  # Per le funzioni di manipolazione stringhe
+
+# Specificare il percorso del file Excel
+file_path <- "C:/PN_Sila/cluster_areas_5_cluster.xlsx"
+
+# Verificare che il file esista
+if(!file.exists(file_path)){
+    stop(paste("Il file", file_path, "non esiste nella directory corrente."))
+}
+
+# Caricare i dati dal foglio "Sheet 1"
+df <- read_excel(file_path, sheet = "Sheet 1")
+
+# Verificare i nomi delle colonne
+required_columns <- c("Date", "LULCC", "Area_km2")
+missing_columns <- setdiff(required_columns, names(df))
+if(length(missing_columns) > 0){
+    stop(paste("Le seguenti colonne mancanti nel file Excel:", 
+               paste(missing_columns, collapse = ", ")))
+}
+
+# --- CORREZIONE: normalizziamo la colonna LULCC per unificare "acque" ---
+df <- df %>%
+  mutate(
+    LULCC = tolower(LULCC),           # tutto in minuscolo
+    LULCC = str_trim(LULCC),          # rimuove spazi iniziali/finali
+    # se ci sono più forme di "acque" (es. "acque interne", "Acque costiere", ecc.)
+    # puoi adattare la regex. Ad es. ^acque
+    LULCC = ifelse(str_detect(LULCC, "^acque"), "acque", LULCC)
+  )
+
+# Estrarre l'anno dalla colonna Date (assumendo che Date sia una vera data o in formato riconoscibile)
+# Se in realtà la colonna ha formati tipo "1984-1988", questa parte andrebbe adeguata.
+df <- df %>%
+  mutate(Year = year(as.Date(Date, format = "%Y-%m-%d")))
+
+# Convertire Area_km2 in numerico se necessario
+df <- df %>%
+  mutate(Area_km2 = as.numeric(Area_km2))
+
+# Rimuovere eventuali valori mancanti nelle colonne chiave
+df_clean <- df %>%
+  filter(!is.na(Year) & !is.na(LULCC) & !is.na(Area_km2))
+
+# Aggregare i dati per anno e categoria di uso del suolo
+df_area <- df_clean %>%
+  group_by(Year, LULCC) %>%
+  summarise(Area_km2 = sum(Area_km2), .groups = "drop")
+
+# Creare il grafico stacked area
+p <- ggplot(df_area, aes(x = Year, y = Area_km2, fill = LULCC)) + 
+    geom_area(alpha = 0.8, size = 0.5, colour = "black") +
+    scale_fill_viridis(discrete = TRUE, option = "D") +
+    theme_minimal() + 
+    ggtitle("Cambiamenti nell'uso del suolo nel tempo") +
+    labs(x = "Anno", y = "Area (km²)", fill = "Uso del suolo") +
+    theme(
+        legend.position = "right",
+        text = element_text(size = 12),
+        plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+        axis.title = element_text(size = 14),
+        axis.text = element_text(size = 12)
+    )
+
+# Mostrare il grafico
+print(p)
+
+# Salvare il grafico
+ggsave("cambiamenti_uso_suolo.png", plot = p, width = 10, height = 6)
+
