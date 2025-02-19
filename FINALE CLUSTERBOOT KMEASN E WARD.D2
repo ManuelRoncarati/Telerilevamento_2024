@@ -1,0 +1,139 @@
+#clusterboot con K-means
+# ====================================================
+# Sezione 1: Caricamento delle librerie
+# ====================================================
+library(kohonen)    # Per leggere i modelli SOM
+library(fpc)        # Per Clusterboot
+library(tibble)     # Per organizzare i risultati
+library(dplyr)      # Per bind_rows
+library(openxlsx)   # Per salvare i risultati in Excel
+
+# Impostazione del seed per la riproducibilità
+set.seed(123)
+
+# ====================================================
+# Sezione 2: Impostazioni iniziali
+# ====================================================
+rds_dir <- "C:/PN_Abruzzo_L_M/som_Abruzzo_L_M"  # Directory dei file SOM
+rds_files <- list.files(path = rds_dir, pattern = "\\.rds$", full.names = TRUE)  # Trova i file RDS
+optimal_clusters <- 3  # Numero di cluster predefinito
+
+# ====================================================
+# Sezione 3: Clusterboot per ogni SOM con K-means
+# ====================================================
+results <- lapply(rds_files, function(rds_path) {
+    cat("\nProcesso il file:", basename(rds_path), "\n")
+    som_model <- readRDS(rds_path)               # Carica il modello SOM
+    som_values <- som_model$codes[[1]]           # Estrai i codebook vectors
+
+    # Esegui Clusterboot utilizzando kmeansCBI
+    clusterboot_result <- clusterboot(
+        data = som_values, 
+        B = 1000, 
+        clustermethod = kmeansCBI, 
+        bootmethod = "boot", 
+        dissolution = 0.5, 
+        recover = 0.75, 
+        k = optimal_clusters
+    )
+    
+    # Estrai la stabilità dei cluster
+    cluster_stability <- clusterboot_result$bootmean
+    
+    # Estrai il range di anni dal nome del file
+    dates <- regmatches(basename(rds_path), gregexpr("\\d{4}", basename(rds_path)))[[1]]
+    year_range <- if (length(dates) == 2) paste(dates[1], "-", dates[2]) else "range non trovato"
+    
+    # Ritorna il risultato come tibble
+    tibble(
+        File = basename(rds_path), 
+        Year_Range = year_range, 
+        Cluster_Stability = cluster_stability
+    )
+})
+
+# ====================================================
+# Sezione 4: Risultati finali e salvataggio
+# ====================================================
+results_summary <- bind_rows(results)  # Combina i risultati in un'unica tabella
+print(results_summary)
+
+output_excel_path <- "C:/PN_Abruzzo_L_M/clusterboot_results_K_3_kmeans.xlsx"
+write.xlsx(results_summary, file = output_excel_path, rowNames = FALSE)
+cat("\nRisultati salvati in formato Excel:", output_excel_path, "\n")
+
+
+
+
+
+
+
+
+
+
+
+
+#clusterboot con Hclust (Ward.D2)
+# ====================================================
+# Sezione 1: Caricamento delle librerie
+# ====================================================
+library(kohonen)    # Per leggere i modelli SOM
+library(fpc)        # Per Clusterboot
+library(tibble)     # Per organizzare i risultati
+library(dplyr)      # Per bind_rows
+library(openxlsx)   # Per salvare i risultati in Excel
+
+# Impostazione del seed per la riproducibilità
+set.seed(123)
+
+# ====================================================
+# Sezione 2: Impostazioni iniziali
+# ====================================================
+rds_dir <- "C:/PN_Abruzzo_L_M/som_Abruzzo_L_M"  # Directory dei file SOM
+rds_files <- list.files(path = rds_dir, pattern = "\\.rds$", full.names = TRUE)  # Trova i file RDS
+optimal_clusters <- 3  # Numero di cluster predefinito
+
+# ====================================================
+# Sezione 3: Clusterboot per ogni SOM con Hclust (Ward.D2)
+# ====================================================
+results <- lapply(rds_files, function(rds_path) {
+    cat("\nProcesso il file:", basename(rds_path), "\n")
+    som_model <- readRDS(rds_path)              # Carica il modello SOM
+    som_values <- som_model$codes[[1]]          # Estrai i codebook vectors
+
+    # Esegui Clusterboot utilizzando hclustCBI con il metodo Ward.D2
+    clusterboot_result <- clusterboot(
+        data = som_values, 
+        B = 1000, 
+        clustermethod = hclustCBI, 
+        method = "ward.D2", 
+        bootmethod = "boot", 
+        dissolution = 0.5, 
+        recover = 0.75, 
+        k = optimal_clusters
+    )
+    
+    # Estrai la stabilità dei cluster
+    cluster_stability <- clusterboot_result$bootmean
+    
+    # Estrai il range di anni dal nome del file
+    dates <- regmatches(basename(rds_path), gregexpr("\\d{4}", basename(rds_path)))[[1]]
+    year_range <- if (length(dates) == 2) paste(dates[1], "-", dates[2]) else "range non trovato"
+    
+    # Ritorna il risultato come tibble
+    tibble(
+        File = basename(rds_path), 
+        Year_Range = year_range, 
+        Cluster_Stability = cluster_stability
+    )
+})
+
+# ====================================================
+# Sezione 4: Risultati finali e salvataggio
+# ====================================================
+results_summary <- bind_rows(results)  # Combina i risultati in un'unica tabella
+print(results_summary)
+
+output_excel_path <- "C:/PN_Abruzzo_L_M/clusterboot_results_K_3_wardD2.xlsx"
+write.xlsx(results_summary, file = output_excel_path, rowNames = FALSE)
+cat("\nRisultati salvati in formato Excel:", output_excel_path, "\n")
