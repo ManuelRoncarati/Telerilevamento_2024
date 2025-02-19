@@ -1,0 +1,193 @@
+# Caricamento delle librerie necessarie
+library(kohonen)    # Per la Self-Organizing Map
+library(cluster)    # Per kmeans() e silhouette()
+library(clValid)    # Per il calcolo dell'indice di Dunn
+library(stringr)    # Per l'estrazione di pattern dalle stringhe
+library(tidyr)      # Per la trasformazione in formato wide
+library(dplyr)      # Per la manipolazione dei data frame
+library(openxlsx)   # Per salvare i dati in Excel
+
+# Funzione per generare un nome breve a partire dal filepath
+short_name_som <- function(filepath) {
+  fname <- basename(filepath)
+  parco <- str_extract(fname, "(?<=PN_)[A-Za-z]+")
+  if (is.na(parco)) { parco <- "Unknown" }
+  years <- str_extract_all(fname, "\\d{4}")[[1]]
+  if (length(years) >= 2) {
+    year1 <- years[1]
+    year2 <- years[2]
+  } else {
+    year1 <- "Unknown"
+    year2 <- "Unknown"
+  }
+  return(paste(parco, year1, year2, "SOM", sep = "_"))
+}
+
+# Funzione per estrarre il nome del parco (la parte subito dopo "PN_")
+extract_parco <- function(filepath) {
+  fname <- basename(filepath)
+  parco <- str_extract(fname, "(?<=PN_)[A-Za-z]+")
+  if (is.na(parco)) { parco <- "Unknown" }
+  return(parco)
+}
+
+# Ricerca delle cartelle dei parchi (in "C:/") che iniziano con "PN_"
+pn_folders <- list.dirs("C:/", recursive = FALSE, full.names = TRUE)
+pn_folders <- pn_folders[grepl("^PN_", basename(pn_folders))]
+
+# Inizializza la lista per raccogliere i dati dell'indice Dunn
+dunn_data_list <- list()
+kmax <- 6
+iter_max <- 100
+
+# Itera su ogni cartella (parco)
+for (pn_folder in pn_folders) {
+  som_files <- list.files(pn_folder, pattern = "\\.rds$", full.names = TRUE, recursive = TRUE)
+  if (length(som_files) == 0) next
+  
+  # Itera su ogni file SOM nel parco
+  for (som_file in som_files) {
+    cat("Analizzando il file:", som_file, "\n")
+    som_model <- readRDS(som_file)
+    som_values <- som_model$codes[[1]]
+    
+    # Calcola la matrice delle distanze euclidea
+    dist_mat <- dist(som_values, method = "euclidean")
+    
+    # Calcola l'indice Dunn per valori di K da 3 a 6
+    dunn_results <- data.frame(clusters = integer(), dunn_index = numeric(), stringsAsFactors = FALSE)
+    for (k in 3:kmax) {
+      set.seed(123)
+      km_res <- kmeans(som_values, centers = k, iter.max = iter_max)  # nstart rimosso
+      dunn_index <- dunn(dist(som_values), km_res$cluster)
+      dunn_results <- rbind(dunn_results, data.frame(clusters = k, dunn_index = dunn_index))
+    }
+    
+    dunn_results$File  <- short_name_som(som_file)
+    dunn_results$Parco <- extract_parco(som_file)
+    
+    dunn_data_list[[ short_name_som(som_file) ]] <- dunn_results
+  }
+}
+
+# Combina i risultati in un unico data frame
+dunn_data <- do.call(rbind, dunn_data_list)
+
+# Trasforma i dati in formato wide: una riga per file e colonne per K=3,4,5,6
+dunn_wide <- pivot_wider(dunn_data, 
+                         id_cols = c(File, Parco), 
+                         names_from = clusters, 
+                         values_from = dunn_index, 
+                         names_prefix = "K")
+
+# Calcola la media per ciascun parco (aggregando i risultati dei modelli SOM)
+final_table_dunn <- dunn_wide %>%
+  group_by(Parco) %>%
+  summarise(across(starts_with("K"), ~ mean(.x, na.rm = TRUE))) %>%
+  ungroup()
+
+# Salva il risultato in un file Excel
+write.xlsx(final_table_dunn, file = "Dunn_Index_Combined.xlsx")
+cat("I risultati dell'indice Dunn sono stati salvati in 'Dunn_Index_Combined.xlsx'\n")
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Caricamento delle librerie necessarie
+library(kohonen)    # Per la Self-Organizing Map
+library(cluster)    # Per kmeans() e silhouette()
+library(stringr)    # Per l'estrazione di pattern dalle stringhe
+library(tidyr)      # Per trasformare i dati in formato wide
+library(dplyr)      # Per operazioni sui data frame
+library(openxlsx)   # Per salvare i dati in Excel
+
+# Le stesse funzioni ausiliarie definite in precedenza
+short_name_som <- function(filepath) {
+  fname <- basename(filepath)
+  parco <- str_extract(fname, "(?<=PN_)[A-Za-z]+")
+  if (is.na(parco)) { parco <- "Unknown" }
+  years <- str_extract_all(fname, "\\d{4}")[[1]]
+  if (length(years) >= 2) {
+    year1 <- years[1]
+    year2 <- years[2]
+  } else {
+    year1 <- "Unknown"
+    year2 <- "Unknown"
+  }
+  return(paste(parco, year1, year2, "SOM", sep = "_"))
+}
+
+extract_parco <- function(filepath) {
+  fname <- basename(filepath)
+  parco <- str_extract(fname, "(?<=PN_)[A-Za-z]+")
+  if (is.na(parco)) { parco <- "Unknown" }
+  return(parco)
+}
+
+# Ricerca delle cartelle dei parchi (in "C:/") che iniziano con "PN_"
+pn_folders <- list.dirs("C:/", recursive = FALSE, full.names = TRUE)
+pn_folders <- pn_folders[grepl("^PN_", basename(pn_folders))]
+
+# Inizializza la lista per raccogliere i dati dell'indice AWS
+aws_data_list <- list()
+ks <- 3:6
+
+# Itera su ogni cartella (parco)
+for (pn_folder in pn_folders) {
+  som_files <- list.files(pn_folder, pattern = "\\.rds$", full.names = TRUE, recursive = TRUE)
+  if (length(som_files) == 0) next
+  
+  # Itera su ogni file SOM nel parco
+  for (som_file in som_files) {
+    cat("Processando il file:", som_file, "\n")
+    som_model <- readRDS(som_file)
+    som_values <- som_model$codes[[1]]
+    
+    # Calcola la matrice delle distanze euclidea
+    dist_mat <- dist(som_values, method = "euclidean")
+    
+    # Calcola l'indice AWS per valori di K da 3 a 6
+    aws_results <- data.frame(k = integer(), AWS = numeric(), stringsAsFactors = FALSE)
+    for (k in ks) {
+      set.seed(123)
+      km_res <- kmeans(som_values, centers = k, iter.max = 100)
+      sil_obj <- silhouette(km_res$cluster, dist_mat)
+      aws_val <- mean(sil_obj[, "sil_width"])
+      aws_results <- rbind(aws_results, data.frame(k = k, AWS = aws_val))
+    }
+    
+    aws_results$File  <- short_name_som(som_file)
+    aws_results$Parco <- extract_parco(som_file)
+    
+    aws_data_list[[ short_name_som(som_file) ]] <- aws_results
+  }
+}
+
+# Combina i risultati in un unico data frame
+aws_data <- do.call(rbind, aws_data_list)
+
+# Trasforma i dati in formato wide: una riga per file e colonne per K=3,4,5,6
+aws_wide <- pivot_wider(aws_data, 
+                        id_cols = c(File, Parco), 
+                        names_from = k, 
+                        values_from = AWS, 
+                        names_prefix = "K")
+
+# Calcola la media per ciascun parco (aggregando i risultati dei modelli SOM)
+final_table_aws <- aws_wide %>%
+  group_by(Parco) %>%
+  summarise(across(starts_with("K"), ~ mean(.x, na.rm = TRUE))) %>%
+  ungroup()
+
+# Salva il risultato in un file Excel
+write.xlsx(final_table_aws, file = "AWS_Combined.xlsx")
+cat("I risultati dell'indice AWS sono stati salvati in 'AWS_Combined.xlsx'\n")
