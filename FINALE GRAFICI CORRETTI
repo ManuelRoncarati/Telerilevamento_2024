@@ -1,4 +1,5 @@
-# grafico barre per file exel aree cluster
+#Grafico a Barre (Aree Cluster)
+# grafico barre per file excel aree cluster
 
 # 📌 Caricare i pacchetti necessari
 library(readxl)
@@ -8,63 +9,71 @@ library(viridis)
 library(stringr)  # Per lavorare con le stringhe
 
 # 📌 Impostare la working directory (MODIFICA con il tuo percorso)
-setwd("C:/PN_Gennargentu")  # Cambia con il percorso corretto del tuo file
+setwd("C:/PN_Sila")  # Cambia con il percorso corretto del tuo file
 
 # 📌 Caricare il file Excel (MODIFICA con il nome corretto)
-df <- read_excel("cluster_areas_3_cluster.xlsx")  # Assicurati che il nome sia corretto
+df <- read_excel("cluster_areas_5_cluster.xlsx")  # Assicurati che il nome sia corretto
 
-# 📌 Estrarre entrambi gli anni dalla colonna Date
-df$Date <- str_extract_all(df$Date, "\\d{4}")  # Estrai tutti gli anni (restituisce una lista)
-df$Date <- sapply(df$Date, function(x) paste(x, collapse = "-"))  # Combina gli anni in "YYYY-YYYY"
-
-# 📌 Convertire Date in factor per renderla DISCRETA
+# 📌 Estrarre entrambi gli anni dalla colonna Date (per formare intervalli tipo "1984-1988")
+df$Date <- str_extract_all(df$Date, "\\d{4}")         
+df$Date <- sapply(df$Date, function(x) paste(x, collapse = "-"))  # "YYYY-YYYY"
 df$Date <- as.factor(df$Date)
 
 # --- CORREZIONE: normalizziamo la colonna LULCC per unificare le varianti di "acque" ---
 df <- df %>%
-    mutate(
-        LULCC = str_trim(LULCC),  # Rimuove spazi iniziali/finali
-        LULCC = ifelse(str_detect(LULCC, regex("^acque", ignore_case = TRUE)), "Acque", LULCC)
-    )
+  mutate(
+    LULCC = str_trim(LULCC),
+    LULCC = ifelse(str_detect(LULCC, regex("^acque", ignore_case = TRUE)), "Acque", LULCC)
+  )
 
 # (Facoltativo) Convertiamo LULCC in factor se serve:
 df$LULCC <- as.factor(df$LULCC)
 
 # 📌 Creazione del grafico a barre
 grafico <- ggplot(df, aes(x = LULCC, y = Area_km2, fill = Date)) +
-    geom_bar(stat = "identity",
-             position = position_dodge(width = 0.9),  # Spazio tra le barre nei gruppi
-             width = 0.8) +  # Barre larghe per occupare tutto lo spazio disponibile
+  geom_bar(
+    stat = "identity",
+    position = position_dodge(width = 0.9),
+    width = 0.8
+  ) +
+  
+  # 📌 Etichette sopra le barre: testo ruotato verticalmente e spostato in alto
+  geom_text(aes(label = sprintf("%.1f", Area_km2),
+                y = Area_km2 + 10),
+            position = position_dodge(width = 0.9),
+            angle = 90,      
+            hjust = 0,       
+            size = 7,
+            fontface = "bold") +
+  
+  scale_fill_viridis_d(option = "viridis", direction = -1) +
+  theme_minimal() +
+  theme(
+    # Testi in nero e grassetto, dimensioni uniformi
+    plot.title   = element_text(size = 20, face = "bold", color = "black", hjust = 0.5, margin = margin(b = 15)),
+    axis.title.x = element_text(size = 20, face = "bold", color = "black", margin = margin(t = 10)),
+    axis.title.y = element_text(size = 20, face = "bold", color = "black", margin = margin(r = 10)),
+    axis.text    = element_text(size = 20, face = "bold", color = "black"),
+    axis.text.x  = element_text(angle = 0, hjust = 0.5, vjust = 0.5, color = "black", face = "bold"),
+    legend.position = "right",
+    legend.title    = element_text(size = 20, face = "bold", color = "black"),
+    legend.text     = element_text(size = 20, face = "bold", color = "black"),
     
-    # 📌 Etichette sopra le barre con posizione allineata
-    geom_text(aes(label = sprintf("%.1f", Area_km2)),
-              position = position_dodge(width = 0.9),  # Stessa posizione delle barre
-              vjust = -0.5,  # Leggero spostamento in alto
-              size = 3,
-              fontface = "bold") +
+    # Linee orizzontali meno visibili (linewidth al posto di size)
+    panel.grid.major.y = element_line(color = "gray80", linewidth = 0.5),
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor   = element_blank(),
     
-    scale_fill_viridis_d(option = "viridis", direction = -1) +  # Palette viridis
-    theme_minimal() +  # Stile minimalista
-    theme(
-        plot.title = element_text(size = 18, face = "bold", hjust = 0.5, margin = margin(b = 15)),
-        axis.title.x = element_text(size = 14, margin = margin(t = 10)),
-        axis.title.y = element_text(size = 14, margin = margin(r = 10)),
-        axis.text = element_text(size = 12),
-        axis.text.x = element_text(angle = 0, hjust = 0.5, vjust = 0.5),
-        legend.position = "right",
-        legend.title = element_text(size = 13, face = "bold"), 
-        legend.text = element_text(size = 12),
-        panel.grid.major.y = element_line(color = "gray85"),
-        panel.grid.major.x = element_blank(),
-        panel.grid.minor = element_blank(),
-        plot.margin = margin(t = 5, r = 5, b = 5, l = 5)
-    ) +
-    labs(title = "Distribuzione dell'area per uso del suolo e periodo\n(Parco Nazionale del Golfo di Orosei e del Gennargentu)",
-         x = "Uso del suolo",
-         y = expression(paste("Area (", km^2, ")")),
-         fill = "Periodo") +
-    scale_x_discrete(expand = c(0, 0)) +  
-    scale_y_continuous(expand = c(0, 0), limits = c(0, 450))
+    plot.margin = margin(t = 5, r = 5, b = 5, l = 5)
+  ) +
+  labs(
+    title = "Distribuzione dell'area per uso del suolo e periodo\n(Parco Nazionale del Golfo di Orosei e del Gennargentu)",
+    x = "Uso del suolo",
+    y = expression(paste("Area (", km^2, ")")),
+    fill = "Periodo"
+  ) +
+  scale_x_discrete(expand = c(0, 0)) +  
+  scale_y_continuous(expand = c(0, 0), limits = c(0, 450))
 
 # 📌 Mostrare il grafico
 print(grafico)
@@ -84,13 +93,7 @@ print(grafico)
 
 
 
-
-
-
-
-
-
-
+#Grafico Stacked Area (con intervalli di tempo e testi uniformi)
 # stacked area
 
 # Caricare le librerie necessarie
@@ -98,15 +101,14 @@ library(ggplot2)
 library(dplyr)
 library(viridis)
 library(readxl)
-library(lubridate)
-library(stringr)  # Per le funzioni di manipolazione stringhe
+library(stringr)
 
 # Specificare il percorso del file Excel
 file_path <- "C:/PN_Gennargentu/cluster_areas_3_cluster.xlsx"
 
 # Verificare che il file esista
 if(!file.exists(file_path)){
-    stop(paste("Il file", file_path, "non esiste nella directory corrente."))
+  stop(paste("Il file", file_path, "non esiste nella directory corrente."))
 }
 
 # Caricare i dati dal foglio "Sheet 1"
@@ -116,48 +118,63 @@ df <- read_excel(file_path, sheet = "Sheet 1")
 required_columns <- c("Date", "LULCC", "Area_km2")
 missing_columns <- setdiff(required_columns, names(df))
 if(length(missing_columns) > 0){
-    stop(paste("Le seguenti colonne mancanti nel file Excel:", 
-               paste(missing_columns, collapse = ", ")))
+  stop(paste("Le seguenti colonne mancano nel file Excel:", 
+             paste(missing_columns, collapse = ", ")))
 }
 
 # --- CORREZIONE: normalizziamo la colonna LULCC per unificare le varianti di "acque" ---
 df <- df %>%
-    mutate(
-        LULCC = str_trim(LULCC),  # Rimuove spazi iniziali/finali
-        LULCC = ifelse(str_detect(LULCC, regex("^acque", ignore_case = TRUE)), "Acque", LULCC)
-    )
+  mutate(
+    LULCC = str_trim(LULCC),
+    LULCC = ifelse(str_detect(LULCC, regex("^acque", ignore_case = TRUE)), "Acque", LULCC)
+  )
 
-# Estrarre l'anno dalla colonna Date (assumendo che Date sia in formato riconoscibile)
-df <- df %>%
-    mutate(Year = year(as.Date(Date, format = "%Y-%m-%d")))
+# 📌 Estrarre gli anni per formare intervalli "YYYY-YYYY"
+df$Date <- str_extract_all(df$Date, "\\d{4}")
+df$Date <- sapply(df$Date, function(x) paste(x, collapse = "-"))
+df$Date <- as.factor(df$Date)
 
 # Convertire Area_km2 in numerico se necessario
 df <- df %>%
-    mutate(Area_km2 = as.numeric(Area_km2))
+  mutate(Area_km2 = as.numeric(Area_km2))
 
-# Rimuovere eventuali valori mancanti nelle colonne chiave
+# Rimuovere eventuali valori mancanti
 df_clean <- df %>%
-    filter(!is.na(Year) & !is.na(LULCC) & !is.na(Area_km2))
+  filter(!is.na(Date) & !is.na(LULCC) & !is.na(Area_km2))
 
-# Aggregare i dati per anno e categoria di uso del suolo
+# Aggregare i dati per intervallo di tempo e categoria di uso del suolo
 df_area <- df_clean %>%
-    group_by(Year, LULCC) %>%
-    summarise(Area_km2 = sum(Area_km2), .groups = "drop")
+  group_by(Date, LULCC) %>%
+  summarise(Area_km2 = sum(Area_km2), .groups = "drop")
 
-# Creare il grafico stacked area
-p <- ggplot(df_area, aes(x = Year, y = Area_km2, fill = LULCC)) + 
-    geom_area(alpha = 0.8, size = 0.5, colour = "black") +
-    scale_fill_viridis(discrete = TRUE, option = "D") +
-    theme_minimal() + 
-    ggtitle("Cambiamenti nell'uso del suolo nel tempo\n(Parco Nazionale del Golfo di Orosei e del Gennargentu)") +
-    labs(x = "Anno", y = "Area (km²)", fill = "Uso del suolo") +
-    theme(
-        legend.position = "right",
-        text = element_text(size = 12),
-        plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
-        axis.title = element_text(size = 14),
-        axis.text = element_text(size = 12)
-    )
+# Creare il grafico stacked area (asse x discreto con intervalli)
+p <- ggplot(df_area, aes(x = Date, y = Area_km2, fill = LULCC, group = LULCC)) + 
+  geom_area(alpha = 0.8, linewidth = 0.5, colour = "black") +
+  scale_fill_viridis(discrete = TRUE, option = "D") +
+  theme_minimal() +
+  ggtitle("Cambiamenti nell'uso del suolo nel tempo\n(Parco Nazionale del Golfo di Orosei e del Gennargentu)") +
+  labs(x = "Periodo", y = "Area (km²)", fill = "Uso del suolo") +
+  theme(
+    legend.position = "right",
+    
+    # Testi in nero e grassetto, stesse dimensioni del grafico a barre
+    plot.title       = element_text(hjust = 0.5, size = 20, face = "bold", color = "black", margin = margin(b = 15)),
+    axis.title.x     = element_text(size = 20, face = "bold", color = "black", margin = margin(t = 10)),
+    axis.title.y     = element_text(size = 20, face = "bold", color = "black", margin = margin(r = 10)),
+    axis.text        = element_text(size = 20, face = "bold", color = "black"),
+    legend.title     = element_text(size = 20, face = "bold", color = "black"),
+    legend.text      = element_text(size = 20, face = "bold", color = "black"),
+    
+    # Linee orizzontali meno visibili (linewidth invece di size)
+    panel.grid.major.y = element_line(color = "gray80", linewidth = 0.5),
+    panel.grid.minor.y = element_blank(),
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.x = element_blank(),
+    
+    plot.margin = margin(t = 5, r = 5, b = 5, l = 5)
+  ) +
+  # Asse x discreto
+  scale_x_discrete(expand = c(0, 0))
 
 # Mostrare il grafico
 print(p)
