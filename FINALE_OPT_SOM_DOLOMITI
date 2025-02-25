@@ -1,0 +1,98 @@
+# ---------------------------------------------------------------------
+# 1. Caricamento pacchetti
+# ---------------------------------------------------------------------
+# Se non li hai installati, decommenta le seguenti righe:
+# install.packages("readxl")
+# install.packages("ggplot2")
+# install.packages("viridis")
+
+library(readxl)
+library(ggplot2)
+library(viridis)
+
+# ---------------------------------------------------------------------
+# 2. Lettura del file Excel e conversione dei dati
+# ---------------------------------------------------------------------
+df <- read_excel("C:/PN_Dolomiti_Bellunesi/risultati_SOM.xlsx")
+
+# Converte eventuali virgole decimali in numeri
+numeric_cols <- c("QuantizationError", "ExplainedVariance", "TopographicError", "KaskiLagusError")
+for (col in numeric_cols) {
+  df[[col]] <- as.numeric(gsub(",", ".", df[[col]]))
+}
+
+# ---------------------------------------------------------------------
+# 3. Rinomina dei livelli di GridType per maggiore chiarezza
+# ---------------------------------------------------------------------
+df$GridType <- factor(df$GridType,
+  levels = c("radice_n", "5_4_radice_n", "default_map"),
+  labels = c("√(n)", "5/4√(n)", "5√(n)")
+)
+
+# ---------------------------------------------------------------------
+# 4. Tema personalizzato con testi grandi (35) e titoli centrati
+# ---------------------------------------------------------------------
+my_theme <- theme_minimal() +
+  theme(
+    plot.title   = element_text(size = 35, face = "bold", hjust = 0.5),
+    axis.title   = element_text(size = 35, hjust = 0.5),
+    axis.text    = element_text(size = 35),
+    legend.title = element_text(size = 35),
+    legend.text  = element_text(size = 35)
+  )
+
+# ---------------------------------------------------------------------
+# 5. Creazione dei boxplot classici con linee più spesse
+# ---------------------------------------------------------------------
+
+# Boxplot per Quantization Error
+p_quant <- ggplot(df, aes(x = GridType, y = QuantizationError, fill = GridType)) +
+  geom_boxplot(size = 1.5) +
+  scale_fill_viridis_d(option = "viridis") +
+  labs(
+    title = "Quantization Error per tipologia di griglia",
+    x     = "Tipo di Griglia",
+    y     = "Quantization Error"
+  ) +
+  my_theme
+
+# Boxplot per Explained Variance
+p_expl_var <- ggplot(df, aes(x = GridType, y = ExplainedVariance, fill = GridType)) +
+  geom_boxplot(size = 1.5) +
+  scale_fill_viridis_d(option = "viridis") +
+  labs(
+    title = "Explained Variance per tipologia di griglia",
+    x     = "Tipo di Griglia",
+    y     = "Explained Variance (%)"
+  ) +
+  my_theme
+
+# Boxplot per Topographic Error
+p_topo <- ggplot(df, aes(x = GridType, y = TopographicError, fill = GridType)) +
+  geom_boxplot(size = 1.5) +
+  scale_fill_viridis_d(option = "viridis") +
+  labs(
+    title = "Topographic Error per tipologia di griglia",
+    x     = "Tipo di Griglia",
+    y     = "Topographic Error"
+  ) +
+  my_theme
+
+# Boxplot per Kaski-Lagus Error
+p_kaski <- ggplot(df, aes(x = GridType, y = KaskiLagusError, fill = GridType)) +
+  geom_boxplot(size = 1.5) +
+  scale_fill_viridis_d(option = "viridis") +
+  labs(
+    title = "Kaski-Lagus Error per tipologia di griglia",
+    x     = "Tipo di Griglia",
+    y     = "Kaski-Lagus Error"
+  ) +
+  my_theme
+
+# ---------------------------------------------------------------------
+# 6. Visualizzazione dei grafici
+# ---------------------------------------------------------------------
+print(p_quant)
+print(p_expl_var)
+print(p_topo)
+print(p_kaski)
