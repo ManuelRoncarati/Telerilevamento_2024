@@ -1,3 +1,110 @@
+#CODICE PER LE DIVERSE FOMULE SOM GRIGLIA NEURONI
+# Carica le librerie necessarie
+library(kohonen)
+library(terra)
+library(openxlsx)  # Per salvare in formato Excel
+
+# Definisci i percorsi delle cartelle e associa un'etichetta per il tipo di griglia
+folders <- list(
+  "default_map"   = "C:/PN_Dolomiti_Bellunesi/som_Dolomiti_Bellunesi",
+  "5_4_radice_n"  = "C:/PN_Dolomiti_Bellunesi/som_Dolomiti_Bellunesi_5_4_radice_n",
+  "radice_n"      = "C:/PN_Dolomiti_Bellunesi/som_Dolomiti_Bellunesi_radice_n"
+)
+
+# Lista in cui salvare i risultati
+results_list <- list()
+
+# Itera su ciascuna cartella
+for(grid_type in names(folders)) {
+  folder <- folders[[grid_type]]
+  
+  # Cerca tutti i file con il modello SOM (file che terminano in _som_model.rds)
+  file_list <- list.files(path = folder, pattern = "_som_model\\.rds$", full.names = TRUE)
+  
+  if(length(file_list) > 0) {
+    for(file_model in file_list) {
+      cat("Caricamento modello da:", file_model, "\n")
+      
+      # Carica il modello SOM
+      som_model <- readRDS(file_model)
+      
+      # Verifica che i dati di training siano salvati nel modello (assumiamo siano il primo elemento della lista 'data')
+      if (!is.null(som_model$data) && length(som_model$data) > 0) {
+        training_data <- som_model$data[[1]]
+      } else {
+        warning(paste("Il modello", file_model, "non contiene dati di training."))
+        next
+      }
+      
+      # Calcola le metriche di qualità usando i dati di training
+      quality <- somQuality(som_model, as.matrix(training_data))
+      
+      # Estrai informazioni sulla griglia
+      grid_info <- som_model$grid
+      x_dim <- grid_info$xdim
+      y_dim <- grid_info$ydim
+      n_nodes <- x_dim * y_dim
+      
+      # Crea una riga per il data frame con tutte le informazioni
+      results_list[[length(results_list) + 1]] <- data.frame(
+        GridType           = grid_type,
+        ModelFile          = basename(file_model),
+        Nodes              = n_nodes,
+        X_dim              = x_dim,
+        Y_dim              = y_dim,
+        QuantizationError  = quality$err.quant,
+        ExplainedVariance  = quality$err.varratio,
+        TopographicError   = quality$err.topo,
+        KaskiLagusError    = quality$err.kaski,
+        stringsAsFactors   = FALSE
+      )
+    }
+  } else {
+    cat("Nessun modello SOM trovato in:", folder, "\n")
+  }
+}
+
+# Combina tutte le righe in un unico data frame
+results_df <- do.call(rbind, results_list)
+
+# Visualizza la tabella dei risultati
+print(results_df)
+
+# Salva il data frame in un file Excel all'interno della cartella "C:/PN_Dolomiti_Bellunesi"
+output_file <- "C:/PN_Dolomiti_Bellunesi/risultati_SOM.xlsx"
+write.xlsx(results_df, output_file)
+cat("Risultati salvati in:", output_file, "\n")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # ---------------------------------------------------------------------
 # 1. Caricamento pacchetti
 # ---------------------------------------------------------------------
