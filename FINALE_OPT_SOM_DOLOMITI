@@ -1,6 +1,7 @@
 #CODICE PER LE DIVERSE FOMULE SOM GRIGLIA NEURONI
 # Carica le librerie necessarie
 library(kohonen)
+library(aweSOM)
 library(terra)
 library(openxlsx)  # Per salvare in formato Excel
 
